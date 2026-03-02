@@ -133,10 +133,10 @@ export const ROLE_CONFIGS: Record<UserRole, RoleViewConfig> = {
     ],
   },
   stylist: {
-    defaultRoute: '/my-schedule',
+    defaultRoute: '/today',
     dashboardLayout: [
       { id: 'my-stats', size: 'small' },
-      { id: 'my-schedule', size: 'large' },
+      { id: 'live-timeline', size: 'large' },
       { id: 'my-next-client', size: 'medium' },
     ],
     sidebarItems: ['dashboard', 'appointments', 'customers'],
@@ -234,7 +234,7 @@ export function canAccessRoute(role: string, route: string): boolean {
 
   // Stylist routes
   if (role === 'stylist') {
-    const allowedPrefixes = ['/dashboard', '/my-schedule', '/appointments', '/customers'];
+    const allowedPrefixes = ['/dashboard', '/today', '/appointments', '/customers'];
     return allowedPrefixes.some((prefix) => route.startsWith(prefix));
   }
 

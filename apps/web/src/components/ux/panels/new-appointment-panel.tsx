@@ -29,10 +29,7 @@ import {
   Footprints,
   X,
   Plus,
-  Check,
-  ChevronsUpDown,
   UserPlus,
-  Star,
   UserX,
   ClipboardList,
 } from 'lucide-react';
@@ -41,29 +38,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/ui/command';
-import { DatePicker } from '@/components/common';
+import { DatePicker, CustomerCombobox, ServiceCombobox } from '@/components/common';
+import type { CustomerOption } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSlideOver } from '@/components/ux/slide-over';
+import { useClosePanel, useSlideOverUnsavedChanges } from '@/components/ux/slide-over';
 import { FormFeedbackOverlay, useFormFeedback } from '@/components/ux/feedback';
 import { useCreateAppointment } from '@/hooks/queries/use-appointments';
+import { useCustomerSearch } from '@/hooks/queries/use-customers';
 import { useServices } from '@/hooks/queries/use-services';
 import { useStaffList } from '@/hooks/queries/use-staff';
-import { useCustomers } from '@/hooks/queries/use-customers';
 import { useWaitlistCount, useWaitlistMatches } from '@/hooks/queries/use-waitlist';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { cn } from '@/lib/utils';
@@ -105,17 +94,7 @@ const appointmentSchema = z
 
 type AppointmentFormData = z.infer<typeof appointmentSchema>;
 
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  visitCount?: number;
-  loyaltyPoints?: number;
-  tags?: string[];
-}
-
 interface NewAppointmentPanelProps {
-  panelId: string;
   stylistId?: string;
   date?: string;
   time?: string;
@@ -124,25 +103,23 @@ interface NewAppointmentPanelProps {
 }
 
 export function NewAppointmentPanel({
-  panelId,
   stylistId: initialStylistId,
   date: initialDate,
   time: initialTime,
   customerId: initialCustomerId,
   onSuccess,
 }: NewAppointmentPanelProps) {
-  const { closePanel, setUnsavedChanges } = useSlideOver();
+  const closePanel = useClosePanel();
+  const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { branchId } = useBranchContext();
 
   // UI State
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const [serviceOpen, setServiceOpen] = useState(false);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [selectedWaitlistEntryId, setSelectedWaitlistEntryId] = useState<string | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
   const {
     status: feedbackStatus,
@@ -157,10 +134,25 @@ export function NewAppointmentPanel({
     branchId: branchId || '',
     role: 'stylist',
   });
-  const { data: customersData } = useCustomers({
-    search: customerSearch,
+
+  // Customer search query
+  const { data: customerSearchData } = useCustomerSearch({
+    q: customerSearchQuery,
     limit: 10,
   });
+
+  // Map customer search results to CustomerOption format
+  const customerOptions: CustomerOption[] = useMemo(() => {
+    if (!customerSearchData) return [];
+    return customerSearchData.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      visitCount: c.visitCount,
+      loyaltyPoints: c.loyaltyPoints,
+      tags: c.tags,
+    }));
+  }, [customerSearchData]);
 
   // Waitlist queries
   const { data: waitlistCountData } = useWaitlistCount(branchId || '');
@@ -212,30 +204,35 @@ export function NewAppointmentPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDirty]);
 
-  // Handle customer selection
+  // Handle customer selection from combobox
   const handleCustomerSelect = useCallback(
-    (customer: Customer) => {
-      setSelectedCustomer(customer);
-      setIsNewCustomer(false);
-      setValue('customerId', customer.id);
-      setValue('customerName', customer.name);
-      setValue('customerPhone', customer.phone);
-      setCustomerOpen(false);
+    (customer: CustomerOption | null) => {
+      if (customer) {
+        setSelectedCustomer(customer);
+        setIsNewCustomer(false);
+        setValue('customerId', customer.id);
+        setValue('customerName', customer.name);
+        setValue('customerPhone', customer.phone);
+      } else {
+        setSelectedCustomer(null);
+        setValue('customerId', '');
+        setValue('customerName', '');
+        setValue('customerPhone', '');
+      }
     },
     [setValue]
   );
 
-  // Handle new customer mode
+  // Handle new customer mode toggle
   const handleNewCustomer = useCallback(() => {
     setSelectedCustomer(null);
     setIsNewCustomer(true);
     setValue('customerId', '');
     setValue('customerName', '');
     setValue('customerPhone', '');
-    setCustomerOpen(false);
   }, [setValue]);
 
-  // Clear customer selection
+  // Clear customer selection and return to search mode
   const handleClearCustomer = useCallback(() => {
     setSelectedCustomer(null);
     setIsNewCustomer(false);
@@ -243,32 +240,6 @@ export function NewAppointmentPanel({
     setValue('customerName', '');
     setValue('customerPhone', '');
   }, [setValue]);
-
-  // Handle service toggle
-  const handleServiceToggle = useCallback(
-    (serviceId: string) => {
-      setSelectedServices((prev) => {
-        const newServices = prev.includes(serviceId)
-          ? prev.filter((id) => id !== serviceId)
-          : [...prev, serviceId];
-        setValue('serviceIds', newServices);
-        return newServices;
-      });
-    },
-    [setValue]
-  );
-
-  // Remove service
-  const handleRemoveService = useCallback(
-    (serviceId: string) => {
-      setSelectedServices((prev) => {
-        const newServices = prev.filter((id) => id !== serviceId);
-        setValue('serviceIds', newServices);
-        return newServices;
-      });
-    },
-    [setValue]
-  );
 
   // Handle form submission
   const onSubmit = useCallback(
@@ -297,7 +268,7 @@ export function NewAppointmentPanel({
           if (onSuccess && result.appointment?.id) {
             onSuccess(result.appointment.id);
           }
-          closePanel(panelId);
+          closePanel();
         }, 1500);
       } catch {
         showError('Failed to create appointment');
@@ -307,7 +278,6 @@ export function NewAppointmentPanel({
       branchId,
       createMutation,
       closePanel,
-      panelId,
       onSuccess,
       showSuccess,
       showError,
@@ -326,29 +296,8 @@ export function NewAppointmentPanel({
     return slots;
   }, []);
 
-  // Group services by category
-  const servicesByCategory = useMemo(() => {
-    const services = servicesData?.data || [];
-    const grouped: Record<string, typeof services> = {};
-    services.forEach((service) => {
-      const category = service.category?.name || 'Other';
-      if (!grouped[category]) grouped[category] = [];
-      grouped[category].push(service);
-    });
-    return grouped;
-  }, [servicesData]);
-
   const services = servicesData?.data || [];
   const stylists = staffData?.data || [];
-  const customers = customersData?.data || [];
-
-  // Calculate total price
-  const totalPrice = useMemo(() => {
-    return selectedServices.reduce((sum, id) => {
-      const service = services.find((s) => s.id === id);
-      return sum + (service?.basePrice || 0);
-    }, 0);
-  }, [selectedServices, services]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full relative">
@@ -423,51 +372,6 @@ export function NewAppointmentPanel({
               Customer
             </Label>
 
-            {/* Selected Customer Card */}
-            {selectedCustomer && (
-              <div className="relative p-4 rounded-lg border bg-muted/30">
-                <button
-                  type="button"
-                  onClick={handleClearCustomer}
-                  className="absolute top-2 right-2 p-1 rounded-full hover:bg-muted"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {selectedCustomer.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{selectedCustomer.name}</p>
-                    <p className="text-sm text-muted-foreground">{selectedCustomer.phone}</p>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      {selectedCustomer.visitCount !== undefined && (
-                        <span>{selectedCustomer.visitCount} visits</span>
-                      )}
-                      {selectedCustomer.loyaltyPoints !== undefined &&
-                        selectedCustomer.loyaltyPoints > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Star className="h-3 w-3 text-amber-500" />
-                            {selectedCustomer.loyaltyPoints} pts
-                          </span>
-                        )}
-                    </div>
-                    {selectedCustomer.tags && selectedCustomer.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {selectedCustomer.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* New Customer Form */}
             {isNewCustomer && (
               <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
@@ -493,68 +397,30 @@ export function NewAppointmentPanel({
               </div>
             )}
 
-            {/* Customer Combobox */}
+            {/* Customer Search Combobox with Add New Button */}
             {!selectedCustomer && !isNewCustomer && (
-              <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={customerOpen}
-                    className={cn(
-                      'w-full justify-between font-normal',
-                      errors.customerName && 'border-destructive'
-                    )}
-                  >
-                    <span className="text-muted-foreground">Search or add customer...</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-[var(--radix-popover-trigger-width)] p-0"
-                  align="start"
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <CustomerCombobox
+                    value={selectedCustomer}
+                    onChange={handleCustomerSelect}
+                    customers={customerOptions}
+                    onSearchChange={setCustomerSearchQuery}
+                    placeholder="Search customer..."
+                    hasError={!!errors.customerName}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleNewCustomer}
+                  className="shrink-0"
+                  title="Add new customer"
                 >
-                  <Command>
-                    <CommandInput
-                      placeholder="Search by name or phone..."
-                      value={customerSearch}
-                      onValueChange={setCustomerSearch}
-                    />
-                    <CommandList>
-                      <CommandEmpty>No customers found.</CommandEmpty>
-                      {customers.length > 0 && (
-                        <CommandGroup heading="Customers">
-                          {customers.map((customer) => (
-                            <CommandItem
-                              key={customer.id}
-                              value={customer.name}
-                              onSelect={() => handleCustomerSelect(customer)}
-                              className="flex items-center gap-3 py-3"
-                            >
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="text-xs">
-                                  {customer.name.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{customer.name}</p>
-                                <p className="text-xs text-muted-foreground">{customer.phone}</p>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      )}
-                      <CommandSeparator />
-                      <CommandGroup>
-                        <CommandItem onSelect={handleNewCustomer} className="py-3">
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          <span>Create new customer</span>
-                        </CommandItem>
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </div>
             )}
             {errors.customerName && !isNewCustomer && !selectedCustomer && (
               <p className="text-xs text-destructive">{errors.customerName.message}</p>
@@ -568,111 +434,29 @@ export function NewAppointmentPanel({
               Services
             </Label>
 
-            {/* Selected Services */}
-            {selectedServices.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {selectedServices.map((id) => {
-                  const service = services.find((s) => s.id === id);
-                  if (!service) return null;
-                  return (
-                    <Badge
-                      key={id}
-                      variant="secondary"
-                      className="pl-3 pr-1 py-1.5 flex items-center gap-2"
-                    >
-                      <span>{service.name}</span>
-                      <span className="text-muted-foreground">
-                        ₹{service.basePrice?.toLocaleString('en-IN')}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveService(id)}
-                        className="ml-1 p-0.5 rounded-full hover:bg-muted-foreground/20"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  );
-                })}
-              </div>
-            )}
-
             {/* Service Combobox */}
             {servicesLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : (
-              <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className={cn(
-                      'w-full justify-between font-normal',
-                      errors.serviceIds && 'border-destructive'
-                    )}
-                  >
-                    <span className="text-muted-foreground">
-                      {selectedServices.length > 0
-                        ? `${selectedServices.length} service(s) selected`
-                        : 'Select services...'}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-[var(--radix-popover-trigger-width)] p-0"
-                  align="start"
-                >
-                  <Command>
-                    <CommandInput placeholder="Search services..." />
-                    <CommandList>
-                      <CommandEmpty>No services found.</CommandEmpty>
-                      {Object.entries(servicesByCategory).map(([category, categoryServices]) => (
-                        <CommandGroup key={category} heading={category}>
-                          {categoryServices.map((service) => (
-                            <CommandItem
-                              key={service.id}
-                              value={service.name}
-                              onSelect={() => handleServiceToggle(service.id)}
-                              className="flex items-center justify-between py-2"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={cn(
-                                    'h-4 w-4 rounded border flex items-center justify-center',
-                                    selectedServices.includes(service.id)
-                                      ? 'bg-primary border-primary'
-                                      : 'border-muted-foreground/30'
-                                  )}
-                                >
-                                  {selectedServices.includes(service.id) && (
-                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                  )}
-                                </div>
-                                <span>{service.name}</span>
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                ₹{service.basePrice?.toLocaleString('en-IN')}
-                              </span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      ))}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <ServiceCombobox
+                value={selectedServices}
+                onChange={(serviceIds) => {
+                  setSelectedServices(serviceIds);
+                  setValue('serviceIds', serviceIds);
+                }}
+                services={services.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  basePrice: s.basePrice,
+                  categoryId: s.categoryId,
+                  categoryName: s.category?.name,
+                }))}
+                hasError={!!errors.serviceIds}
+                showTotal={true}
+              />
             )}
             {errors.serviceIds && (
               <p className="text-xs text-destructive">{errors.serviceIds.message}</p>
-            )}
-
-            {/* Total Price */}
-            {totalPrice > 0 && (
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="text-sm text-muted-foreground">Estimated Total</span>
-                <span className="font-semibold">₹{totalPrice.toLocaleString('en-IN')}</span>
-              </div>
             )}
           </div>
 
@@ -798,20 +582,41 @@ export function NewAppointmentPanel({
                       {watchedTime || 'Select time'}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-3" align="start">
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {timeSlots.map((time) => (
-                        <Button
-                          key={time}
-                          type="button"
-                          variant={watchedTime === time ? 'default' : 'ghost'}
-                          size="sm"
-                          className="h-8 text-xs"
-                          onClick={() => setValue('time', time)}
-                        >
-                          {time}
-                        </Button>
-                      ))}
+                  <PopoverContent className="w-72 p-3" align="start">
+                    <div className="space-y-3">
+                      {/* Custom time input */}
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1.5 block">
+                          Enter exact time
+                        </Label>
+                        <Input
+                          type="time"
+                          value={watchedTime || ''}
+                          onChange={(e) => setValue('time', e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+
+                      {/* Quick select buttons */}
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1.5 block">
+                          Quick select
+                        </Label>
+                        <div className="grid grid-cols-4 gap-1.5 max-h-48 overflow-y-auto">
+                          {timeSlots.map((time) => (
+                            <Button
+                              key={time}
+                              type="button"
+                              variant={watchedTime === time ? 'default' : 'ghost'}
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() => setValue('time', time)}
+                            >
+                              {time}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -867,12 +672,7 @@ export function NewAppointmentPanel({
 
       {/* Footer */}
       <div className="border-t p-4 flex gap-3 bg-background">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={() => closePanel(panelId)}
-        >
+        <Button type="button" variant="outline" className="flex-1" onClick={() => closePanel()}>
           Cancel
         </Button>
         <Button type="submit" className="flex-1" disabled={createMutation.isPending}>

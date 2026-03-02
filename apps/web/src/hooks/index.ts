@@ -8,16 +8,6 @@ export { useConfirm } from './use-confirm';
 export { usePagination } from './use-pagination';
 export { usePermissions, PERMISSIONS } from './use-permissions';
 
-// UX Redesign hooks
-export {
-  useSlideOver,
-  useCurrentPanelId,
-  useSlideOverUnsavedChanges,
-  type UseSlideOverReturn,
-} from './use-slide-over';
-
-export { useCommandPalette, type UseCommandPaletteReturn } from './use-command-palette';
-
 export { useQuickActions, useActionContext } from './use-quick-actions';
 
 export { useLongPress } from './use-long-press';

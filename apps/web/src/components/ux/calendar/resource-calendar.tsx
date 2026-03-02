@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/common';
 import { useCalendarStore } from '@/stores/calendar-store';
+import { cn } from '@/lib/utils';
 import type {
   CalendarAppointment,
   ResourceCalendarData,
@@ -74,6 +75,7 @@ export function ResourceCalendar({
   } = useCalendarStore();
 
   // Generate time slots based on working hours and interval
+  // Dynamically extend if there are appointments beyond working hours (phone/walk-in)
   const timeSlots = useMemo(() => {
     if (!data?.workingHours) return [];
 
@@ -84,16 +86,39 @@ export function ResourceCalendar({
     let currentTime = new Date();
     currentTime.setHours(startHour, startMin, 0, 0);
 
-    const endTime = new Date();
-    endTime.setHours(endHour, endMin, 0, 0);
+    const workingEndTime = new Date();
+    workingEndTime.setHours(endHour, endMin, 0, 0);
 
-    while (currentTime < endTime) {
+    // Find the latest appointment end time to extend calendar if needed
+    let latestEndTime = workingEndTime;
+    if (data.appointments && data.appointments.length > 0) {
+      data.appointments.forEach((apt) => {
+        const [aptEndHour, aptEndMin] = apt.endTime.split(':').map(Number);
+        const aptEnd = new Date();
+        aptEnd.setHours(aptEndHour, aptEndMin, 0, 0);
+        if (aptEnd > latestEndTime) {
+          latestEndTime = aptEnd;
+        }
+      });
+    }
+
+    // Generate slots up to the latest end time (working hours or appointment end, whichever is later)
+    while (currentTime < latestEndTime) {
       slots.push(format(currentTime, 'HH:mm'));
       currentTime = addMinutes(currentTime, timeSlotInterval);
     }
 
     return slots;
-  }, [data?.workingHours, timeSlotInterval]);
+  }, [data?.workingHours, data?.appointments, timeSlotInterval]);
+
+  // Determine which slots are outside working hours (for visual distinction)
+  const isSlotAfterHours = useCallback(
+    (time: string) => {
+      if (!data?.workingHours) return false;
+      return time >= data.workingHours.end;
+    },
+    [data?.workingHours]
+  );
 
   // Calculate slot height based on interval
   const slotHeight = useMemo(() => {
@@ -127,9 +152,17 @@ export function ResourceCalendar({
       );
     }
 
+    // Include filter - if set, only show these statuses
     if (filters.statuses.length > 0) {
       filtered = filtered.filter((apt) =>
         filters.statuses.includes(apt.status as AppointmentStatus)
+      );
+    }
+
+    // Exclude filter - hide these statuses (applied after include filter)
+    if (filters.excludedStatuses && filters.excludedStatuses.length > 0) {
+      filtered = filtered.filter(
+        (apt) => !filters.excludedStatuses.includes(apt.status as AppointmentStatus)
       );
     }
 
@@ -391,15 +424,23 @@ export function ResourceCalendar({
                 <span className="text-xs text-muted-foreground">Time</span>
               </div>
               {/* Time labels */}
-              {timeSlots.map((time) => (
-                <div
-                  key={time}
-                  className="flex items-start justify-end pr-2 text-xs text-muted-foreground border-b"
-                  style={{ height: `${slotHeight}px` }}
-                >
-                  <span className="-mt-2">{time}</span>
-                </div>
-              ))}
+              {timeSlots.map((time) => {
+                const afterHours = isSlotAfterHours(time);
+                return (
+                  <div
+                    key={time}
+                    className={cn(
+                      'flex items-start justify-end pr-2 text-xs border-b',
+                      afterHours
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20'
+                        : 'text-muted-foreground'
+                    )}
+                    style={{ height: `${slotHeight}px` }}
+                  >
+                    <span className="-mt-2">{time}</span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Scrollable content */}
@@ -459,6 +500,7 @@ export function ResourceCalendar({
                         !stylist.workingHours ||
                         time < stylist.workingHours.start ||
                         time >= stylist.workingHours.end;
+                      const isAfterHours = isSlotAfterHours(time);
 
                       // Check for conflict when dragging
                       const hasConflict = draggedAppointment
@@ -480,6 +522,7 @@ export function ResourceCalendar({
                             time={time}
                             height={slotHeight}
                             hasConflict={hasConflict}
+                            isAfterHours={isAfterHours}
                           >
                             {appointmentsStartingInSlot.map((appointment, index) => {
                               const startMins =
@@ -527,6 +570,7 @@ export function ResourceCalendar({
                             time={time}
                             height={slotHeight}
                             hasConflict={hasConflict}
+                            isAfterHours={isAfterHours}
                           />
                         );
                       }
@@ -543,6 +587,7 @@ export function ResourceCalendar({
                           isBreak={isBreak}
                           isBlocked={isBlocked}
                           isOutsideHours={isOutsideHours}
+                          isAfterHours={isAfterHours}
                           hasConflict={hasConflict}
                           onClick={() => onSlotClick(stylist.id, selectedDate, time)}
                         />

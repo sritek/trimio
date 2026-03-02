@@ -72,6 +72,10 @@ async function main() {
     // 10. Waitlist Entries
     const waitlistCount = await seedWaitlist(tenant.id, branches[0].id, customers, services, users);
     console.log(`✅ Created ${waitlistCount} waitlist entries`);
+
+    // 11. Station Types & Stations
+    const { stationTypes, stations } = await seedStations(tenant.id, branches);
+    console.log(`✅ Created ${stationTypes.length} station types and ${stations.length} stations`);
   }
 
   console.log('🎉 Seed completed successfully!');
@@ -135,6 +139,7 @@ async function clearDatabase() {
   await safeTruncate('tenant_leave_policies');
   await safeTruncate('audit_logs');
   await safeTruncate('refresh_tokens');
+  await safeTruncate('stations, station_types');
   await safeTruncate('user_branches');
   await safeTruncate('users');
   await safeTruncate('branches');
@@ -2228,6 +2233,122 @@ async function seedWaitlist(
   });
 
   return waitlistData.length;
+}
+
+// ============================================
+// Station Types & Stations
+// ============================================
+
+async function seedStations(tenantId: string, branches: { id: string }[]) {
+  // Default Station Types
+  const stationTypesData = [
+    {
+      name: 'Styling Chair',
+      icon: 'armchair',
+      color: '#8B5CF6',
+      displayOrder: 0,
+      isDefault: true,
+    },
+    {
+      name: 'Wash Basin',
+      icon: 'droplets',
+      color: '#3B82F6',
+      displayOrder: 1,
+      isDefault: true,
+    },
+    {
+      name: 'Nail Station',
+      icon: 'hand',
+      color: '#EC4899',
+      displayOrder: 2,
+      isDefault: true,
+    },
+    {
+      name: 'Facial Bed',
+      icon: 'bed-single',
+      color: '#22C55E',
+      displayOrder: 3,
+      isDefault: true,
+    },
+    {
+      name: 'Massage Table',
+      icon: 'heart-pulse',
+      color: '#F59E0B',
+      displayOrder: 4,
+      isDefault: true,
+    },
+  ];
+
+  const stationTypes = await prisma.stationType.createManyAndReturn({
+    data: stationTypesData.map((st) => ({ tenantId, ...st })),
+  });
+
+  // Create stations for each branch
+  const stationsData: Prisma.StationCreateManyInput[] = [];
+
+  for (const branch of branches) {
+    // Styling Chairs (4 per branch)
+    for (let i = 1; i <= 4; i++) {
+      stationsData.push({
+        tenantId,
+        branchId: branch.id,
+        stationTypeId: stationTypes[0].id, // Styling Chair
+        name: `Chair ${i}`,
+        displayOrder: i - 1,
+        status: 'available',
+      });
+    }
+
+    // Wash Basins (2 per branch)
+    for (let i = 1; i <= 2; i++) {
+      stationsData.push({
+        tenantId,
+        branchId: branch.id,
+        stationTypeId: stationTypes[1].id, // Wash Basin
+        name: `Wash ${i}`,
+        displayOrder: 4 + i - 1,
+        status: 'available',
+      });
+    }
+
+    // Nail Stations (2 per branch)
+    for (let i = 1; i <= 2; i++) {
+      stationsData.push({
+        tenantId,
+        branchId: branch.id,
+        stationTypeId: stationTypes[2].id, // Nail Station
+        name: `Nail ${i}`,
+        displayOrder: 6 + i - 1,
+        status: 'available',
+      });
+    }
+
+    // Facial Beds (2 per branch)
+    for (let i = 1; i <= 2; i++) {
+      stationsData.push({
+        tenantId,
+        branchId: branch.id,
+        stationTypeId: stationTypes[3].id, // Facial Bed
+        name: `Facial ${i}`,
+        displayOrder: 8 + i - 1,
+        status: 'available',
+      });
+    }
+
+    // Massage Tables (1 per branch)
+    stationsData.push({
+      tenantId,
+      branchId: branch.id,
+      stationTypeId: stationTypes[4].id, // Massage Table
+      name: 'Massage 1',
+      displayOrder: 10,
+      status: 'available',
+    });
+  }
+
+  const stations = await prisma.station.createManyAndReturn({ data: stationsData });
+
+  return { stationTypes, stations };
 }
 
 // ============================================

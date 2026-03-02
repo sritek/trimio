@@ -56,9 +56,9 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; accent: string }
     accent: 'bg-red-500',
   },
   no_show: {
-    bg: 'bg-orange-100 dark:bg-orange-900/60',
-    text: 'text-orange-800 dark:text-orange-200',
-    accent: 'bg-orange-500',
+    bg: 'bg-rose-100 dark:bg-rose-900/60',
+    text: 'text-rose-800 dark:text-rose-200',
+    accent: 'bg-rose-500',
   },
 };
 

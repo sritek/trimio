@@ -20,8 +20,7 @@ import { Button } from '@/components/ui/button';
 import { PageContainer, PageContent } from '@/components/common';
 import { QuickStats } from '@/components/ux/command-center';
 import { useCommandCenter } from '@/hooks/queries/use-command-center';
-import { useSlideOver } from '@/components/ux/slide-over';
-import { PANEL_IDS } from '@/components/ux/slide-over/slide-over-registry';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { cn } from '@/lib/utils';
 import type { AttentionItem } from '@/types/dashboard';
 import { useAuthStore } from '@/stores';
@@ -29,7 +28,7 @@ import { useBranchContext } from '@/hooks/use-branch-context';
 
 // Role-based dashboard components
 import { OperationalDashboard } from './components/operational-dashboard';
-import { OwnerDashboard } from './components/owner-dashboard';
+import { OwnerDashboard, OwnerDashboardViewToggle } from './components/owner-dashboard';
 import { BranchManagerDashboard } from './components/branch-manager-dashboard';
 import { AccountantDashboard } from './components/accountant-dashboard';
 import { getRoleDashboardType, type DashboardRole } from './utils/get-dashboard-type';
@@ -113,6 +112,7 @@ function RoleDashboard({
           data={commandCenterData}
           isLoading={isLoading}
           currentTime={currentTime}
+          branchId={branchId}
           onTimelineSlotClick={onTimelineSlotClick}
           onAppointmentClick={onAppointmentClick}
           onCheckIn={onCheckIn}
@@ -132,7 +132,7 @@ export default function TodayPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { branchId } = useBranchContext();
-  const { openPanel } = useSlideOver();
+  const { openNewAppointment, openAppointmentDetails, openCustomerPeek } = useOpenPanel();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Get user role for dashboard type
@@ -155,16 +155,12 @@ export default function TodayPage() {
 
   // Quick action handlers
   const handleNewAppointment = useCallback(() => {
-    openPanel(PANEL_IDS.NEW_APPOINTMENT, {}, { title: 'New Appointment', width: 'wide' });
-  }, [openPanel]);
+    openNewAppointment();
+  }, [openNewAppointment]);
 
   const handleWalkIn = useCallback(() => {
-    openPanel(
-      PANEL_IDS.NEW_APPOINTMENT,
-      { bookingType: 'walk_in' },
-      { title: 'Walk-in Customer', width: 'wide' }
-    );
-  }, [openPanel]);
+    openNewAppointment({ bookingType: 'walk_in' } as any);
+  }, [openNewAppointment]);
 
   const handleNewCustomer = useCallback(() => {
     router.push('/customers/new');
@@ -177,13 +173,9 @@ export default function TodayPage() {
   // Appointment click handler
   const handleAppointmentClick = useCallback(
     (id: string) => {
-      openPanel(
-        PANEL_IDS.APPOINTMENT_DETAILS,
-        { appointmentId: id },
-        { title: 'Appointment Details', width: 'medium' }
-      );
+      openAppointmentDetails(id);
     },
-    [openPanel]
+    [openAppointmentDetails]
   );
 
   const handleCheckIn = useCallback((id: string) => {
@@ -201,18 +193,10 @@ export default function TodayPage() {
     (item: AttentionItem) => {
       switch (item.entityType) {
         case 'appointment':
-          openPanel(
-            PANEL_IDS.APPOINTMENT_DETAILS,
-            { appointmentId: item.entityId },
-            { title: 'Appointment Details', width: 'medium' }
-          );
+          openAppointmentDetails(item.entityId);
           break;
         case 'customer':
-          openPanel(
-            PANEL_IDS.CUSTOMER_PEEK,
-            { customerId: item.entityId },
-            { title: 'Customer Details', width: 'medium' }
-          );
+          openCustomerPeek(item.entityId);
           break;
         case 'inventory':
           router.push(`/inventory/products/${item.entityId}`);
@@ -222,7 +206,7 @@ export default function TodayPage() {
           break;
       }
     },
-    [openPanel, router]
+    [openAppointmentDetails, openCustomerPeek, router]
   );
 
   const handleDismissAttention = useCallback((id: string) => {
@@ -233,13 +217,9 @@ export default function TodayPage() {
   // Timeline slot click handler
   const handleTimelineSlotClick = useCallback(
     (stylistId: string, time: string) => {
-      openPanel(
-        PANEL_IDS.NEW_APPOINTMENT,
-        { stylistId, time, date: format(currentTime, 'yyyy-MM-dd') },
-        { title: 'New Appointment', width: 'wide' }
-      );
+      openNewAppointment({ stylistId, time, date: format(currentTime, 'yyyy-MM-dd') });
     },
-    [openPanel, currentTime]
+    [openNewAppointment, currentTime]
   );
 
   // Show quick stats only for operational dashboard
@@ -252,7 +232,11 @@ export default function TodayPage() {
       <PageContent className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <WelcomeHeader />
+          <div className="flex items-center justify-between gap-4 w-full">
+            <WelcomeHeader />
+            {/* View toggle for owner dashboard - placed next to welcome header */}
+            {dashboardType === 'owner' && <OwnerDashboardViewToggle />}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {dashboardType === 'operational' && (
               <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefetching}>
@@ -264,15 +248,15 @@ export default function TodayPage() {
               <>
                 <Button variant="outline" size="sm" onClick={handleNewCustomer}>
                   <UserPlus className="h-4 w-4 mr-2" />
-                  New Customer
+                  <span className="hidden sm:inline">New Customer</span>
                 </Button>
-                <Button variant="outline" onClick={handleWalkIn}>
+                <Button variant="outline" size="sm" onClick={handleWalkIn}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Walk-in
+                  <span className="hidden sm:inline">Walk-in</span>
                 </Button>
-                <Button onClick={handleNewAppointment}>
+                <Button size="sm" onClick={handleNewAppointment}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Book Appointment
+                  <span className="hidden sm:inline">Book</span>
                 </Button>
               </>
             )}

@@ -192,12 +192,24 @@ export type GetCalendarInput = z.infer<typeof getCalendarSchema>;
 // APPOINTMENT LIST QUERY
 // =====================================================
 
+// Helper to transform comma-separated string to array for query params
+const commaSeparatedToArray = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (val) => {
+      if (typeof val === 'string' && val.includes(',')) {
+        return val.split(',').map((s) => s.trim());
+      }
+      return val;
+    },
+    z.union([schema, z.array(schema)])
+  );
+
 export const listAppointmentsSchema = z.object({
   branchId: z.string().uuid().optional(),
-  stylistId: z.string().uuid().optional(),
+  stylistId: commaSeparatedToArray(z.string().uuid()).optional(),
   customerId: z.string().uuid().optional(),
-  status: z.union([appointmentStatusEnum, z.array(appointmentStatusEnum)]).optional(),
-  bookingType: z.union([bookingTypeEnum, z.array(bookingTypeEnum)]).optional(),
+  status: commaSeparatedToArray(appointmentStatusEnum).optional(),
+  bookingType: commaSeparatedToArray(bookingTypeEnum).optional(),
   dateFrom: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -410,3 +422,36 @@ export const assignStylistSchema = z.object({
 });
 
 export type AssignStylistInput = z.infer<typeof assignStylistSchema>;
+
+// =====================================================
+// STATION ASSIGNMENT (Floor View)
+// =====================================================
+
+export const assignStationSchema = z.object({
+  stationId: z.string().uuid(),
+});
+
+export type AssignStationInput = z.infer<typeof assignStationSchema>;
+
+// =====================================================
+// ADD SERVICE MID-APPOINTMENT (Upsell)
+// =====================================================
+
+export const addServiceSchema = z.object({
+  serviceId: z.string().uuid(),
+  stylistId: z.string().uuid().optional(),
+  quantity: z.number().int().min(1).default(1),
+});
+
+export type AddServiceInput = z.infer<typeof addServiceSchema>;
+
+// =====================================================
+// UPDATE STYLISTS (Multi-Stylist Support)
+// =====================================================
+
+export const updateStylistsSchema = z.object({
+  primaryStylistId: z.string().uuid().optional(),
+  assistantIds: z.array(z.string().uuid()).optional(),
+});
+
+export type UpdateStylistsInput = z.infer<typeof updateStylistsSchema>;

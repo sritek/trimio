@@ -22,15 +22,15 @@ interface MobileCalendarProps {
   onSlotClick: (stylistId: string, date: string, time: string) => void;
 }
 
-// Status color mapping
+// Status color mapping - consistent with appointment-block.tsx
 const STATUS_COLORS: Record<string, string> = {
-  booked: 'bg-blue-100 border-blue-400 text-blue-700',
-  confirmed: 'bg-green-100 border-green-400 text-green-700',
-  checked_in: 'bg-purple-100 border-purple-500 text-purple-700',
-  in_progress: 'bg-purple-200 border-purple-600 text-purple-800',
-  completed: 'bg-gray-100 border-gray-400 text-gray-600',
-  cancelled: 'bg-red-100 border-red-400 text-red-600',
-  no_show: 'bg-orange-100 border-orange-400 text-orange-600',
+  booked: 'bg-sky-100 border-sky-500 text-sky-700',
+  confirmed: 'bg-emerald-100 border-emerald-500 text-emerald-700',
+  checked_in: 'bg-violet-100 border-violet-500 text-violet-700',
+  in_progress: 'bg-amber-100 border-amber-500 text-amber-700',
+  completed: 'bg-slate-100 border-slate-400 text-slate-600',
+  cancelled: 'bg-red-100 border-red-500 text-red-600',
+  no_show: 'bg-rose-100 border-rose-500 text-rose-600',
 };
 
 export function MobileCalendar({

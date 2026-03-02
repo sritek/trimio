@@ -38,7 +38,8 @@ export interface DragState {
 export interface CalendarFilters {
   stylistIds: string[];
   serviceCategories: string[];
-  statuses: AppointmentStatus[];
+  statuses: AppointmentStatus[]; // Include filter - when set, only show these
+  excludedStatuses: AppointmentStatus[]; // Exclude filter - hide these statuses
 }
 
 interface CalendarState {
@@ -67,6 +68,7 @@ interface CalendarState {
   clearFilters: () => void;
   toggleStylistFilter: (stylistId: string) => void;
   toggleStatusFilter: (status: AppointmentStatus) => void;
+  toggleExcludedStatus: (status: AppointmentStatus) => void;
 
   // Mobile
   setSelectedStylist: (stylistId: string | null) => void;
@@ -92,6 +94,7 @@ const initialFilters: CalendarFilters = {
   stylistIds: [],
   serviceCategories: [],
   statuses: [],
+  excludedStatuses: ['cancelled', 'no_show'], // Hide cancelled and no-show by default
 };
 
 export const useCalendarStore = create<CalendarState>()(
@@ -179,6 +182,18 @@ export const useCalendarStore = create<CalendarState>()(
             : [...current, status];
           return {
             filters: { ...state.filters, statuses: updated },
+          };
+        });
+      },
+
+      toggleExcludedStatus: (status) => {
+        set((state) => {
+          const current = state.filters.excludedStatuses;
+          const updated = current.includes(status)
+            ? current.filter((s) => s !== status)
+            : [...current, status];
+          return {
+            filters: { ...state.filters, excludedStatuses: updated },
           };
         });
       },

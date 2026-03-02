@@ -30,8 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { useSlideOver } from '@/components/ux/slide-over';
-import { PANEL_IDS } from '@/components/ux/slide-over/slide-over-registry';
+import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
 import {
   useCustomer,
   useCustomerAppointments,
@@ -42,11 +41,11 @@ import { maskPhoneNumber, shouldMaskPhoneForRole } from '@/lib/phone-masking';
 
 interface CustomerPeekPanelProps {
   customerId: string;
-  panelId: string;
 }
 
-export function CustomerPeekPanel({ customerId, panelId }: CustomerPeekPanelProps) {
-  const { openPanel, closePanel } = useSlideOver();
+export function CustomerPeekPanel({ customerId }: CustomerPeekPanelProps) {
+  const closePanel = useClosePanel();
+  const { openNewAppointment } = useOpenPanel();
   const { user } = useAuthStore();
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
   const [activeTab, setActiveTab] = useState('overview');
@@ -57,12 +56,8 @@ export function CustomerPeekPanel({ customerId, panelId }: CustomerPeekPanelProp
 
   // Handle book appointment
   const handleBookAppointment = useCallback(() => {
-    openPanel(
-      PANEL_IDS.NEW_APPOINTMENT,
-      { customerId },
-      { title: 'New Appointment', width: 'wide' }
-    );
-  }, [customerId, openPanel]);
+    openNewAppointment({ customerId });
+  }, [customerId, openNewAppointment]);
 
   // Loading state
   if (isLoading) {
@@ -91,7 +86,7 @@ export function CustomerPeekPanel({ customerId, panelId }: CustomerPeekPanelProp
         <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">Failed to load customer</h3>
         <p className="text-muted-foreground mb-4">{error?.message || 'Customer not found'}</p>
-        <Button variant="outline" onClick={() => closePanel(panelId)}>
+        <Button variant="outline" onClick={() => closePanel()}>
           Close
         </Button>
       </div>

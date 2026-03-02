@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { startOfDay, parseISO } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import { AppointmentsService } from './appointments.service';
 import type { AddToQueueInput } from './appointments.schema';
@@ -13,8 +14,7 @@ export class WalkInQueueService {
    * Add customer to walk-in queue
    */
   async addToQueue(tenantId: string, branchId: string, input: AddToQueueInput, _userId: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfDay(new Date());
 
     // Generate token number (sequential per branch per day)
     const tokenNumber = await this.generateToken(branchId, today);
@@ -56,8 +56,7 @@ export class WalkInQueueService {
    * Get current queue for a branch
    */
   async getQueue(tenantId: string, branchId: string, date?: string) {
-    const queueDate = date ? new Date(date) : new Date();
-    queueDate.setHours(0, 0, 0, 0);
+    const queueDate = date ? startOfDay(parseISO(date)) : startOfDay(new Date());
 
     const queue = await this.prisma.walkInQueue.findMany({
       where: {
@@ -268,8 +267,7 @@ export class WalkInQueueService {
     serviceIds: string[]
   ): Promise<number> {
     // Get waiting customers ahead
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfDay(new Date());
 
     const waitingAhead = await this.prisma.walkInQueue.count({
       where: {

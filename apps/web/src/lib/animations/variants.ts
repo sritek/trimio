@@ -71,31 +71,6 @@ export const backdropVariants: Variants = {
   },
 };
 
-// Command palette variants
-export const commandPaletteVariants: Variants = {
-  hidden: {
-    opacity: 0,
-    scale: 0.95,
-    y: -20,
-  },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: 'spring',
-      stiffness: 400,
-      damping: 25,
-    },
-  },
-  exit: {
-    opacity: 0,
-    scale: 0.95,
-    y: -20,
-    transition: { duration: 0.15 },
-  },
-};
-
 // List item variants for staggered animations
 export const listItemVariants: Variants = {
   hidden: {

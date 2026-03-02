@@ -30,7 +30,6 @@ export interface ActionContext {
     props: Record<string, unknown>,
     options: { width?: 'narrow' | 'medium' | 'wide'; title: string }
   ) => void;
-  closePanel: () => void;
   toast: {
     success: (message: string) => void;
     error: (message: string) => void;

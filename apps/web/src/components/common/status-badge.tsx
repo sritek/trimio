@@ -61,31 +61,31 @@ interface StatusBadgeProps {
 }
 
 const STATUS_CONFIG: Record<StatusType, { label: string; variant: string; dotColor: string }> = {
-  // Appointment statuses
+  // Appointment statuses - unique colors for each
   booked: {
     label: 'Booked',
-    variant: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
-    dotColor: 'bg-blue-500',
+    variant: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
+    dotColor: 'bg-sky-500',
   },
   confirmed: {
     label: 'Confirmed',
-    variant: 'bg-green-100 text-green-800 hover:bg-green-100',
-    dotColor: 'bg-green-500',
+    variant: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100',
+    dotColor: 'bg-emerald-500',
   },
   checked_in: {
     label: 'Checked In',
-    variant: 'bg-purple-100 text-purple-800 hover:bg-purple-100',
-    dotColor: 'bg-purple-500',
+    variant: 'bg-violet-100 text-violet-800 hover:bg-violet-100',
+    dotColor: 'bg-violet-500',
   },
   in_progress: {
     label: 'In Progress',
-    variant: 'bg-purple-100 text-purple-800 hover:bg-purple-100',
-    dotColor: 'bg-purple-500',
+    variant: 'bg-amber-100 text-amber-800 hover:bg-amber-100',
+    dotColor: 'bg-amber-500',
   },
   completed: {
     label: 'Completed',
-    variant: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
-    dotColor: 'bg-blue-500',
+    variant: 'bg-slate-100 text-slate-600 hover:bg-slate-100',
+    dotColor: 'bg-slate-400',
   },
   cancelled: {
     label: 'Cancelled',
@@ -94,8 +94,8 @@ const STATUS_CONFIG: Record<StatusType, { label: string; variant: string; dotCol
   },
   no_show: {
     label: 'No Show',
-    variant: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
-    dotColor: 'bg-gray-500',
+    variant: 'bg-rose-100 text-rose-800 hover:bg-rose-100',
+    dotColor: 'bg-rose-500',
   },
   rescheduled: {
     label: 'Rescheduled',

@@ -179,9 +179,13 @@ export function ScheduleGrid({
                       variant="outline"
                       className={cn(
                         'mt-1 text-[10px]',
-                        apt.status === 'completed' && 'bg-green-100 text-green-700',
-                        apt.status === 'cancelled' && 'bg-gray-100 text-gray-700',
-                        apt.status === 'in_progress' && 'bg-purple-100 text-purple-700'
+                        apt.status === 'booked' && 'bg-sky-100 text-sky-700',
+                        apt.status === 'confirmed' && 'bg-emerald-100 text-emerald-700',
+                        apt.status === 'checked_in' && 'bg-violet-100 text-violet-700',
+                        apt.status === 'in_progress' && 'bg-amber-100 text-amber-700',
+                        apt.status === 'completed' && 'bg-slate-100 text-slate-600',
+                        apt.status === 'cancelled' && 'bg-red-100 text-red-600',
+                        apt.status === 'no_show' && 'bg-rose-100 text-rose-600'
                       )}
                     >
                       {apt.status}

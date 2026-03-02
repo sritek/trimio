@@ -40,11 +40,13 @@ function generateTimeSlots(currentTime: Date): Date[] {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  booked: 'bg-blue-500',
-  confirmed: 'bg-green-500',
-  checked_in: 'bg-purple-500',
-  in_progress: 'bg-indigo-500',
-  completed: 'bg-gray-400',
+  booked: 'bg-sky-500',
+  confirmed: 'bg-emerald-500',
+  checked_in: 'bg-violet-500',
+  in_progress: 'bg-amber-500',
+  completed: 'bg-slate-400',
+  cancelled: 'bg-red-500',
+  no_show: 'bg-rose-500',
 };
 
 function LiveTimelineComponent({

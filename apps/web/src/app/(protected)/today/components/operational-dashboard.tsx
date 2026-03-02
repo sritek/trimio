@@ -3,14 +3,19 @@
 /**
  * Operational Dashboard Component
  * For receptionist and stylist roles
- * Shows timeline, queue, and attention items
+ * Shows timeline, queue, attention items, and floor view
  */
 
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown, ChevronUp, LayoutGrid, Calendar } from 'lucide-react';
+import { toast } from 'sonner';
 import { NextUpQueue, AttentionItems, LiveTimeline } from '@/components/ux/command-center';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { useOpenPanel } from '@/components/ux/slide-over';
+import { useStartAppointment, useCompleteAppointment } from '@/hooks/queries/use-appointments';
+import { FloorViewTab } from './floor-view-tab';
 import type { AttentionItem, CommandCenterData } from '@/types/dashboard';
 
 interface CollapsibleSectionProps {
@@ -80,6 +85,7 @@ interface OperationalDashboardProps {
   data: CommandCenterData | undefined;
   isLoading: boolean;
   currentTime: Date;
+  branchId: string;
   onTimelineSlotClick: (stylistId: string, time: string) => void;
   onAppointmentClick: (id: string) => void;
   onCheckIn: (id: string) => void;
@@ -92,6 +98,7 @@ export function OperationalDashboard({
   data,
   isLoading,
   currentTime,
+  branchId,
   onTimelineSlotClick,
   onAppointmentClick,
   onCheckIn,
@@ -99,43 +106,122 @@ export function OperationalDashboard({
   onAttentionItemClick,
   onDismissAttention,
 }: OperationalDashboardProps) {
+  const { openStationAssignment, openAppointmentDetails, openAddService, openCheckout } =
+    useOpenPanel();
+  const [activeTab, setActiveTab] = useState('timeline');
+  const startMutation = useStartAppointment();
+  const completeMutation = useCompleteAppointment();
+
+  // Floor view action handlers
+  const handleAssign = useCallback(
+    (stationId: string) => {
+      openStationAssignment(stationId);
+    },
+    [openStationAssignment]
+  );
+
+  const handleViewDetails = useCallback(
+    (appointmentId: string) => {
+      openAppointmentDetails(appointmentId);
+    },
+    [openAppointmentDetails]
+  );
+
+  const handleAddService = useCallback(
+    (appointmentId: string) => {
+      openAddService(appointmentId);
+    },
+    [openAddService]
+  );
+
+  const handleComplete = useCallback(
+    async (appointmentId: string) => {
+      try {
+        await completeMutation.mutateAsync(appointmentId);
+        toast.success('Appointment completed');
+        openCheckout(appointmentId);
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to complete appointment');
+      }
+    },
+    [completeMutation, openCheckout]
+  );
+
+  const handleStartNow = useCallback(
+    async (appointmentId: string) => {
+      try {
+        await startMutation.mutateAsync(appointmentId);
+        toast.success('Appointment started');
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to start appointment');
+      }
+    },
+    [startMutation]
+  );
+
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      {/* Left Column - Timeline (2/3 width on desktop) */}
-      <div className="lg:col-span-2 space-y-6">
-        <CollapsibleSection title="Timeline" defaultOpen={true} mobileDefaultOpen={false}>
-          <LiveTimeline
-            entries={data?.timeline || []}
-            currentTime={currentTime}
-            isLoading={isLoading}
-            onSlotClick={onTimelineSlotClick}
-            onAppointmentClick={onAppointmentClick}
-          />
-        </CollapsibleSection>
-      </div>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="timeline" className="flex items-center gap-2">
+          <Calendar className="h-4 w-4" />
+          Timeline
+        </TabsTrigger>
+        <TabsTrigger value="floor" className="flex items-center gap-2">
+          <LayoutGrid className="h-4 w-4" />
+          Floor View
+        </TabsTrigger>
+      </TabsList>
 
-      {/* Right Column - Queue and Attention (1/3 width on desktop) */}
-      <div className="space-y-6">
-        <CollapsibleSection title="Next Up" defaultOpen={true} mobileDefaultOpen={true}>
-          <NextUpQueue
-            appointments={data?.nextUp.appointments || []}
-            walkIns={data?.nextUp.walkIns || []}
-            isLoading={isLoading}
-            onAppointmentClick={onAppointmentClick}
-            onCheckIn={onCheckIn}
-            onCallWalkIn={onCallWalkIn}
-          />
-        </CollapsibleSection>
+      <TabsContent value="timeline" className="mt-0">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Column - Timeline (2/3 width on desktop) */}
+          <div className="lg:col-span-2 space-y-6">
+            <CollapsibleSection title="Timeline" defaultOpen={true} mobileDefaultOpen={false}>
+              <LiveTimeline
+                entries={data?.timeline || []}
+                currentTime={currentTime}
+                isLoading={isLoading}
+                onSlotClick={onTimelineSlotClick}
+                onAppointmentClick={onAppointmentClick}
+              />
+            </CollapsibleSection>
+          </div>
 
-        <CollapsibleSection title="Needs Attention" defaultOpen={true} mobileDefaultOpen={true}>
-          <AttentionItems
-            items={data?.attentionItems || []}
-            isLoading={isLoading}
-            onItemClick={onAttentionItemClick}
-            onDismiss={onDismissAttention}
-          />
-        </CollapsibleSection>
-      </div>
-    </div>
+          {/* Right Column - Queue and Attention (1/3 width on desktop) */}
+          <div className="space-y-6">
+            <CollapsibleSection title="Next Up" defaultOpen={true} mobileDefaultOpen={true}>
+              <NextUpQueue
+                appointments={data?.nextUp.appointments || []}
+                walkIns={data?.nextUp.walkIns || []}
+                isLoading={isLoading}
+                onAppointmentClick={onAppointmentClick}
+                onCheckIn={onCheckIn}
+                onCallWalkIn={onCallWalkIn}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Needs Attention" defaultOpen={true} mobileDefaultOpen={true}>
+              <AttentionItems
+                items={data?.attentionItems || []}
+                isLoading={isLoading}
+                onItemClick={onAttentionItemClick}
+                onDismiss={onDismissAttention}
+              />
+            </CollapsibleSection>
+          </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="floor" className="mt-0">
+        <FloorViewTab
+          branchId={branchId}
+          onAssign={handleAssign}
+          onViewDetails={handleViewDetails}
+          onAddService={handleAddService}
+          onComplete={handleComplete}
+          onStartNow={handleStartNow}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }

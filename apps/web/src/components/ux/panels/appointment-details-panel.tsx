@@ -10,7 +10,7 @@
  * Includes quick action buttons for status changes and checkout.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
   Calendar,
@@ -31,15 +31,19 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { useSlideOver } from '@/components/ux/slide-over';
-import { PANEL_IDS } from '@/components/ux/slide-over/slide-over-registry';
+import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
+import { CustomerInfoPopover } from '@/components/ux/customer-info-popover';
+import {
+  ConfirmAppointmentDialog,
+  CancelAppointmentDialog,
+  RescheduleAppointmentDialog,
+} from '@/components/ux/dialogs';
 import { useAppointment, useUpdateAppointmentStatus } from '@/hooks/queries/use-appointments';
 import { useAuthStore } from '@/stores/auth-store';
 import { maskPhoneNumber, shouldMaskPhoneForRole } from '@/lib/phone-masking';
 
 interface AppointmentDetailsPanelProps {
   appointmentId: string;
-  panelId: string;
 }
 
 // Status action configurations
@@ -64,10 +68,16 @@ const STATUS_ACTIONS = {
   no_show: [],
 };
 
-export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentDetailsPanelProps) {
-  const { openPanel, closePanel } = useSlideOver();
+export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPanelProps) {
+  const closePanel = useClosePanel();
+  const { openCheckout } = useOpenPanel();
   const { user } = useAuthStore();
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
+
+  // Dialog states
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
 
   const { data: appointment, isLoading, error } = useAppointment(appointmentId);
   const updateStatusMutation = useUpdateAppointmentStatus();
@@ -84,10 +94,22 @@ export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentD
     return appointment.status === 'in_progress' || appointment.status === 'completed';
   }, [appointment]);
 
-  // Handle status change
+  // Handle status change (for non-dialog actions like check-in, start, complete, no-show)
   const handleStatusChange = useCallback(
     async (newStatus: string) => {
       if (!appointment) return;
+
+      // Use dialogs for confirm and cancel
+      if (newStatus === 'confirmed') {
+        setConfirmDialogOpen(true);
+        return;
+      }
+      if (newStatus === 'cancelled') {
+        setCancelDialogOpen(true);
+        return;
+      }
+
+      // Direct status change for other statuses
       try {
         await updateStatusMutation.mutateAsync({
           id: appointmentId,
@@ -100,24 +122,14 @@ export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentD
     [appointment, appointmentId, updateStatusMutation]
   );
 
-  // Handle customer click - open customer peek panel
-  const handleCustomerClick = useCallback(() => {
-    if (!appointment?.customerId) return;
-    openPanel(
-      PANEL_IDS.CUSTOMER_PEEK,
-      { customerId: appointment.customerId },
-      { title: 'Customer Profile', width: 'medium' }
-    );
-  }, [appointment?.customerId, openPanel]);
-
   // Handle checkout click
   const handleCheckout = useCallback(() => {
-    openPanel(PANEL_IDS.CHECKOUT, { appointmentId }, { title: 'Checkout', width: 'wide' });
-  }, [appointmentId, openPanel]);
+    openCheckout(appointmentId);
+  }, [appointmentId, openCheckout]);
 
   // Handle reschedule click
   const handleReschedule = useCallback(() => {
-    // TODO: Implement reschedule panel - will open a reschedule panel when implemented
+    setRescheduleDialogOpen(true);
   }, []);
 
   // Loading state
@@ -149,7 +161,7 @@ export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentD
         <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">Failed to load appointment</h3>
         <p className="text-muted-foreground mb-4">{error?.message || 'Appointment not found'}</p>
-        <Button variant="outline" onClick={() => closePanel(panelId)}>
+        <Button variant="outline" onClick={() => closePanel()}>
           Close
         </Button>
       </div>
@@ -170,18 +182,27 @@ export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentD
             <h3 className="text-xl font-semibold">
               {appointment.customerName || 'Walk-in Customer'}
             </h3>
-            {appointment.customerPhone && (
-              <button
-                onClick={handleCustomerClick}
-                className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-1"
-              >
+            {appointment.customerPhone && appointment.customerId && (
+              <CustomerInfoPopover customerId={appointment.customerId}>
+                <button className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors mt-1">
+                  <Phone className="h-4 w-4" />
+                  <span className="text-sm">
+                    {shouldMask
+                      ? maskPhoneNumber(appointment.customerPhone)
+                      : appointment.customerPhone}
+                  </span>
+                </button>
+              </CustomerInfoPopover>
+            )}
+            {appointment.customerPhone && !appointment.customerId && (
+              <div className="flex items-center gap-1 text-muted-foreground mt-1">
                 <Phone className="h-4 w-4" />
                 <span className="text-sm">
                   {shouldMask
                     ? maskPhoneNumber(appointment.customerPhone)
                     : appointment.customerPhone}
                 </span>
-              </button>
+              </div>
             )}
           </div>
           <StatusBadge status={appointment.status} showDot />
@@ -310,6 +331,28 @@ export function AppointmentDetailsPanel({ appointmentId, panelId }: AppointmentD
           </Button>
         )}
       </div>
+
+      {/* Dialogs */}
+      <ConfirmAppointmentDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        appointmentId={appointmentId}
+        customerName={appointment.customerName || undefined}
+        scheduledTime={appointment.scheduledTime}
+      />
+
+      <CancelAppointmentDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        appointmentId={appointmentId}
+        customerName={appointment.customerName || undefined}
+      />
+
+      <RescheduleAppointmentDialog
+        open={rescheduleDialogOpen}
+        onOpenChange={setRescheduleDialogOpen}
+        appointment={appointment}
+      />
     </div>
   );
 }

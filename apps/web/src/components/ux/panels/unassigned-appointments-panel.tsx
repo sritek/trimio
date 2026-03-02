@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useSlideOver } from '@/components/ux/slide-over';
+import { useClosePanel } from '@/components/ux/slide-over';
 import {
   useUnassignedAppointments,
   useAssignStylist,
@@ -26,12 +26,8 @@ import { useBranchContext } from '@/hooks/use-branch-context';
 
 import type { Appointment } from '@/types/appointments';
 
-interface UnassignedAppointmentsPanelProps {
-  panelId: string;
-}
-
-export function UnassignedAppointmentsPanel({ panelId }: UnassignedAppointmentsPanelProps) {
-  const { closePanel } = useSlideOver();
+export function UnassignedAppointmentsPanel() {
+  const closePanel = useClosePanel();
   const { branchId: activeBranchId } = useBranchContext();
   const today = format(new Date(), 'yyyy-MM-dd');
 
@@ -63,7 +59,7 @@ export function UnassignedAppointmentsPanel({ panelId }: UnassignedAppointmentsP
         <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">Failed to load appointments</h3>
         <p className="text-muted-foreground mb-4">{error.message}</p>
-        <Button variant="outline" onClick={() => closePanel(panelId)}>
+        <Button variant="outline" onClick={() => closePanel()}>
           Close
         </Button>
       </div>
@@ -79,7 +75,7 @@ export function UnassignedAppointmentsPanel({ panelId }: UnassignedAppointmentsP
         <p className="text-muted-foreground mb-4">
           All appointments for today have stylists assigned.
         </p>
-        <Button variant="outline" onClick={() => closePanel(panelId)}>
+        <Button variant="outline" onClick={() => closePanel()}>
           Close
         </Button>
       </div>

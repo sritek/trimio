@@ -22,15 +22,18 @@ interface CalendarHeaderProps {
   hasActiveFilters?: boolean;
 }
 
-// Status legend items
-const STATUS_LEGEND = [
+// Status legend items - grouped by flow
+const ACTIVE_FLOW_STATUSES = [
   { key: 'booked', label: 'Booked', color: 'bg-sky-500' },
   { key: 'confirmed', label: 'Confirmed', color: 'bg-emerald-500' },
   { key: 'checked_in', label: 'Checked In', color: 'bg-violet-500' },
   { key: 'in_progress', label: 'In Progress', color: 'bg-amber-500' },
+];
+
+const TERMINAL_STATUSES = [
   { key: 'completed', label: 'Completed', color: 'bg-slate-400' },
-  { key: 'cancelled', label: 'Cancelled', color: 'bg-red-500' },
-  { key: 'no_show', label: 'No Show', color: 'bg-orange-500' },
+  { key: 'cancelled', label: 'Cancelled', color: 'bg-red-500', hidden: true },
+  { key: 'no_show', label: 'No Show', color: 'bg-rose-500', hidden: true },
 ];
 
 function StatusLegend() {
@@ -46,17 +49,40 @@ function StatusLegend() {
           <span className="hidden sm:inline text-xs">Legend</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-48 p-2" align="end">
-        <div className="text-xs font-medium text-muted-foreground mb-2">Status Colors</div>
-        <div className="space-y-1.5">
-          {STATUS_LEGEND.map((item) => (
+      <PopoverContent className="w-52 p-3" align="end">
+        {/* Active Flow */}
+        <div className="text-xs font-medium text-muted-foreground mb-2">Active Flow</div>
+        <div className="space-y-1.5 mb-3">
+          {ACTIVE_FLOW_STATUSES.map((item) => (
             <div key={item.key} className="flex items-center gap-2">
               <div className={cn('w-3 h-3 rounded-full', item.color)} />
               <span className="text-sm">{item.label}</span>
             </div>
           ))}
         </div>
-        <div className="border-t mt-2 pt-2">
+
+        {/* Terminal States */}
+        <div className="border-t pt-2">
+          <div className="text-xs font-medium text-muted-foreground mb-2">Terminal States</div>
+          <div className="space-y-1.5">
+            {TERMINAL_STATUSES.map((item) => (
+              <div key={item.key} className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    'w-3 h-3 rounded-full',
+                    item.color,
+                    item.hidden && 'ring-1 ring-offset-1 ring-muted-foreground/30'
+                  )}
+                />
+                <span className="text-sm">{item.label}</span>
+                {item.hidden && <span className="text-xs text-muted-foreground">(hidden)</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Other */}
+        <div className="border-t mt-3 pt-2">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-sm bg-amber-200 dark:bg-amber-800" />
             <span className="text-sm">Break Time</span>

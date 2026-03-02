@@ -9,7 +9,7 @@ import type { ApiResponse, PaginatedApiResponse, PaginatedResult } from '@/types
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | number | boolean | string[] | undefined>;
 }
 
 export class ApiError extends Error {
@@ -66,7 +66,14 @@ async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Pr
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {
-        searchParams.append(key, String(value));
+        if (Array.isArray(value)) {
+          // Handle arrays - join with comma for API compatibility
+          if (value.length > 0) {
+            searchParams.append(key, value.join(','));
+          }
+        } else {
+          searchParams.append(key, String(value));
+        }
       }
     });
     const queryString = searchParams.toString();

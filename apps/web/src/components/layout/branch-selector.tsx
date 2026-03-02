@@ -41,15 +41,15 @@ export function BranchSelector({ className }: BranchSelectorProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className={cn('flex items-center gap-2', className)}>
-          <Building2 className="h-4 w-4" />
+          <Building2 className="h-4 w-4 shrink-0" />
           {isLoading ? (
             <Skeleton className="h-4 w-20" />
           ) : (
-            <span className="max-w-[120px] truncate">
+            <span className="max-w-[100px] sm:max-w-[180px] truncate">
               {selectedBranch?.name || 'Select Branch'}
             </span>
           )}
-          <ChevronDown className="h-4 w-4 opacity-50" />
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">

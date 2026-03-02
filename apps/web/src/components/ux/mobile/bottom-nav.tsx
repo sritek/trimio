@@ -9,7 +9,6 @@
 import { useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
-  Home,
   Calendar,
   Users,
   Menu,
@@ -59,7 +58,7 @@ const ROLE_NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { id: 'billing', label: 'Billing', icon: DollarSign, href: '/billing' },
   ],
   stylist: [
-    { id: 'home', label: 'Home', icon: Home, href: '/my-schedule' },
+    { id: 'home', label: 'Today', icon: Command, href: '/today' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, href: '/appointments' },
     { id: 'customers', label: 'Customers', icon: Users, href: '/customers' },
   ],
@@ -90,7 +89,7 @@ export function BottomNav({ className, notificationCount, attentionCount }: Bott
 
   // Check if a nav item is active
   const isActive = (href: string) => {
-    if (href === '/today' || href === '/my-schedule') {
+    if (href === '/today') {
       return pathname === href;
     }
     return pathname.startsWith(href);

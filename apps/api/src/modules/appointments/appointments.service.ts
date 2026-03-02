@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma, AppointmentStatus } from '@prisma/client';
+import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import type {
   CreateAppointmentInput,
@@ -51,7 +52,9 @@ export class AppointmentsService {
     };
 
     if (branchId) where.branchId = branchId;
-    if (stylistId) where.stylistId = stylistId;
+    if (stylistId) {
+      where.stylistId = Array.isArray(stylistId) ? { in: stylistId } : stylistId;
+    }
     if (customerId) where.customerId = customerId;
 
     if (status) {
@@ -64,8 +67,10 @@ export class AppointmentsService {
 
     if (dateFrom || dateTo) {
       where.scheduledDate = {};
-      if (dateFrom) where.scheduledDate.gte = new Date(dateFrom);
-      if (dateTo) where.scheduledDate.lte = new Date(dateTo);
+      // Use parseISO to create local timezone dates (consistent with calendar service)
+      // Then use startOfDay/endOfDay to ensure we capture the full day
+      if (dateFrom) where.scheduledDate.gte = startOfDay(parseISO(dateFrom));
+      if (dateTo) where.scheduledDate.lte = endOfDay(parseISO(dateTo));
     }
 
     if (search) {
@@ -168,7 +173,7 @@ export class AppointmentsService {
     excludeAppointmentId?: string
   ) {
     const endTime = this.calculateEndTime(scheduledTime, duration);
-    const dateObj = new Date(scheduledDate);
+    const dateObj = startOfDay(parseISO(scheduledDate));
 
     const where: Prisma.AppointmentWhereInput = {
       tenantId,
@@ -357,7 +362,7 @@ export class AppointmentsService {
     // 7. Generate token for walk-ins
     let tokenNumber: number | undefined;
     if (input.bookingType === 'walk_in') {
-      const today = new Date(input.scheduledDate);
+      const today = startOfDay(parseISO(input.scheduledDate));
       const lastToken = await this.prisma.appointment.findFirst({
         where: {
           branchId: input.branchId,
@@ -452,7 +457,7 @@ export class AppointmentsService {
           customerId: input.customerId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          scheduledDate: new Date(input.scheduledDate),
+          scheduledDate: startOfDay(parseISO(input.scheduledDate)),
           scheduledTime: input.scheduledTime,
           endTime,
           totalDuration,
@@ -614,7 +619,37 @@ export class AppointmentsService {
       throw new AppError('Cannot start appointment in current status', 400, 'APT_030');
     }
 
-    return this.updateStatus(tenantId, appointmentId, 'in_progress', userId);
+    // Set startedAt timestamp when starting
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: 'in_progress',
+          startedAt: new Date(),
+        },
+        include: {
+          services: true,
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          station: {
+            include: { stationType: true },
+          },
+        },
+      });
+
+      await tx.appointmentStatusHistory.create({
+        data: {
+          tenantId,
+          appointmentId,
+          fromStatus: appointment.status,
+          toStatus: 'in_progress',
+          changedBy: userId,
+        },
+      });
+
+      return updated;
+    });
   }
 
   /**
@@ -627,7 +662,34 @@ export class AppointmentsService {
       throw new AppError('Cannot complete appointment in current status', 400, 'APT_030');
     }
 
-    return this.updateStatus(tenantId, appointmentId, 'completed', userId);
+    // Clear station assignment when completing
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: 'completed',
+          stationId: null, // Clear station on completion
+        },
+        include: {
+          services: true,
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+        },
+      });
+
+      await tx.appointmentStatusHistory.create({
+        data: {
+          tenantId,
+          appointmentId,
+          fromStatus: appointment.status,
+          toStatus: 'completed',
+          changedBy: userId,
+        },
+      });
+
+      return updated;
+    });
   }
 
   /**
@@ -825,7 +887,7 @@ export class AppointmentsService {
           customerId: appointment.customerId,
           customerName: appointment.customerName,
           customerPhone: appointment.customerPhone,
-          scheduledDate: new Date(input.newDate),
+          scheduledDate: startOfDay(parseISO(input.newDate)),
           scheduledTime: input.newTime,
           endTime: newEndTime,
           totalDuration: appointment.totalDuration,
@@ -1040,8 +1102,7 @@ export class AppointmentsService {
    * Defaults to today's date if not specified
    */
   async getUnassignedAppointments(tenantId: string, branchId: string, date?: string) {
-    const targetDate = date ? new Date(date) : new Date();
-    targetDate.setHours(0, 0, 0, 0);
+    const targetDate = date ? startOfDay(parseISO(date)) : startOfDay(new Date());
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
@@ -1074,8 +1135,7 @@ export class AppointmentsService {
    * Get count of unassigned appointments for a branch (today)
    */
   async getUnassignedCount(tenantId: string, branchId: string): Promise<number> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfDay(new Date());
 
     return this.prisma.appointment.count({
       where: {
@@ -1163,6 +1223,388 @@ export class AppointmentsService {
           entityId: appointmentId,
           oldValues: { stylistId: null },
           newValues: { stylistId },
+        },
+      });
+
+      return apt;
+    });
+
+    return updated;
+  }
+
+  // =====================================================
+  // STATION ASSIGNMENT (Floor View)
+  // =====================================================
+
+  /**
+   * Assign a station to an appointment
+   */
+  async assignStation(tenantId: string, appointmentId: string, stationId: string, userId: string) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    // Check if appointment is in a valid status for station assignment
+    if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
+      throw new AppError('Cannot assign station to appointment in current status', 400, 'APT_030');
+    }
+
+    // Verify station exists and belongs to the same branch
+    const station = await this.prisma.station.findFirst({
+      where: {
+        id: stationId,
+        tenantId,
+        branchId: appointment.branchId,
+        deletedAt: null,
+      },
+    });
+
+    if (!station) {
+      throw new AppError('Station not found', 404, 'STATION_NOT_FOUND');
+    }
+
+    // Check if station is out of service
+    if (station.status === 'out_of_service') {
+      throw new AppError('Station is out of service', 400, 'STATION_OUT_OF_SERVICE');
+    }
+
+    // Check if station is already occupied by another active appointment
+    const existingAppointment = await this.prisma.appointment.findFirst({
+      where: {
+        stationId,
+        id: { not: appointmentId },
+        status: { in: ['checked_in', 'in_progress'] },
+        deletedAt: null,
+      },
+    });
+
+    if (existingAppointment) {
+      throw new AppError('Station is already occupied', 409, 'STATION_ALREADY_OCCUPIED', {
+        existingAppointmentId: existingAppointment.id,
+      });
+    }
+
+    // Update appointment with station
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          stationId,
+          updatedAt: new Date(),
+        },
+        include: {
+          services: true,
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          stylist: {
+            select: { id: true, name: true },
+          },
+          station: {
+            include: { stationType: true },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          branchId: appointment.branchId,
+          userId,
+          action: 'STATION_ASSIGNED',
+          entityType: 'appointment',
+          entityId: appointmentId,
+          oldValues: { stationId: appointment.stationId },
+          newValues: { stationId },
+        },
+      });
+
+      return apt;
+    });
+
+    return updated;
+  }
+
+  /**
+   * Clear station assignment from an appointment
+   */
+  async clearStation(tenantId: string, appointmentId: string, userId: string) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    if (!appointment.stationId) {
+      return appointment; // No station to clear
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          stationId: null,
+          updatedAt: new Date(),
+        },
+        include: {
+          services: true,
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          stylist: {
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          branchId: appointment.branchId,
+          userId,
+          action: 'STATION_CLEARED',
+          entityType: 'appointment',
+          entityId: appointmentId,
+          oldValues: { stationId: appointment.stationId },
+          newValues: { stationId: null },
+        },
+      });
+
+      return apt;
+    });
+
+    return updated;
+  }
+
+  // =====================================================
+  // ADD SERVICE MID-APPOINTMENT (Upsell)
+  // =====================================================
+
+  /**
+   * Add a service to an in-progress appointment
+   */
+  async addService(
+    tenantId: string,
+    appointmentId: string,
+    input: { serviceId: string; stylistId?: string; quantity?: number },
+    userId: string
+  ) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    // Only allow adding services to in-progress appointments
+    if (appointment.status !== 'in_progress') {
+      throw new AppError('Can only add services to in-progress appointments', 400, 'APT_030');
+    }
+
+    // Get service details
+    const service = await this.prisma.service.findFirst({
+      where: {
+        id: input.serviceId,
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+      },
+    });
+
+    if (!service) {
+      throw new AppError('Service not found', 404, 'SERVICE_NOT_FOUND');
+    }
+
+    const quantity = input.quantity || 1;
+    const stylistId = input.stylistId || appointment.stylistId;
+
+    // Calculate price (lock at current rate)
+    const unitPrice = Number(service.basePrice);
+    const totalAmount = unitPrice * quantity;
+    const taxRate = Number(service.taxRate);
+    const taxAmount = service.isTaxInclusive
+      ? totalAmount - totalAmount / (1 + taxRate / 100)
+      : totalAmount * (taxRate / 100);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Create appointment service
+      await tx.appointmentService.create({
+        data: {
+          tenantId,
+          appointmentId,
+          serviceId: input.serviceId,
+          serviceName: service.name,
+          serviceSku: service.sku,
+          stylistId,
+          quantity,
+          unitPrice,
+          totalAmount,
+          taxRate,
+          taxAmount,
+          durationMinutes: service.durationMinutes,
+          activeTimeMinutes: service.activeTimeMinutes,
+          processingTimeMinutes: service.processingTimeMinutes,
+          status: 'pending',
+          addedMidAppointment: true,
+          addedAt: new Date(),
+          addedBy: userId,
+        },
+      });
+
+      // Recalculate appointment totals
+      const allServices = await tx.appointmentService.findMany({
+        where: { appointmentId },
+      });
+
+      const subtotal = allServices.reduce((sum, s) => sum + Number(s.totalAmount), 0);
+      const totalTax = allServices.reduce((sum, s) => sum + Number(s.taxAmount), 0);
+      const totalDuration = await this.calculateTotalDuration(tx, allServices);
+
+      // Update appointment
+      const apt = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          subtotal,
+          taxAmount: totalTax,
+          totalAmount: subtotal + totalTax,
+          totalDuration,
+          endTime: this.calculateEndTime(appointment.scheduledTime, totalDuration),
+          updatedAt: new Date(),
+        },
+        include: {
+          services: {
+            include: {
+              service: { select: { id: true, name: true, durationMinutes: true } },
+            },
+          },
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          stylist: {
+            select: { id: true, name: true },
+          },
+          station: {
+            include: { stationType: true },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          branchId: appointment.branchId,
+          userId,
+          action: 'SERVICE_ADDED_MID_APPOINTMENT',
+          entityType: 'appointment',
+          entityId: appointmentId,
+          newValues: {
+            serviceId: input.serviceId,
+            serviceName: service.name,
+            quantity,
+            unitPrice,
+            totalAmount,
+          },
+        },
+      });
+
+      return apt;
+    });
+
+    return updated;
+  }
+
+  /**
+   * Helper to calculate total duration from appointment services
+   */
+  private async calculateTotalDuration(
+    tx: any,
+    services: Array<{ serviceId: string; quantity: number }>
+  ): Promise<number> {
+    let totalDuration = 0;
+
+    for (const svc of services) {
+      const service = await tx.service.findUnique({
+        where: { id: svc.serviceId },
+        select: { durationMinutes: true },
+      });
+      if (service) {
+        totalDuration += service.durationMinutes * svc.quantity;
+      }
+    }
+
+    return totalDuration;
+  }
+
+  // =====================================================
+  // MULTI-STYLIST SUPPORT
+  // =====================================================
+
+  /**
+   * Update stylists for an appointment (primary and assistants)
+   */
+  async updateStylists(
+    tenantId: string,
+    appointmentId: string,
+    input: { primaryStylistId?: string; assistantIds?: string[] },
+    userId: string
+  ) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    // Check if appointment is in a valid status
+    if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
+      throw new AppError(
+        'Cannot update stylists for appointment in current status',
+        400,
+        'APT_030'
+      );
+    }
+
+    const updates: any = { updatedAt: new Date() };
+
+    // Update primary stylist if provided
+    if (input.primaryStylistId !== undefined) {
+      // Verify stylist exists
+      const stylist = await this.prisma.user.findFirst({
+        where: {
+          id: input.primaryStylistId,
+          tenantId,
+          role: 'stylist',
+          isActive: true,
+        },
+      });
+
+      if (!stylist) {
+        throw new AppError('Stylist not found', 404, 'STYLIST_NOT_FOUND');
+      }
+
+      updates.stylistId = input.primaryStylistId;
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const apt = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: updates,
+        include: {
+          services: {
+            include: {
+              service: { select: { id: true, name: true } },
+            },
+          },
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          stylist: {
+            select: { id: true, name: true },
+          },
+          station: {
+            include: { stationType: true },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          branchId: appointment.branchId,
+          userId,
+          action: 'STYLISTS_UPDATED',
+          entityType: 'appointment',
+          entityId: appointmentId,
+          oldValues: { stylistId: appointment.stylistId },
+          newValues: { stylistId: input.primaryStylistId },
         },
       });
 

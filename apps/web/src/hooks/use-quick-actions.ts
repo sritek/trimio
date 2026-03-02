@@ -9,7 +9,7 @@
 
 import { useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
-import { useSlideOver } from './use-slide-over';
+import { useSlideOverStore } from '@/stores/slide-over-store';
 import {
   ENTITY_ACTIONS,
   getVisibleActions,
@@ -78,7 +78,7 @@ export function useQuickActions<T>(
 ): UseQuickActionsReturn<T> {
   const { permissions = [], maxPrimaryActions = 3, onActionComplete, onActionError } = options;
 
-  const { openPanel, closePanel } = useSlideOver();
+  const openPanel = useSlideOverStore((s) => s.open);
 
   // Store last failed action for retry
   const lastFailedActionRef = useRef<FailedAction<T> | null>(null);
@@ -119,9 +119,6 @@ export function useQuickActions<T>(
     () => ({
       openPanel: (componentId, props, opts) => {
         openPanel(componentId, props, opts);
-      },
-      closePanel: () => {
-        closePanel();
       },
       toast: {
         success: (message: string) => toast.success(message),
@@ -166,7 +163,7 @@ export function useQuickActions<T>(
         },
       },
     }),
-    [openPanel, closePanel, retryLastAction]
+    [openPanel, retryLastAction]
   );
 
   // Get actions for the entity type
@@ -233,15 +230,12 @@ export function useQuickActions<T>(
  * Useful for custom action implementations
  */
 export function useActionContext(): ActionContext {
-  const { openPanel, closePanel } = useSlideOver();
+  const openPanel = useSlideOverStore((s) => s.open);
 
   return useMemo(
     () => ({
       openPanel: (componentId, props, opts) => {
         openPanel(componentId, props, opts);
-      },
-      closePanel: () => {
-        closePanel();
       },
       toast: {
         success: (message: string) => toast.success(message),
@@ -268,6 +262,6 @@ export function useActionContext(): ActionContext {
         },
       },
     }),
-    [openPanel, closePanel]
+    [openPanel]
   );
 }

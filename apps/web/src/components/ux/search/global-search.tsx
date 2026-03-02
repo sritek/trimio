@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDebounce } from '@/hooks/use-debounce';
-import { useSlideOver } from '@/hooks/use-slide-over';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { api } from '@/lib/api/client';
 
 export interface SearchResult {
@@ -87,7 +87,7 @@ export function GlobalSearch({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { openPanel } = useSlideOver();
+  const { openCustomerPeek, openAppointmentDetails } = useOpenPanel();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -127,38 +127,15 @@ export function GlobalSearch({
     (result: SearchResult) => {
       switch (result.type) {
         case 'customer':
-          openPanel(
-            'CustomerDetails',
-            { customerId: result.id },
-            {
-              title: result.title,
-              width: 'medium',
-            }
-          );
+          openCustomerPeek(result.id);
           break;
         case 'appointment':
-          openPanel(
-            'AppointmentDetails',
-            { appointmentId: result.id },
-            {
-              title: 'Appointment Details',
-              width: 'medium',
-            }
-          );
+          openAppointmentDetails(result.id);
           break;
-        case 'invoice':
-          openPanel(
-            'InvoiceDetails',
-            { invoiceId: result.id },
-            {
-              title: result.title,
-              width: 'medium',
-            }
-          );
-          break;
+        // TODO: Add invoice details panel when implemented
       }
     },
-    [openPanel]
+    [openCustomerPeek, openAppointmentDetails]
   );
 
   // Handle result selection

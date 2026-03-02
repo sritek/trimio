@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSlideOver } from '@/components/ux/slide-over';
+import { useClosePanel, useSlideOverUnsavedChanges } from '@/components/ux/slide-over';
 import { SlideOverContent } from '@/components/ux/slide-over/slide-over-content';
 import { SlideOverFooter } from '@/components/ux/slide-over/slide-over-footer';
 import { Button } from '@/components/ui/button';
@@ -55,7 +55,6 @@ import type { CheckoutSession } from '@/types/checkout';
 interface CheckoutPanelProps {
   appointmentId?: string;
   customerId?: string;
-  panelId?: string;
   onComplete?: (invoiceId: string) => void;
 }
 
@@ -235,13 +234,9 @@ function PaymentMethodButton({
 // Main Component
 // ============================================
 
-export function CheckoutPanel({
-  appointmentId,
-  customerId,
-  panelId,
-  onComplete,
-}: CheckoutPanelProps) {
-  const { closePanel, setUnsavedChanges } = useSlideOver();
+export function CheckoutPanel({ appointmentId, customerId, onComplete }: CheckoutPanelProps) {
+  const closePanel = useClosePanel();
+  const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { branchId } = useBranchContext();
 
   // Session state
@@ -425,7 +420,7 @@ export function CheckoutPanel({
             setUnsavedChanges(false);
             setShowCompletionDialog(false);
             onComplete?.(result.invoiceId);
-            closePanel(panelId);
+            closePanel();
           },
           onError: (error) => {
             toast.error('Failed to complete checkout', {
@@ -605,7 +600,7 @@ export function CheckoutPanel({
       </SlideOverContent>
 
       <SlideOverFooter>
-        <Button variant="outline" onClick={() => closePanel(panelId)}>
+        <Button variant="outline" onClick={() => closePanel()}>
           Cancel
         </Button>
         <Button onClick={handleComplete} disabled={!canComplete || completeCheckout.isPending}>

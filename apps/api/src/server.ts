@@ -48,6 +48,9 @@ import { branchRoutes } from './modules/branches';
 import { waitlistRoutes } from './modules/waitlist';
 import { tenantRoutes } from './modules/tenant';
 import { usersRoutes } from './modules/users';
+import { stationTypesRoutes } from './modules/station-types';
+import { stationsRoutes } from './modules/stations';
+import { floorViewRoutes } from './modules/floor-view';
 
 // Create Fastify instance with Zod type provider
 const fastify = Fastify({
@@ -269,6 +272,15 @@ async function registerRoutes() {
 
   // Waitlist routes
   fastify.register(waitlistRoutes, { prefix: '/api/v1/waitlist' });
+
+  // Station Types routes
+  fastify.register(stationTypesRoutes, { prefix: '/api/v1' });
+
+  // Stations routes
+  fastify.register(stationsRoutes, { prefix: '/api/v1' });
+
+  // Floor View routes
+  fastify.register(floorViewRoutes, { prefix: '/api/v1' });
 }
 
 // Start server

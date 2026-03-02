@@ -8,7 +8,7 @@
 import { useCallback, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Clock } from 'lucide-react';
 
 // Debounce interval in milliseconds to prevent rapid clicks
 const CLICK_DEBOUNCE_MS = 300;
@@ -22,6 +22,7 @@ interface DroppableSlotProps {
   isBreak?: boolean;
   isBlocked?: boolean;
   isOutsideHours?: boolean;
+  isAfterHours?: boolean; // Beyond branch closing time (overtime)
   hasConflict?: boolean;
   onClick?: () => void;
   children?: React.ReactNode;
@@ -36,6 +37,7 @@ export function DroppableSlot({
   isBreak = false,
   isBlocked = false,
   isOutsideHours = false,
+  isAfterHours = false,
   hasConflict = false,
   onClick,
   children,
@@ -47,10 +49,12 @@ export function DroppableSlot({
       date,
       time,
     },
+    // After-hours slots can still receive drops (for phone/walk-in)
     disabled: isBreak || isBlocked || isOutsideHours,
   });
 
   const isDragging = !!active;
+  // After-hours slots are droppable but show visual distinction
   const canDrop = !isBreak && !isBlocked && !isOutsideHours;
 
   // Track last click time to debounce rapid clicks
@@ -83,6 +87,8 @@ export function DroppableSlot({
         isOutsideHours && 'bg-muted/50',
         isBlocked && 'bg-red-50 dark:bg-red-950/20',
         isBreak && 'bg-amber-200/60 dark:bg-amber-900/50',
+        // After-hours styling (overtime - striped pattern)
+        isAfterHours && !isBreak && !isBlocked && 'bg-orange-50/50 dark:bg-orange-950/20',
         // Interactive states (only when not break/blocked/outside)
         canDrop && !isDragging && 'cursor-pointer hover:bg-primary/5',
         // Drag hover states

@@ -4,10 +4,13 @@
  * Owner Dashboard Component
  * For super_owner and regional_manager roles
  * Shows revenue metrics, appointment stats, inventory alerts, and quick links
+ * Includes Floor View tab for station management
  */
 
+import { useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   TrendingUp,
   TrendingDown,
@@ -17,10 +20,17 @@ import {
   FileText,
   Users,
   DollarSign,
+  LayoutGrid,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useOwnerDashboard } from '@/hooks/queries/use-owner-dashboard';
+import { useOpenPanel } from '@/components/ux/slide-over';
+import { useStartAppointment, useCompleteAppointment } from '@/hooks/queries/use-appointments';
+import { FloorViewTab } from './floor-view-tab';
+import { useUIStore } from '@/stores/ui-store';
 
 interface OwnerDashboardProps {
   branchId: string;
@@ -39,13 +49,106 @@ function formatPercent(value: number): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
+// View toggle component for the header
+export function OwnerDashboardViewToggle() {
+  const { ownerDashboardView, setOwnerDashboardView } = useUIStore();
+
+  return (
+    <ToggleGroup
+      type="single"
+      value={ownerDashboardView}
+      onValueChange={(value) => value && setOwnerDashboardView(value as 'overview' | 'floor')}
+      className="rounded-lg border"
+    >
+      <ToggleGroupItem value="overview" aria-label="Overview" className="px-3 py-1.5 text-sm">
+        <BarChart3 className="h-4 w-4 mr-1.5" />
+        Overview
+      </ToggleGroupItem>
+      <ToggleGroupItem value="floor" aria-label="Floor View" className="px-3 py-1.5 text-sm">
+        <LayoutGrid className="h-4 w-4 mr-1.5" />
+        Floor View
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
 export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
   const { data, isLoading } = useOwnerDashboard({ branchId });
+  const { ownerDashboardView } = useUIStore();
+  const { openStationAssignment, openAppointmentDetails, openAddService, openCheckout } =
+    useOpenPanel();
+  const startMutation = useStartAppointment();
+  const completeMutation = useCompleteAppointment();
+
+  // Floor view action handlers
+  const handleAssign = useCallback(
+    (stationId: string) => {
+      openStationAssignment(stationId);
+    },
+    [openStationAssignment]
+  );
+
+  const handleViewDetails = useCallback(
+    (appointmentId: string) => {
+      openAppointmentDetails(appointmentId);
+    },
+    [openAppointmentDetails]
+  );
+
+  const handleAddService = useCallback(
+    (appointmentId: string) => {
+      openAddService(appointmentId);
+    },
+    [openAddService]
+  );
+
+  const handleComplete = useCallback(
+    async (appointmentId: string) => {
+      try {
+        await completeMutation.mutateAsync(appointmentId);
+        toast.success('Appointment completed');
+        openCheckout(appointmentId);
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to complete appointment');
+      }
+    },
+    [completeMutation, openCheckout]
+  );
+
+  const handleStartNow = useCallback(
+    async (appointmentId: string) => {
+      try {
+        await startMutation.mutateAsync(appointmentId);
+        toast.success('Appointment started');
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to start appointment');
+      }
+    },
+    [startMutation]
+  );
 
   if (isLoading) {
     return <OwnerDashboardSkeleton />;
   }
 
+  if (ownerDashboardView === 'floor') {
+    return (
+      <FloorViewTab
+        branchId={branchId}
+        onAssign={handleAssign}
+        onViewDetails={handleViewDetails}
+        onAddService={handleAddService}
+        onComplete={handleComplete}
+        onStartNow={handleStartNow}
+      />
+    );
+  }
+
+  return <OwnerOverviewContent data={data} />;
+}
+
+// Extracted overview content to keep the component clean
+function OwnerOverviewContent({ data }: { data: ReturnType<typeof useOwnerDashboard>['data'] }) {
   return (
     <div className="space-y-6">
       {/* Revenue Metrics */}

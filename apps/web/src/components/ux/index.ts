@@ -4,7 +4,6 @@
  *
  * This module contains all the new UX redesign components including:
  * - Slide-over panels
- * - Command palette
  * - Quick actions
  * - Command center
  * - Calendar components
@@ -20,9 +19,6 @@
 
 // Slide-over panel system
 export * from './slide-over';
-
-// Command palette
-export * from './command-palette';
 
 // Quick actions
 export * from './quick-actions';

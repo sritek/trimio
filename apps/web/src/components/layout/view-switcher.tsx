@@ -8,7 +8,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Calendar, Command, BarChart3, Check } from 'lucide-react';
+import { Command, BarChart3, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -38,15 +38,14 @@ const VIEW_OPTIONS: ViewOption[] = [
     description: 'Real-time salon operations',
     icon: Command,
     href: '/today',
-    roles: ['super_owner', 'regional_manager', 'branch_manager', 'receptionist', 'accountant'],
-  },
-  {
-    id: 'my-schedule',
-    label: 'My Schedule',
-    description: 'Your personal appointments',
-    icon: Calendar,
-    href: '/my-schedule',
-    roles: ['stylist', 'super_owner', 'regional_manager', 'branch_manager'],
+    roles: [
+      'super_owner',
+      'regional_manager',
+      'branch_manager',
+      'receptionist',
+      'accountant',
+      'stylist',
+    ],
   },
   {
     id: 'analytics',

@@ -2,11 +2,7 @@
 
 /**
  * Appointments Page - Calendar-First
- * Based on: .kiro/specs/ux-consolidation-slideover/design.md
- * Requirements: 8.1, 8.2, 8.4, 8.5, 8.6, 8.7
- *
  * Default view is calendar, with list view as secondary option.
- * View preference is persisted in localStorage.
  */
 
 import { useCallback, useMemo, useState, useEffect } from 'react';
@@ -31,7 +27,7 @@ import { useWaitlistCount } from '@/hooks/queries/use-waitlist';
 import { useDebounce } from '@/hooks/use-debounce';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useBranchContext } from '@/hooks/use-branch-context';
-import { useAppointmentsUIStore } from '@/stores/appointments-ui-store';
+import { useAppointmentsUIStore, type ListFiltersState } from '@/stores/appointments-ui-store';
 import { useCalendarStore } from '@/stores/calendar-store';
 import { useOpenPanel } from '@/components/ux/slide-over/slide-over-registry';
 import { useMediaQuery } from '@/hooks/use-media-query';
@@ -49,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ResourceCalendar, CalendarFilters, MobileCalendar } from '@/components/ux/calendar';
 
-import { AppointmentFilters, AppointmentTable, type AppointmentFiltersState } from './components';
+import { AppointmentTable, ListFiltersSheet } from './components';
 
 import type {
   AppointmentFilters as AppointmentFiltersType,
@@ -57,7 +53,6 @@ import type {
   BookingType,
 } from '@/types/appointments';
 
-// View preference storage key
 const VIEW_PREFERENCE_KEY = 'appointments-view-preference';
 
 type ViewMode = 'calendar' | 'list';
@@ -72,28 +67,24 @@ export default function AppointmentsPage() {
     useOpenPanel();
   const isMobile = useMediaQuery('(max-width: 768px)');
 
-  // View mode state - default to calendar
+  // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [viewLoaded, setViewLoaded] = useState(false);
 
-  // Load view preference from URL param or localStorage
   useEffect(() => {
     const urlView = searchParams.get('view') as ViewMode | null;
     if (urlView === 'calendar' || urlView === 'list') {
       setViewMode(urlView);
       localStorage.setItem(VIEW_PREFERENCE_KEY, urlView);
     }
-
     setViewLoaded(true);
   }, [searchParams]);
 
-  // Save view preference to localStorage and update URL
   const handleViewChange = useCallback(
     (value: string) => {
       if (value === 'calendar' || value === 'list') {
         setViewMode(value);
         localStorage.setItem(VIEW_PREFERENCE_KEY, value);
-        // Update URL without navigation
         const params = new URLSearchParams(searchParams.toString());
         params.set('view', value);
         router.replace(`/appointments?${params.toString()}`, { scroll: false });
@@ -102,13 +93,10 @@ export default function AppointmentsPage() {
     [router, searchParams]
   );
 
-  // State for no-show confirmation dialog
+  // Dialog states
   const [noShowId, setNoShowId] = useState<string | null>(null);
-
-  // Filter panel state
   const [filterOpen, setFilterOpen] = useState(false);
-
-  // Confirmation dialog for stylist change
+  const [listFilterOpen, setListFilterOpen] = useState(false);
   const [confirmMove, setConfirmMove] = useState<{
     appointmentId: string;
     newStylistId: string;
@@ -117,65 +105,63 @@ export default function AppointmentsPage() {
     stylistName?: string;
   } | null>(null);
 
-  // Use persisted store for list state
+  // Store state
   const {
-    currentDate,
     listFilters,
+    listSearch,
     listPage,
     listLimit,
-    setCurrentDate,
     setListFilters,
+    setListSearch,
     setListPage,
     setListLimit,
   } = useAppointmentsUIStore();
 
-  // Calendar state from store
   const { selectedDate, filters: calendarFilters } = useCalendarStore();
-
-  // Get branch from branch context (handles multi-branch selection)
   const { branchId } = useBranchContext();
 
-  // Convert stored date string to Date object for list view
+  // Parse dates for display
   const selectedListDate = useMemo(() => {
     try {
-      return parseISO(currentDate);
+      return parseISO(listFilters.dateFrom);
     } catch {
       return new Date();
     }
-  }, [currentDate]);
+  }, [listFilters.dateFrom]);
 
-  // Combine store filters with date for the filter component
-  const filters: AppointmentFiltersState = useMemo(
-    () => ({
-      search: listFilters.search,
-      date: selectedListDate,
-      status: listFilters.status,
-      bookingType: listFilters.bookingType,
-      stylistId: listFilters.stylistId || 'all',
-    }),
-    [listFilters, selectedListDate]
-  );
-
-  const debouncedSearch = useDebounce(listFilters.search, 300);
+  const debouncedSearch = useDebounce(listSearch, 300);
 
   // Build query filters for list view
-  const queryFilters: AppointmentFiltersType = {
-    page: listPage,
-    limit: listLimit,
-    branchId: branchId || undefined, // Filter by current branch
-    search: debouncedSearch || undefined,
-    dateFrom: format(selectedListDate, 'yyyy-MM-dd'),
-    dateTo: format(selectedListDate, 'yyyy-MM-dd'),
-    status: listFilters.status !== 'all' ? (listFilters.status as AppointmentStatus) : undefined,
-    bookingType:
-      listFilters.bookingType !== 'all' ? (listFilters.bookingType as BookingType) : undefined,
-    stylistId:
-      listFilters.stylistId && listFilters.stylistId !== 'all' ? listFilters.stylistId : undefined,
-    sortBy: 'scheduledTime',
-    sortOrder: 'asc',
-  };
+  // Multi-select within group = OR, across groups = AND
+  const queryFilters: AppointmentFiltersType = useMemo(
+    () => ({
+      page: listPage,
+      limit: listLimit,
+      branchId: branchId || undefined,
+      search: debouncedSearch || undefined,
+      dateFrom: listFilters.dateFrom,
+      dateTo: listFilters.dateTo,
+      // Arrays for multi-select (backend handles as OR within each)
+      status:
+        listFilters.statuses.length > 0
+          ? (listFilters.statuses as AppointmentStatus | AppointmentStatus[])
+          : undefined,
+      bookingType:
+        listFilters.bookingTypes.length > 0
+          ? (listFilters.bookingTypes as BookingType | BookingType[])
+          : undefined,
+      // Backend now supports stylistId as array
+      stylistId:
+        listFilters.stylistIds.length > 0
+          ? (listFilters.stylistIds as string | string[])
+          : undefined,
+      sortBy: 'scheduledTime',
+      sortOrder: 'asc',
+    }),
+    [listPage, listLimit, branchId, debouncedSearch, listFilters]
+  );
 
-  // Queries - only fetch data for the active view
+  // Queries
   const { data: appointmentsData, isLoading: isLoadingList } = useAppointments(queryFilters, {
     enabled: viewMode === 'list',
   });
@@ -188,7 +174,7 @@ export default function AppointmentsPage() {
     { enabled: viewMode === 'calendar' && !!branchId }
   );
 
-  // Badge count queries
+  // Badge counts
   const { data: unassignedCountData } = useUnassignedCount(branchId || '');
   const { data: waitlistCountData } = useWaitlistCount(branchId || '');
   const unassignedCount = unassignedCountData?.count || 0;
@@ -202,42 +188,29 @@ export default function AppointmentsPage() {
   const markNoShow = useMarkNoShow();
   const moveAppointment = useMoveAppointment();
 
-  // List view handlers - open SlideOver for viewing
+  // Handlers
   const handleView = useCallback(
-    (id: string) => {
-      openAppointmentDetails(id);
-    },
+    (id: string) => openAppointmentDetails(id),
     [openAppointmentDetails]
   );
 
-  const handleCheckout = useCallback(
-    (id: string) => {
-      openCheckout(id);
-    },
-    [openCheckout]
-  );
+  const handleCheckout = useCallback((id: string) => openCheckout(id), [openCheckout]);
 
   const handleFiltersChange = useCallback(
-    (newFilters: AppointmentFiltersState) => {
-      if (newFilters.date) {
-        setCurrentDate(newFilters.date);
-      }
-      setListFilters({
-        search: newFilters.search,
-        status: newFilters.status,
-        bookingType: newFilters.bookingType,
-        stylistId: newFilters.stylistId !== 'all' ? newFilters.stylistId : undefined,
-      });
-    },
-    [setCurrentDate, setListFilters]
+    (newFilters: ListFiltersState) => setListFilters(newFilters),
+    [setListFilters]
   );
 
-  const handlePageChange = useCallback(
-    (newPage: number) => {
-      setListPage(newPage);
+  // Quick date change from table header - updates both dateFrom and dateTo
+  const handleDateChange = useCallback(
+    (date: Date) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      setListFilters({ dateFrom: dateStr, dateTo: dateStr });
     },
-    [setListPage]
+    [setListFilters]
   );
+
+  const handlePageChange = useCallback((newPage: number) => setListPage(newPage), [setListPage]);
 
   const handlePageSizeChange = useCallback(
     (newLimit: number) => {
@@ -247,24 +220,15 @@ export default function AppointmentsPage() {
     [setListLimit, setListPage]
   );
 
-  const handleCheckIn = useCallback(
-    async (id: string) => {
-      await checkIn.mutateAsync(id);
-    },
-    [checkIn]
-  );
+  const handleCheckIn = useCallback(async (id: string) => await checkIn.mutateAsync(id), [checkIn]);
 
   const handleStart = useCallback(
-    async (id: string) => {
-      await startAppointment.mutateAsync(id);
-    },
+    async (id: string) => await startAppointment.mutateAsync(id),
     [startAppointment]
   );
 
   const handleComplete = useCallback(
-    async (id: string) => {
-      await completeAppointment.mutateAsync(id);
-    },
+    async (id: string) => await completeAppointment.mutateAsync(id),
     [completeAppointment]
   );
 
@@ -278,9 +242,7 @@ export default function AppointmentsPage() {
     [cancelAppointment, t]
   );
 
-  const handleNoShow = useCallback((id: string) => {
-    setNoShowId(id);
-  }, []);
+  const handleNoShow = useCallback((id: string) => setNoShowId(id), []);
 
   const confirmNoShow = useCallback(async () => {
     if (noShowId) {
@@ -289,11 +251,8 @@ export default function AppointmentsPage() {
     }
   }, [markNoShow, noShowId]);
 
-  // Calendar view handlers
   const handleAppointmentClick = useCallback(
-    (appointmentId: string) => {
-      openAppointmentDetails(appointmentId);
-    },
+    (appointmentId: string) => openAppointmentDetails(appointmentId),
     [openAppointmentDetails]
   );
 
@@ -317,11 +276,7 @@ export default function AppointmentsPage() {
           stylistName: stylist?.name,
         });
       } else {
-        moveAppointment.mutate({
-          appointmentId,
-          newDate,
-          newTime,
-        });
+        moveAppointment.mutate({ appointmentId, newDate, newTime });
       }
     },
     [calendarData?.stylists, moveAppointment]
@@ -338,37 +293,37 @@ export default function AppointmentsPage() {
     setConfirmMove(null);
   }, [confirmMove, moveAppointment]);
 
-  const handleNewAppointment = useCallback(() => {
-    openNewAppointment();
-  }, [openNewAppointment]);
+  const handleNewAppointment = useCallback(() => openNewAppointment(), [openNewAppointment]);
 
+  // Filter state checks
   const hasListFilters =
-    listFilters.search !== '' ||
-    listFilters.status !== 'all' ||
-    listFilters.bookingType !== 'all' ||
-    !!(listFilters.stylistId && listFilters.stylistId !== 'all');
+    listFilters.statuses.length > 0 ||
+    listFilters.bookingTypes.length > 0 ||
+    listFilters.stylistIds.length > 0;
+
   const hasCalendarFilters =
-    calendarFilters.stylistIds.length > 0 || calendarFilters.statuses.length > 0;
+    calendarFilters.stylistIds.length > 0 ||
+    calendarFilters.statuses.length > 0 ||
+    !(
+      calendarFilters.excludedStatuses?.length === 2 &&
+      calendarFilters.excludedStatuses.includes('cancelled') &&
+      calendarFilters.excludedStatuses.includes('no_show')
+    );
 
   const appointments = appointmentsData?.data || [];
   const meta = appointmentsData?.meta;
 
-  // Don't render until view preference is loaded
-  if (!viewLoaded) {
-    return null;
-  }
+  if (!viewLoaded) return null;
 
   return (
     <PermissionGuard permission={PERMISSIONS.APPOINTMENTS_READ} fallback={<AccessDenied />}>
-      <PageContainer className={viewMode === 'calendar' ? 'h-[calc(100vh-4rem)]' : ''}>
+      <PageContainer>
         <PageHeader
           title={t('list.title')}
           description={t('list.description')}
           actions={
             <div className="flex items-center gap-2">
-              {/* Badge Counters */}
               <div className="flex items-center gap-1.5 mr-2">
-                {/* Walk-in Queue Badge */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -379,7 +334,6 @@ export default function AppointmentsPage() {
                   <span className="hidden sm:inline">Walk-in</span>
                 </Button>
 
-                {/* Unassigned Badge */}
                 {unassignedCount > 0 && (
                   <Button
                     variant="ghost"
@@ -394,7 +348,6 @@ export default function AppointmentsPage() {
                   </Button>
                 )}
 
-                {/* Waitlist Badge */}
                 {waitlistCount > 0 && (
                   <Button
                     variant="ghost"
@@ -410,8 +363,12 @@ export default function AppointmentsPage() {
                 )}
               </div>
 
-              {/* View Toggle */}
-              <ToggleGroup type="single" value={viewMode} onValueChange={handleViewChange}>
+              <ToggleGroup
+                type="single"
+                value={viewMode}
+                onValueChange={handleViewChange}
+                className="rounded-lg border"
+              >
                 <ToggleGroupItem value="calendar" aria-label="Calendar view">
                   <Calendar className="h-4 w-4" />
                 </ToggleGroupItem>
@@ -420,7 +377,6 @@ export default function AppointmentsPage() {
                 </ToggleGroupItem>
               </ToggleGroup>
 
-              {/* New Appointment button - only show in list view (calendar has its own) */}
               {canWrite && (
                 <Button onClick={handleNewAppointment}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -433,7 +389,6 @@ export default function AppointmentsPage() {
 
         <PageContent className={viewMode === 'calendar' ? 'flex-1 overflow-hidden p-0' : ''}>
           {viewMode === 'calendar' ? (
-            // Calendar View
             isMobile ? (
               <MobileCalendar
                 data={calendarData}
@@ -453,38 +408,45 @@ export default function AppointmentsPage() {
               />
             )
           ) : (
-            // List View
-            <>
-              <AppointmentFilters filters={filters} onFiltersChange={handleFiltersChange} />
-              <AppointmentTable
-                data={appointments}
-                meta={meta}
-                isLoading={isLoadingList}
-                canWrite={canWrite}
-                page={listPage}
-                onPageChange={handlePageChange}
-                onPageSizeChange={handlePageSizeChange}
-                onView={handleView}
-                onCheckIn={handleCheckIn}
-                onStart={handleStart}
-                onComplete={handleComplete}
-                onCancel={handleCancel}
-                onNoShow={handleNoShow}
-                onCheckout={handleCheckout}
-                hasFilters={hasListFilters}
-              />
-            </>
+            <AppointmentTable
+              data={appointments}
+              meta={meta}
+              isLoading={isLoadingList}
+              canWrite={canWrite}
+              page={listPage}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              onView={handleView}
+              onCheckIn={handleCheckIn}
+              onStart={handleStart}
+              onComplete={handleComplete}
+              onCancel={handleCancel}
+              onNoShow={handleNoShow}
+              onCheckout={handleCheckout}
+              hasFilters={hasListFilters || !!debouncedSearch}
+              onFilterClick={() => setListFilterOpen(true)}
+              hasActiveFilters={hasListFilters}
+              selectedDate={selectedListDate}
+              onDateChange={handleDateChange}
+              search={listSearch}
+              onSearchChange={setListSearch}
+            />
           )}
         </PageContent>
 
-        {/* Calendar Filter Panel */}
         <CalendarFilters
           open={filterOpen}
           onOpenChange={setFilterOpen}
           stylists={calendarData?.stylists || []}
         />
 
-        {/* No-Show Confirmation Dialog */}
+        <ListFiltersSheet
+          open={listFilterOpen}
+          onOpenChange={setListFilterOpen}
+          filters={listFilters}
+          onFiltersChange={handleFiltersChange}
+        />
+
         <ConfirmDialog
           open={!!noShowId}
           onOpenChange={(open) => !open && setNoShowId(null)}
@@ -495,7 +457,6 @@ export default function AppointmentsPage() {
           isLoading={markNoShow.isPending}
         />
 
-        {/* Confirm Stylist Change Dialog */}
         <ConfirmDialog
           open={!!confirmMove}
           onOpenChange={(open) => !open && setConfirmMove(null)}

@@ -32,6 +32,12 @@ export { FilterBar } from './filter-bar';
 export { DatePicker } from './date-picker';
 export { TimePicker } from './time-picker';
 
+// Combobox components
+export { CustomerCombobox } from './customer-combobox';
+export type { CustomerOption, CustomerComboboxProps } from './customer-combobox';
+export { ServiceCombobox } from './service-combobox';
+export type { ServiceOption, ServiceComboboxProps } from './service-combobox';
+
 // Feedback components
 export { LoadingSpinner } from './loading-spinner';
 export { LoadingOverlay } from './loading-overlay';

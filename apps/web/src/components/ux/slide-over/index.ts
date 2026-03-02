@@ -1,15 +1,13 @@
 /**
- * Slide-Over Panel Components
- * Based on: .kiro/specs/ux-redesign/design.md
- * Requirements: 1.1-1.10
+ * Slide-Over Panel System
  */
 
-export {
-  SlideOverProvider,
-  useSlideOver,
-  useRegisterSlideOverComponent,
-} from './slide-over-provider';
-export { SlideOverPanel } from './slide-over-panel';
-export { SlideOverHeader } from './slide-over-header';
+// Hooks
+export { useClosePanel, useSlideOverUnsavedChanges } from '@/stores/slide-over-store';
+export { useOpenPanel, PANEL_IDS } from './slide-over-registry';
+
+// Components
+export { SlideOverContainer } from './slide-over-container';
+export { SlideOverRegistry } from './slide-over-registry';
 export { SlideOverContent } from './slide-over-content';
 export { SlideOverFooter } from './slide-over-footer';

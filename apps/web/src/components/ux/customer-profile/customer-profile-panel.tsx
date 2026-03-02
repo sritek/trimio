@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useSlideOver } from '@/hooks/use-slide-over';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { api } from '@/lib/api/client';
 
 interface CustomerProfilePanelProps {
@@ -65,7 +65,7 @@ interface CustomerMembership {
 
 export function CustomerProfilePanel({ customerId }: CustomerProfilePanelProps) {
   const [activeTab, setActiveTab] = useState('details');
-  const { openPanel } = useSlideOver();
+  const { openNewAppointment } = useOpenPanel();
 
   // Fetch customer details
   const { data: customer, isLoading: isLoadingCustomer } = useQuery({
@@ -114,51 +114,26 @@ export function CustomerProfilePanel({ customerId }: CustomerProfilePanelProps) 
 
   // Quick action: Book appointment
   const handleBookAppointment = useCallback(() => {
-    openPanel(
-      'AppointmentForm',
-      { customerId, customerName: customer?.name },
-      {
-        title: 'New Appointment',
-        width: 'medium',
-      }
-    );
-  }, [customerId, customer?.name, openPanel]);
+    openNewAppointment({ customerId });
+  }, [customerId, openNewAppointment]);
 
   // Quick action: Top up wallet
   const handleTopUpWallet = useCallback(() => {
-    openPanel(
-      'WalletTopUp',
-      { customerId, currentBalance: customer?.walletBalance },
-      {
-        title: 'Top Up Wallet',
-        width: 'narrow',
-      }
-    );
-  }, [customerId, customer?.walletBalance, openPanel]);
+    // TODO: Implement wallet top-up panel
+    console.log('Top up wallet for customer:', customerId);
+  }, [customerId]);
 
   // Quick action: Redeem points
   const handleRedeemPoints = useCallback(() => {
-    openPanel(
-      'RedeemPoints',
-      { customerId, availablePoints: customer?.loyaltyPoints },
-      {
-        title: 'Redeem Points',
-        width: 'narrow',
-      }
-    );
-  }, [customerId, customer?.loyaltyPoints, openPanel]);
+    // TODO: Implement redeem points panel
+    console.log('Redeem points for customer:', customerId);
+  }, [customerId]);
 
   // Quick action: Send message
   const handleSendMessage = useCallback(() => {
-    openPanel(
-      'SendMessage',
-      { customerId, customerPhone: customer?.phone, customerName: customer?.name },
-      {
-        title: 'Send Message',
-        width: 'narrow',
-      }
-    );
-  }, [customerId, customer?.phone, customer?.name, openPanel]);
+    // TODO: Implement send message panel
+    console.log('Send message to customer:', customerId);
+  }, [customerId]);
 
   if (isLoadingCustomer) {
     return (

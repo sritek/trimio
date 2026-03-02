@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import type {
   CreateStylistBreakInput,
@@ -40,8 +41,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         blockedDate: {
-          gte: new Date(dateFrom),
-          lte: new Date(dateTo),
+          gte: startOfDay(parseISO(dateFrom)),
+          lte: endOfDay(parseISO(dateTo)),
         },
       },
     });
@@ -52,8 +53,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         scheduledDate: {
-          gte: new Date(dateFrom),
-          lte: new Date(dateTo),
+          gte: startOfDay(parseISO(dateFrom)),
+          lte: endOfDay(parseISO(dateTo)),
         },
         status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
         deletedAt: null,
@@ -204,7 +205,7 @@ export class StylistScheduleService {
         where: {
           tenantId,
           stylistId,
-          scheduledDate: new Date(input.blockedDate),
+          scheduledDate: startOfDay(parseISO(input.blockedDate)),
           status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
           deletedAt: null,
         },
@@ -225,7 +226,7 @@ export class StylistScheduleService {
         where: {
           tenantId,
           stylistId,
-          scheduledDate: new Date(input.blockedDate),
+          scheduledDate: startOfDay(parseISO(input.blockedDate)),
           status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
           deletedAt: null,
         },
@@ -245,7 +246,7 @@ export class StylistScheduleService {
         tenantId,
         branchId,
         stylistId,
-        blockedDate: new Date(input.blockedDate),
+        blockedDate: startOfDay(parseISO(input.blockedDate)),
         startTime: input.isFullDay ? null : input.startTime,
         endTime: input.isFullDay ? null : input.endTime,
         isFullDay: input.isFullDay,
@@ -300,8 +301,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         blockedDate: {
-          gte: new Date(dateFrom),
-          lte: new Date(dateTo),
+          gte: startOfDay(parseISO(dateFrom)),
+          lte: endOfDay(parseISO(dateTo)),
         },
       },
       orderBy: { blockedDate: 'asc' },

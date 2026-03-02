@@ -62,6 +62,9 @@ export interface Appointment {
   cancelledBy?: string | null;
   cancellationReason?: string | null;
   isSalonCancelled: boolean;
+  // Station assignment
+  stationId?: string | null;
+  startedAt?: string | null;
   // Conflict tracking
   hasConflict: boolean;
   conflictNotes?: string | null;
@@ -202,7 +205,7 @@ export interface ConflictingAppointment {
 
 export interface AppointmentFilters {
   branchId?: string;
-  stylistId?: string;
+  stylistId?: string | string[];
   customerId?: string;
   status?: AppointmentStatus | AppointmentStatus[];
   bookingType?: BookingType | BookingType[];

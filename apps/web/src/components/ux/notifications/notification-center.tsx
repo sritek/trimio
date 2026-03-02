@@ -23,7 +23,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useSlideOver } from '@/hooks/use-slide-over';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { api } from '@/lib/api/client';
 
 export type NotificationType = 'appointment' | 'billing' | 'inventory' | 'staff';
@@ -62,7 +62,7 @@ export function NotificationCenter({ className }: NotificationCenterProps) {
   const [open, setOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<NotificationType[]>([]);
   const queryClient = useQueryClient();
-  const { openPanel } = useSlideOver();
+  const { openAppointmentDetails, openCustomerPeek } = useOpenPanel();
 
   // Fetch notifications
   const { data: notifications, isLoading } = useQuery({
@@ -134,41 +134,18 @@ export function NotificationCenter({ className }: NotificationCenterProps) {
       if (notification.entityType && notification.entityId) {
         switch (notification.entityType) {
           case 'appointment':
-            openPanel(
-              'AppointmentDetails',
-              { appointmentId: notification.entityId },
-              {
-                title: 'Appointment Details',
-                width: 'medium',
-              }
-            );
-            break;
-          case 'invoice':
-            openPanel(
-              'InvoiceDetails',
-              { invoiceId: notification.entityId },
-              {
-                title: 'Invoice Details',
-                width: 'medium',
-              }
-            );
+            openAppointmentDetails(notification.entityId);
             break;
           case 'customer':
-            openPanel(
-              'CustomerDetails',
-              { customerId: notification.entityId },
-              {
-                title: 'Customer Details',
-                width: 'medium',
-              }
-            );
+            openCustomerPeek(notification.entityId);
             break;
+          // TODO: Add invoice details panel when implemented
         }
       }
 
       setOpen(false);
     },
-    [markReadMutation, openPanel]
+    [markReadMutation, openAppointmentDetails, openCustomerPeek]
   );
 
   // Toggle type filter

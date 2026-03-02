@@ -4,7 +4,7 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
-import { format, parseISO, startOfWeek, endOfWeek, getDay } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek, getDay, startOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import { serializeDecimals } from '../../lib/prisma';
 
@@ -104,8 +104,9 @@ export class CalendarService {
       startDate = startOfWeek(dateObj, { weekStartsOn: 1 }); // Monday
       endDate = endOfWeek(dateObj, { weekStartsOn: 1 }); // Sunday
     } else {
-      startDate = dateObj;
-      endDate = dateObj;
+      // Use startOfDay to ensure consistent date comparison with database
+      startDate = startOfDay(dateObj);
+      endDate = startOfDay(dateObj);
     }
 
     // Get branch working hours

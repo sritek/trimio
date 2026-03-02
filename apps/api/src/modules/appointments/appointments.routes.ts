@@ -33,6 +33,9 @@ import {
   serveQueueBodySchema,
   listUnassignedQuerySchema,
   assignStylistSchema,
+  assignStationSchema,
+  addServiceSchema,
+  updateStylistsSchema,
   // Response schemas
   successResponseSchema,
   paginatedResponseSchema,
@@ -497,6 +500,98 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       const { id } = request.params;
       const { stylistId } = request.body;
       const result = await appointmentsService.assignStylist(tenantId, id, stylistId, userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  // =====================================================
+  // STATION ASSIGNMENT (Floor View)
+  // =====================================================
+
+  app.patch(
+    '/:id/station',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Floor View'],
+        summary: 'Assign station to appointment',
+        description: 'Assign a station to an appointment. Validates station availability.',
+        params: idParamSchema,
+        body: assignStationSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = (request as any).user!;
+      const { id } = request.params;
+      const { stationId } = request.body;
+      const result = await appointmentsService.assignStation(tenantId, id, stationId, userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  // =====================================================
+  // ADD SERVICE MID-APPOINTMENT (Upsell)
+  // =====================================================
+
+  app.post(
+    '/:id/services',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Floor View'],
+        summary: 'Add service to appointment',
+        description: 'Add a service to an in-progress appointment (upsell flow).',
+        params: idParamSchema,
+        body: addServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = (request as any).user!;
+      const { id } = request.params;
+      const result = await appointmentsService.addService(tenantId, id, request.body, userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  // =====================================================
+  // MULTI-STYLIST SUPPORT
+  // =====================================================
+
+  app.patch(
+    '/:id/stylists',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Floor View'],
+        summary: 'Update appointment stylists',
+        description: 'Update primary stylist and assistant stylists for an appointment.',
+        params: idParamSchema,
+        body: updateStylistsSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = (request as any).user!;
+      const { id } = request.params;
+      const result = await appointmentsService.updateStylists(tenantId, id, request.body, userId);
       return reply.send({ success: true, data: result });
     }
   );

@@ -72,8 +72,36 @@ The build should now succeed on Railway. The key fixes were:
 1. ioredis version alignment
 2. Proper dependency resolution for @salon-ops/shared
 
+### 4. Checkout Panel panelId Error ✅
+
+**Problem**: TypeScript build error - `panelId` referenced in dependency array but not defined in component scope.
+
+**Solution**:
+- Removed undefined `panelId` from the `useCallback` dependency array in `checkout-panel.tsx`
+- The variable was a leftover from refactoring
+
+### 5. Next.js Standalone Build Symlink Error (Windows) ✅
+
+**Problem**: Windows permission error when Next.js tries to create symlinks for standalone build output.
+
+**Solution**:
+- Removed `output: 'standalone'` from `apps/web/next.config.js`
+- Standalone mode isn't required for Railway deployment
+- This eliminates the EPERM symlink errors on Windows
+
+### 6. Railway Build - Missing @salon-ops/shared Dependency ✅
+
+**Problem**: Railway build fails because API can't find `@salon-ops/shared` module during TypeScript compilation.
+
+**Root Cause**: Railway's auto-detected build command (`pnpm --filter @salon-ops/api build`) only builds the API package, skipping the shared package dependency.
+
+**Solution**:
+- Created `nixpacks.toml` to override Railway's build configuration
+- Changed build command to use Turbo: `pnpm turbo run build --filter=@salon-ops/api...`
+- The `...` suffix tells Turbo to build all dependencies (including `@salon-ops/shared`) before building the API
+
 ## Next Steps
 
-1. Consider disabling strict linting in production builds for faster deployment
-2. Address the remaining linting warnings in the web app
-3. Test the deployment on Railway
+1. Push changes to Railway and verify the build succeeds
+2. Address the remaining linting warnings in the web app (optional)
+3. Test the deployed application

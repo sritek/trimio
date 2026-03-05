@@ -430,7 +430,7 @@ export function CheckoutPanel({ appointmentId, customerId, onComplete }: Checkou
         }
       );
     },
-    [sessionId, tipAmount, onComplete, closePanel, panelId, setUnsavedChanges]
+    [sessionId, tipAmount, onComplete, closePanel, setUnsavedChanges]
   );
 
   // Quick amount buttons

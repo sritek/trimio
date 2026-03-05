@@ -8,7 +8,7 @@
 import { useCallback, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 // Debounce interval in milliseconds to prevent rapid clicks
 const CLICK_DEBOUNCE_MS = 300;

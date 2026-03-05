@@ -5,7 +5,8 @@
   "packageManager": "pnpm@9.0.0",
   "pnpm": {
     "overrides": {
-      "@swc/helpers": "^0.5.17"
+      "@swc/helpers": "^0.5.17",
+      "ioredis": "^5.10.0"
     }
   },
   "scripts": {
@@ -24,8 +25,7 @@
     "db:migrate": "turbo run db:migrate",
     "db:seed": "turbo run db:seed",
     "db:studio": "turbo run db:studio",
-    "postinstall": "pnpm db:generate",
-    "generate-jwt": "node scripts/generate-jwt-secret.js"
+    "postinstall": "pnpm db:generate"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

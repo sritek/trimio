@@ -17,7 +17,7 @@ import { format, startOfDay } from 'date-fns';
 
 export type CalendarView = 'day' | 'week';
 export type TimeSlotInterval = 15 | 30 | 60;
-export type AppointmentStatus =
+export type FilterableAppointmentStatus =
   | 'booked'
   | 'confirmed'
   | 'checked_in'
@@ -37,9 +37,7 @@ export interface DragState {
 
 export interface CalendarFilters {
   stylistIds: string[];
-  serviceCategories: string[];
-  statuses: AppointmentStatus[]; // Include filter - when set, only show these
-  excludedStatuses: AppointmentStatus[]; // Exclude filter - hide these statuses
+  statuses: FilterableAppointmentStatus[];
 }
 
 interface CalendarState {
@@ -67,8 +65,7 @@ interface CalendarState {
   setFilters: (filters: Partial<CalendarFilters>) => void;
   clearFilters: () => void;
   toggleStylistFilter: (stylistId: string) => void;
-  toggleStatusFilter: (status: AppointmentStatus) => void;
-  toggleExcludedStatus: (status: AppointmentStatus) => void;
+  toggleStatusFilter: (status: FilterableAppointmentStatus) => void;
 
   // Mobile
   setSelectedStylist: (stylistId: string | null) => void;
@@ -92,9 +89,7 @@ const initialDragState: DragState = {
 
 const initialFilters: CalendarFilters = {
   stylistIds: [],
-  serviceCategories: [],
   statuses: [],
-  excludedStatuses: ['cancelled', 'no_show'], // Hide cancelled and no-show by default
 };
 
 export const useCalendarStore = create<CalendarState>()(
@@ -186,18 +181,6 @@ export const useCalendarStore = create<CalendarState>()(
         });
       },
 
-      toggleExcludedStatus: (status) => {
-        set((state) => {
-          const current = state.filters.excludedStatuses;
-          const updated = current.includes(status)
-            ? current.filter((s) => s !== status)
-            : [...current, status];
-          return {
-            filters: { ...state.filters, excludedStatuses: updated },
-          };
-        });
-      },
-
       // Mobile
       setSelectedStylist: (stylistId) => set({ selectedStylistId: stylistId }),
 
@@ -236,7 +219,6 @@ export const useCalendarStore = create<CalendarState>()(
       partialize: (state) => ({
         view: state.view,
         timeSlotInterval: state.timeSlotInterval,
-        filters: state.filters,
       }),
     }
   )

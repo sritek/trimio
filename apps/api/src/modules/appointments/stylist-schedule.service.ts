@@ -1,11 +1,26 @@
 import { PrismaClient } from '@prisma/client';
-import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import type {
   CreateStylistBreakInput,
   CreateBlockedSlotInput,
   GetStylistScheduleInput,
 } from './appointments.schema';
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC end of day (23:59:59.999)
+ */
+function parseToUTCEndOfDay(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+}
 
 export class StylistScheduleService {
   constructor(private prisma: PrismaClient) {}
@@ -41,8 +56,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         blockedDate: {
-          gte: startOfDay(parseISO(dateFrom)),
-          lte: endOfDay(parseISO(dateTo)),
+          gte: parseToUTCDate(dateFrom),
+          lte: parseToUTCEndOfDay(dateTo),
         },
       },
     });
@@ -53,8 +68,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         scheduledDate: {
-          gte: startOfDay(parseISO(dateFrom)),
-          lte: endOfDay(parseISO(dateTo)),
+          gte: parseToUTCDate(dateFrom),
+          lte: parseToUTCEndOfDay(dateTo),
         },
         status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
         deletedAt: null,
@@ -205,7 +220,7 @@ export class StylistScheduleService {
         where: {
           tenantId,
           stylistId,
-          scheduledDate: startOfDay(parseISO(input.blockedDate)),
+          scheduledDate: parseToUTCDate(input.blockedDate),
           status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
           deletedAt: null,
         },
@@ -226,7 +241,7 @@ export class StylistScheduleService {
         where: {
           tenantId,
           stylistId,
-          scheduledDate: startOfDay(parseISO(input.blockedDate)),
+          scheduledDate: parseToUTCDate(input.blockedDate),
           status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
           deletedAt: null,
         },
@@ -246,7 +261,7 @@ export class StylistScheduleService {
         tenantId,
         branchId,
         stylistId,
-        blockedDate: startOfDay(parseISO(input.blockedDate)),
+        blockedDate: parseToUTCDate(input.blockedDate),
         startTime: input.isFullDay ? null : input.startTime,
         endTime: input.isFullDay ? null : input.endTime,
         isFullDay: input.isFullDay,
@@ -301,8 +316,8 @@ export class StylistScheduleService {
         tenantId,
         stylistId,
         blockedDate: {
-          gte: startOfDay(parseISO(dateFrom)),
-          lte: endOfDay(parseISO(dateTo)),
+          gte: parseToUTCDate(dateFrom),
+          lte: parseToUTCEndOfDay(dateTo),
         },
       },
       orderBy: { blockedDate: 'asc' },

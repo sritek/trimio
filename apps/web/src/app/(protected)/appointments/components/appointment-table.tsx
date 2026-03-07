@@ -1,13 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Calendar, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { addDays, subDays, isToday } from 'date-fns';
 
-import { DataTable, EmptyState, DatePicker, SearchInput } from '@/components/common';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { DataTable, EmptyState, SearchInput, FilterButton } from '@/components/common';
 
 import { getAppointmentColumns } from './appointment-columns';
 
@@ -32,10 +29,7 @@ interface AppointmentTableProps {
   hasFilters: boolean;
   // Filter button
   onFilterClick?: () => void;
-  hasActiveFilters?: boolean;
-  // Single date with arrows and DatePicker
-  selectedDate?: Date;
-  onDateChange?: (date: Date) => void;
+  activeFilterCount?: number;
   // Search
   search?: string;
   onSearchChange?: (value: string) => void;
@@ -58,9 +52,7 @@ export function AppointmentTable({
   onCheckout,
   hasFilters,
   onFilterClick,
-  hasActiveFilters,
-  selectedDate,
-  onDateChange,
+  activeFilterCount = 0,
   search,
   onSearchChange,
 }: AppointmentTableProps) {
@@ -89,50 +81,11 @@ export function AppointmentTable({
     />
   );
 
-  const handlePrevDay = () => {
-    if (selectedDate && onDateChange) {
-      onDateChange(subDays(selectedDate, 1));
-    }
-  };
-
-  const handleNextDay = () => {
-    if (selectedDate && onDateChange) {
-      onDateChange(addDays(selectedDate, 1));
-    }
-  };
-
-  const handleToday = () => {
-    if (onDateChange) {
-      onDateChange(new Date());
-    }
-  };
-
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col flex-1 min-h-0 space-y-4">
       {/* Header Row: Search | Date Navigation | Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 flex-shrink-0">
         <div className="flex flex-col sm:flex-row gap-4">
-          {/* Date Navigation with arrows and clickable DatePicker */}
-          {selectedDate && onDateChange && (
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={handlePrevDay} className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <DatePicker
-                value={selectedDate}
-                onChange={(date) => date && onDateChange(date)}
-                className="w-[180px]"
-              />
-              <Button variant="outline" size="icon" onClick={handleNextDay} className="h-8 w-8">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              {!isToday(selectedDate) && (
-                <Button variant="ghost" size="sm" onClick={handleToday} className="h-8">
-                  Today
-                </Button>
-              )}
-            </div>
-          )}
           {/* Left side: Search */}
           {onSearchChange !== undefined && (
             <SearchInput
@@ -148,15 +101,7 @@ export function AppointmentTable({
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {/* Filter Button */}
           {onFilterClick && (
-            <Button variant="outline" size="sm" onClick={onFilterClick} className="gap-2 h-8">
-              <Filter className="h-4 w-4" />
-              <span className="hidden sm:inline">Filters</span>
-              {hasActiveFilters && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                  Active
-                </Badge>
-              )}
-            </Button>
+            <FilterButton onClick={onFilterClick} activeCount={activeFilterCount} />
           )}
         </div>
       </div>
@@ -179,6 +124,7 @@ export function AppointmentTable({
         }
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
+        className="flex-1"
       />
     </div>
   );

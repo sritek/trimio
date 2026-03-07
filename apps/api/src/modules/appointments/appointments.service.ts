@@ -1,5 +1,4 @@
 import { PrismaClient, Prisma, AppointmentStatus } from '@prisma/client';
-import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import type {
   CreateAppointmentInput,
@@ -11,6 +10,23 @@ import type {
 } from './appointments.schema';
 
 const MAX_RESCHEDULES = 3;
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ * This ensures consistent date handling regardless of server timezone
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC end of day (23:59:59.999)
+ */
+function parseToUTCEndOfDay(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+}
 
 // Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -42,7 +58,6 @@ export class AppointmentsService {
       search,
       page = 1,
       limit = 20,
-      sortBy = 'scheduledDate',
       sortOrder = 'desc',
     } = filters;
 
@@ -67,10 +82,10 @@ export class AppointmentsService {
 
     if (dateFrom || dateTo) {
       where.scheduledDate = {};
-      // Use parseISO to create local timezone dates (consistent with calendar service)
-      // Then use startOfDay/endOfDay to ensure we capture the full day
-      if (dateFrom) where.scheduledDate.gte = startOfDay(parseISO(dateFrom));
-      if (dateTo) where.scheduledDate.lte = endOfDay(parseISO(dateTo));
+      // Use UTC dates for comparison since PostgreSQL Date type stores as UTC midnight
+      // This ensures consistent filtering regardless of server timezone
+      if (dateFrom) where.scheduledDate.gte = parseToUTCDate(dateFrom);
+      if (dateTo) where.scheduledDate.lte = parseToUTCEndOfDay(dateTo);
     }
 
     if (search) {
@@ -105,7 +120,8 @@ export class AppointmentsService {
             },
           },
         },
-        orderBy: { [sortBy]: sortOrder },
+        // Sort by date first, then by time for proper chronological order
+        orderBy: [{ scheduledDate: sortOrder }, { scheduledTime: sortOrder }],
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -173,7 +189,7 @@ export class AppointmentsService {
     excludeAppointmentId?: string
   ) {
     const endTime = this.calculateEndTime(scheduledTime, duration);
-    const dateObj = startOfDay(parseISO(scheduledDate));
+    const dateObj = parseToUTCDate(scheduledDate);
 
     const where: Prisma.AppointmentWhereInput = {
       tenantId,
@@ -362,7 +378,7 @@ export class AppointmentsService {
     // 7. Generate token for walk-ins
     let tokenNumber: number | undefined;
     if (input.bookingType === 'walk_in') {
-      const today = startOfDay(parseISO(input.scheduledDate));
+      const today = parseToUTCDate(input.scheduledDate);
       const lastToken = await this.prisma.appointment.findFirst({
         where: {
           branchId: input.branchId,
@@ -457,7 +473,7 @@ export class AppointmentsService {
           customerId: input.customerId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          scheduledDate: startOfDay(parseISO(input.scheduledDate)),
+          scheduledDate: parseToUTCDate(input.scheduledDate),
           scheduledTime: input.scheduledTime,
           endTime,
           totalDuration,
@@ -887,7 +903,7 @@ export class AppointmentsService {
           customerId: appointment.customerId,
           customerName: appointment.customerName,
           customerPhone: appointment.customerPhone,
-          scheduledDate: startOfDay(parseISO(input.newDate)),
+          scheduledDate: parseToUTCDate(input.newDate),
           scheduledTime: input.newTime,
           endTime: newEndTime,
           totalDuration: appointment.totalDuration,
@@ -1102,7 +1118,9 @@ export class AppointmentsService {
    * Defaults to today's date if not specified
    */
   async getUnassignedAppointments(tenantId: string, branchId: string, date?: string) {
-    const targetDate = date ? startOfDay(parseISO(date)) : startOfDay(new Date());
+    const targetDate = date
+      ? parseToUTCDate(date)
+      : parseToUTCDate(new Date().toISOString().split('T')[0]);
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
@@ -1135,7 +1153,7 @@ export class AppointmentsService {
    * Get count of unassigned appointments for a branch (today)
    */
   async getUnassignedCount(tenantId: string, branchId: string): Promise<number> {
-    const today = startOfDay(new Date());
+    const today = parseToUTCDate(new Date().toISOString().split('T')[0]);
 
     return this.prisma.appointment.count({
       where: {

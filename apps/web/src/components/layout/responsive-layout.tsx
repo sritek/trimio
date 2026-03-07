@@ -51,9 +51,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
       {/* Floating Action Button - visible on screens < 768px */}
       <FloatingActionButton className="md:hidden" />
-
-      {/* Add padding at bottom for mobile to account for bottom nav */}
-      <div className="h-16 md:hidden" />
     </>
   );
 }

@@ -100,6 +100,7 @@ export function TransferTable({
       }
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
+      className="flex-1"
     />
   );
 }

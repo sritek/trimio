@@ -4,9 +4,55 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
-import { format, parseISO, startOfWeek, endOfWeek, getDay, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import { serializeDecimals } from '../../lib/prisma';
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ * This ensures consistent date handling regardless of server timezone
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Get day of week from a date string (0 = Sunday, 6 = Saturday)
+ */
+function getDayOfWeek(dateStr: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay();
+}
+
+/**
+ * Get start of week (Monday) for a date string
+ */
+function getStartOfWeekUTC(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  // Adjust to Monday (1 = Monday, 0 = Sunday becomes 7)
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(year, month - 1, day - diff);
+  return new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0, 0));
+}
+
+/**
+ * Get end of week (Sunday) for a date string
+ */
+function getEndOfWeekUTC(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  // Adjust to Sunday
+  const diff = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const sunday = new Date(year, month - 1, day + diff);
+  return new Date(
+    Date.UTC(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59, 999)
+  );
+}
 
 // Day-specific working hours structure from branch settings
 interface DayWorkingHours {
@@ -49,8 +95,7 @@ function extractSimpleWorkingHours(
   }
 
   // Get day of week from date (0 = Sunday, 1 = Monday, etc.)
-  const dateObj = parseISO(date);
-  const dayIndex = getDay(dateObj);
+  const dayIndex = getDayOfWeek(date);
   const dayName = DAY_NAMES[dayIndex] as keyof BranchWorkingHours;
   const dayHours = branchWorkingHours[dayName];
 
@@ -94,19 +139,18 @@ export class CalendarService {
     input: GetResourceCalendarInput
   ): Promise<ResourceCalendarResponse> {
     const { branchId, date, view } = input;
-    const dateObj = parseISO(date);
 
     // Calculate date range based on view
     let startDate: Date;
     let endDate: Date;
 
     if (view === 'week') {
-      startDate = startOfWeek(dateObj, { weekStartsOn: 1 }); // Monday
-      endDate = endOfWeek(dateObj, { weekStartsOn: 1 }); // Sunday
+      startDate = getStartOfWeekUTC(date); // Monday
+      endDate = getEndOfWeekUTC(date); // Sunday
     } else {
-      // Use startOfDay to ensure consistent date comparison with database
-      startDate = startOfDay(dateObj);
-      endDate = startOfDay(dateObj);
+      // Day view - use UTC midnight for consistent date comparison
+      startDate = parseToUTCDate(date);
+      endDate = parseToUTCDate(date);
     }
 
     // Get branch working hours
@@ -195,9 +239,8 @@ export class CalendarService {
           }));
 
         // Check if stylist has full day blocked for the requested date
-        const isFullDayBlocked = stylistBlocked.some(
-          (bs) => bs.isFullDay && format(parseISO(date), 'yyyy-MM-dd') === date
-        );
+        // Since we already filtered blockedSlots by date range, just check isFullDay
+        const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
 
         return {
           id: ub.user.id,
@@ -356,7 +399,7 @@ export class CalendarService {
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: {
-          scheduledDate: parseISO(newDate),
+          scheduledDate: parseToUTCDate(newDate),
           scheduledTime: newTime,
           endTime: newEndTime,
           stylistId: targetStylistId,
@@ -411,7 +454,7 @@ export class CalendarService {
     excludeAppointmentId?: string
   ) {
     const endTime = this.calculateEndTime(startTime, duration);
-    const dateObj = parseISO(date);
+    const dateObj = parseToUTCDate(date);
 
     const where: Prisma.AppointmentWhereInput = {
       tenantId,
@@ -452,7 +495,7 @@ export class CalendarService {
     startTime: string,
     endTime: string
   ): Promise<boolean> {
-    const dateObj = parseISO(date);
+    const dateObj = parseToUTCDate(date);
 
     const blockedSlots = await this.prisma.stylistBlockedSlot.findMany({
       where: {

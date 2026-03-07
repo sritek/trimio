@@ -106,6 +106,7 @@ export function ServiceTable({
       }
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
+      className="flex-1"
     />
   );
 }

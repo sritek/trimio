@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PageHeader, PageContent, SearchInput } from '@/components/common';
+import { PageHeader, PageContent, PageContainer, SearchInput } from '@/components/common';
 import { useStaffList } from '@/hooks/queries/use-staff';
 
 import { StaffTable } from './components/staff-table';
@@ -59,7 +59,7 @@ export default function StaffPage() {
   }, []);
 
   return (
-    <>
+    <PageContainer>
       <PageHeader
         title={t('title')}
         description={t('description')}
@@ -75,7 +75,7 @@ export default function StaffPage() {
 
       <PageContent>
         {/* Filters */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center flex-shrink-0">
           <SearchInput
             value={search}
             onChange={setSearch}
@@ -135,6 +135,6 @@ export default function StaffPage() {
           hasFilters={hasFilters}
         />
       </PageContent>
-    </>
+    </PageContainer>
   );
 }

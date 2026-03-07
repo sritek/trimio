@@ -5,9 +5,10 @@
 
 'use client';
 
-import { ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { FilterButton } from '@/components/common';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -19,7 +20,7 @@ interface CalendarHeaderProps {
   onDateChange: (direction: 'prev' | 'next' | 'today') => void;
   onIntervalChange: (interval: TimeSlotInterval) => void;
   onFilterClick?: () => void;
-  hasActiveFilters?: boolean;
+  activeFilterCount?: number;
 }
 
 // Status legend items - grouped by flow
@@ -99,7 +100,7 @@ export function CalendarHeader({
   onDateChange,
   onIntervalChange,
   onFilterClick,
-  hasActiveFilters = false,
+  activeFilterCount = 0,
 }: CalendarHeaderProps) {
   const t = useTranslations('calendar');
   const dateObj = parseISO(date);
@@ -107,7 +108,7 @@ export function CalendarHeader({
   const isToday = format(new Date(), 'yyyy-MM-dd') === date;
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       {/* Date Navigation */}
       <div className="flex items-center gap-2">
         <Button
@@ -160,18 +161,7 @@ export function CalendarHeader({
         <StatusLegend />
 
         {/* Filter Button */}
-        {onFilterClick && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onFilterClick}
-            className={cn(hasActiveFilters && 'border-primary text-primary')}
-          >
-            <Filter className="h-4 w-4 mr-1" />
-            {t('filter')}
-            {hasActiveFilters && <span className="ml-1 h-2 w-2 rounded-full bg-primary" />}
-          </Button>
-        )}
+        {onFilterClick && <FilterButton onClick={onFilterClick} activeCount={activeFilterCount} />}
       </div>
     </div>
   );

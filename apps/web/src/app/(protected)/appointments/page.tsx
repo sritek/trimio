@@ -5,9 +5,8 @@
  * Default view is calendar, with list view as secondary option.
  */
 
-import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format, parseISO } from 'date-fns';
 import { Calendar, List, Plus, UserPlus, ClipboardList, UserX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -43,7 +42,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { ResourceCalendar, CalendarFilters, MobileCalendar } from '@/components/ux/calendar';
+import {
+  ResourceCalendar,
+  CalendarFiltersSheet,
+  MobileCalendar,
+} from '@/app/(protected)/appointments/calendar/components';
 
 import { AppointmentTable, ListFiltersSheet } from './components';
 
@@ -115,19 +118,32 @@ export default function AppointmentsPage() {
     setListSearch,
     setListPage,
     setListLimit,
+    syncDateFromCalendar,
   } = useAppointmentsUIStore();
 
   const { selectedDate, filters: calendarFilters } = useCalendarStore();
   const { branchId } = useBranchContext();
 
-  // Parse dates for display
-  const selectedListDate = useMemo(() => {
-    try {
-      return parseISO(listFilters.dateFrom);
-    } catch {
-      return new Date();
+  // Track previous view mode to detect view switches
+  const prevViewModeRef = useRef<ViewMode | null>(null);
+
+  // Sync list view date with calendar date when switching from calendar to list
+  useEffect(() => {
+    // On initial mount or when switching from calendar to list, sync the date
+    if (viewLoaded) {
+      const prevView = prevViewModeRef.current;
+
+      // If switching from calendar to list, or if list filters have no date set
+      if (
+        (prevView === 'calendar' && viewMode === 'list') ||
+        (viewMode === 'list' && !listFilters.dateFrom)
+      ) {
+        syncDateFromCalendar(selectedDate);
+      }
+
+      prevViewModeRef.current = viewMode;
     }
-  }, [listFilters.dateFrom]);
+  }, [viewMode, viewLoaded, selectedDate, listFilters.dateFrom, syncDateFromCalendar]);
 
   const debouncedSearch = useDebounce(listSearch, 300);
 
@@ -155,7 +171,7 @@ export default function AppointmentsPage() {
         listFilters.stylistIds.length > 0
           ? (listFilters.stylistIds as string | string[])
           : undefined,
-      sortBy: 'scheduledTime',
+      // Sort by date and time ascending (backend handles both fields)
       sortOrder: 'asc',
     }),
     [listPage, listLimit, branchId, debouncedSearch, listFilters]
@@ -198,15 +214,6 @@ export default function AppointmentsPage() {
 
   const handleFiltersChange = useCallback(
     (newFilters: ListFiltersState) => setListFilters(newFilters),
-    [setListFilters]
-  );
-
-  // Quick date change from table header - updates both dateFrom and dateTo
-  const handleDateChange = useCallback(
-    (date: Date) => {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      setListFilters({ dateFrom: dateStr, dateTo: dateStr });
-    },
     [setListFilters]
   );
 
@@ -295,21 +302,13 @@ export default function AppointmentsPage() {
 
   const handleNewAppointment = useCallback(() => openNewAppointment(), [openNewAppointment]);
 
-  // Filter state checks
-  const hasListFilters =
-    listFilters.statuses.length > 0 ||
-    listFilters.bookingTypes.length > 0 ||
-    listFilters.stylistIds.length > 0;
-
-  const hasCalendarFilters =
-    calendarFilters.stylistIds.length > 0 ||
-    calendarFilters.statuses.length > 0 ||
-    !(
-      calendarFilters.excludedStatuses?.length === 2 &&
-      calendarFilters.excludedStatuses.includes('cancelled') &&
-      calendarFilters.excludedStatuses.includes('no_show')
-    );
-
+  const listFilterCount =
+    (listFilters.statuses.length > 0 ? 1 : 0) +
+    (listFilters.bookingTypes.length > 0 ? 1 : 0) +
+    (listFilters.stylistIds.length > 0 ? 1 : 0);
+  const calendarFilterCount =
+    (calendarFilters.stylistIds.length > 0 ? 1 : 0) + (calendarFilters.statuses.length > 0 ? 1 : 0);
+  const hasListFilters = listFilterCount > 0;
   const appointments = appointmentsData?.data || [];
   const meta = appointmentsData?.meta;
 
@@ -404,7 +403,7 @@ export default function AppointmentsPage() {
                 onSlotClick={handleSlotClick}
                 onAppointmentMove={handleAppointmentMove}
                 onFilterClick={() => setFilterOpen(true)}
-                hasActiveFilters={hasCalendarFilters}
+                activeFilterCount={calendarFilterCount}
               />
             )
           ) : (
@@ -425,16 +424,14 @@ export default function AppointmentsPage() {
               onCheckout={handleCheckout}
               hasFilters={hasListFilters || !!debouncedSearch}
               onFilterClick={() => setListFilterOpen(true)}
-              hasActiveFilters={hasListFilters}
-              selectedDate={selectedListDate}
-              onDateChange={handleDateChange}
+              activeFilterCount={listFilterCount}
               search={listSearch}
               onSearchChange={setListSearch}
             />
           )}
         </PageContent>
 
-        <CalendarFilters
+        <CalendarFiltersSheet
           open={filterOpen}
           onOpenChange={setFilterOpen}
           stylists={calendarData?.stylists || []}

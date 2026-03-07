@@ -16,7 +16,7 @@ export {
   useCalendarIsDragging,
   type CalendarView as ResourceCalendarView,
   type TimeSlotInterval,
-  type AppointmentStatus,
+  type FilterableAppointmentStatus,
   type DragState,
   type CalendarFilters,
 } from './calendar-store';

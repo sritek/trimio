@@ -89,6 +89,7 @@ export function StaffTable({
       }
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
+      className="flex-1"
     />
   );
 }

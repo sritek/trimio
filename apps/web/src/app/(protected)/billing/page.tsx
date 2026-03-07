@@ -90,7 +90,7 @@ export default function BillingPage() {
 
         <PageContent>
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4 flex-shrink-0">
             <SearchInput
               value={search}
               onChange={setSearch}

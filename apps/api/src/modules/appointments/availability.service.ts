@@ -1,6 +1,23 @@
 import { PrismaClient } from '@prisma/client';
-import { parseISO, startOfDay, format, addDays, getDay } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import type { GetAvailableSlotsInput } from './appointments.schema';
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Get day of week from a date string (0 = Sunday, 6 = Saturday)
+ */
+function getDayOfWeek(dateStr: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay();
+}
 
 interface WorkingHours {
   [key: string]: { start: string; end: string; closed?: boolean } | undefined;
@@ -185,7 +202,7 @@ export class AvailabilityService {
           where: {
             tenantId,
             stylistId: stylist.id,
-            scheduledDate: startOfDay(parseISO(date)),
+            scheduledDate: parseToUTCDate(date),
             status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
           },
         });
@@ -213,7 +230,7 @@ export class AvailabilityService {
     if (!branch?.workingHours) return null;
 
     const workingHours = branch.workingHours as WorkingHours;
-    const dayOfWeek = getDay(parseISO(date));
+    const dayOfWeek = getDayOfWeek(date);
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayNames[dayOfWeek];
 
@@ -284,7 +301,7 @@ export class AvailabilityService {
     duration: number
   ): Promise<boolean> {
     const endTime = this.addMinutes(startTime, duration);
-    const dateObj = startOfDay(parseISO(date));
+    const dateObj = parseToUTCDate(date);
 
     // Check for blocked slots (full day or overlapping)
     const blockedSlots = await this.prisma.stylistBlockedSlot.findMany({
@@ -305,7 +322,7 @@ export class AvailabilityService {
     }
 
     // Check for breaks
-    const dayOfWeek = dateObj.getDay();
+    const dayOfWeek = getDayOfWeek(date);
     const breaks = await this.prisma.stylistBreak.findMany({
       where: {
         tenantId,
@@ -394,7 +411,10 @@ export class AvailabilityService {
     branchId: string,
     fromDate: string
   ): Promise<string | undefined> {
-    let date = parseISO(fromDate);
+    // Parse the date string to get year, month, day
+    const [year, month, day] = fromDate.split('-').map(Number);
+    let date = new Date(year, month - 1, day);
+
     for (let i = 1; i <= 30; i++) {
       date = addDays(date, 1);
       const dateStr = format(date, 'yyyy-MM-dd');

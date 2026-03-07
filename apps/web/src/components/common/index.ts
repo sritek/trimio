@@ -29,6 +29,7 @@ export { ConfirmDialog } from './confirm-dialog';
 export { ActionMenu } from './action-menu';
 export { SearchInput } from './search-input';
 export { FilterBar } from './filter-bar';
+export { FilterButton } from './filter-button';
 export { DatePicker } from './date-picker';
 export { TimePicker } from './time-picker';
 

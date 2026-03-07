@@ -1,6 +1,7 @@
 /**
  * Resource Calendar Component
  * Visual calendar with stylists as columns and time slots as rows
+ * Uses CSS Grid for proper sticky headers and synchronized scrolling
  */
 
 'use client';
@@ -24,13 +25,12 @@ import { CurrentTimeIndicator } from './current-time-indicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/common';
-import { useCalendarStore } from '@/stores/calendar-store';
+import { useCalendarStore, type FilterableAppointmentStatus } from '@/stores/calendar-store';
 import { cn } from '@/lib/utils';
 import type {
   CalendarAppointment,
   ResourceCalendarData,
 } from '@/hooks/queries/use-resource-calendar';
-import type { AppointmentStatus } from '@/stores/calendar-store';
 
 interface ResourceCalendarProps {
   data: ResourceCalendarData | undefined;
@@ -46,8 +46,19 @@ interface ResourceCalendarProps {
     newTime: string
   ) => void;
   onFilterClick?: () => void;
-  hasActiveFilters?: boolean;
+  activeFilterCount?: number;
 }
+
+// Slot height constants based on interval
+const SLOT_HEIGHTS: Record<number, number> = {
+  15: 30,
+  30: 60,
+  60: 80,
+};
+
+// Header heights
+const STYLIST_HEADER_HEIGHT = 72;
+const TIME_COLUMN_WIDTH = 64;
 
 export function ResourceCalendar({
   data,
@@ -58,7 +69,7 @@ export function ResourceCalendar({
   onSlotClick,
   onAppointmentMove,
   onFilterClick,
-  hasActiveFilters = false,
+  activeFilterCount = 0,
 }: ResourceCalendarProps) {
   const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -74,8 +85,10 @@ export function ResourceCalendar({
     filters,
   } = useCalendarStore();
 
+  // Calculate slot height based on interval
+  const slotHeight = SLOT_HEIGHTS[timeSlotInterval] || 60;
+
   // Generate time slots based on working hours and interval
-  // Dynamically extend if there are appointments beyond working hours (phone/walk-in)
   const timeSlots = useMemo(() => {
     if (!data?.workingHours) return [];
 
@@ -102,7 +115,6 @@ export function ResourceCalendar({
       });
     }
 
-    // Generate slots up to the latest end time (working hours or appointment end, whichever is later)
     while (currentTime < latestEndTime) {
       slots.push(format(currentTime, 'HH:mm'));
       currentTime = addMinutes(currentTime, timeSlotInterval);
@@ -111,7 +123,7 @@ export function ResourceCalendar({
     return slots;
   }, [data?.workingHours, data?.appointments, timeSlotInterval]);
 
-  // Determine which slots are outside working hours (for visual distinction)
+  // Check if slot is after working hours
   const isSlotAfterHours = useCallback(
     (time: string) => {
       if (!data?.workingHours) return false;
@@ -119,20 +131,6 @@ export function ResourceCalendar({
     },
     [data?.workingHours]
   );
-
-  // Calculate slot height based on interval
-  const slotHeight = useMemo(() => {
-    switch (timeSlotInterval) {
-      case 15:
-        return 24;
-      case 30:
-        return 50;
-      case 60:
-        return 70;
-      default:
-        return 30;
-    }
-  }, [timeSlotInterval]);
 
   // Filter stylists based on active filters
   const filteredStylists = useMemo(() => {
@@ -152,24 +150,16 @@ export function ResourceCalendar({
       );
     }
 
-    // Include filter - if set, only show these statuses
     if (filters.statuses.length > 0) {
       filtered = filtered.filter((apt) =>
-        filters.statuses.includes(apt.status as AppointmentStatus)
-      );
-    }
-
-    // Exclude filter - hide these statuses (applied after include filter)
-    if (filters.excludedStatuses && filters.excludedStatuses.length > 0) {
-      filtered = filtered.filter(
-        (apt) => !filters.excludedStatuses.includes(apt.status as AppointmentStatus)
+        filters.statuses.includes(apt.status as FilterableAppointmentStatus)
       );
     }
 
     return filtered;
   }, [data?.appointments, filters]);
 
-  // Check if a slot has a conflict with existing appointments
+  // Check for slot conflicts
   const checkSlotConflict = useCallback(
     (stylistId: string, time: string, excludeAppointmentId?: string) => {
       const slotMins = parseInt(time.split(':')[0]) * 60 + parseInt(time.split(':')[1]);
@@ -189,38 +179,26 @@ export function ResourceCalendar({
     [filteredAppointments]
   );
 
-  // Handle date navigation - day view only
+  // Date navigation handlers
   const handleDateChange = useCallback(
     (direction: 'prev' | 'next' | 'today') => {
-      if (direction === 'today') {
-        goToToday();
-      } else if (direction === 'next') {
-        goToNextDay();
-      } else {
-        goToPreviousDay();
-      }
+      if (direction === 'today') goToToday();
+      else if (direction === 'next') goToNextDay();
+      else goToPreviousDay();
     },
     [goToToday, goToNextDay, goToPreviousDay]
   );
 
-  // Handle drag start
+  // Drag handlers
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
       const appointmentId = event.active.id as string;
       const appointment = data?.appointments.find((apt) => apt.id === appointmentId);
-      if (appointment) {
-        setDraggedAppointment(appointment);
-      }
+      if (appointment) setDraggedAppointment(appointment);
     },
     [data?.appointments]
   );
 
-  // Handle drag over
-  const handleDragOver = useCallback(() => {
-    // Drag over handling is done via DroppableSlot's isOver state
-  }, []);
-
-  // Handle drag end
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const currentDraggedAppointment = draggedAppointment;
@@ -230,35 +208,24 @@ export function ResourceCalendar({
       if (!over || !currentDraggedAppointment) return;
 
       const dropData = over.data.current as
-        | {
-            stylistId: string;
-            date: string;
-            time: string;
-          }
+        | { stylistId: string; date: string; time: string }
         | undefined;
-
       if (!dropData) return;
 
-      // Check if position changed
       const samePosition =
         dropData.stylistId === currentDraggedAppointment.stylistId &&
         dropData.time === currentDraggedAppointment.startTime;
 
       if (samePosition) return;
 
-      // Check for conflicts at the target slot before triggering move
       const hasConflict = checkSlotConflict(
         dropData.stylistId,
         dropData.time,
         currentDraggedAppointment.id
       );
 
-      if (hasConflict) {
-        // Don't proceed with the move if there's a conflict
-        return;
-      }
+      if (hasConflict) return;
 
-      // Trigger move
       onAppointmentMove(
         currentDraggedAppointment.id,
         dropData.stylistId !== currentDraggedAppointment.stylistId ? dropData.stylistId : undefined,
@@ -269,10 +236,7 @@ export function ResourceCalendar({
     [draggedAppointment, onAppointmentMove, checkSlotConflict]
   );
 
-  // Handle drag cancel
-  const handleDragCancel = useCallback(() => {
-    setDraggedAppointment(null);
-  }, []);
+  const handleDragCancel = useCallback(() => setDraggedAppointment(null), []);
 
   // Scroll to current time on mount
   useEffect(() => {
@@ -335,9 +299,7 @@ export function ResourceCalendar({
           <EmptyState
             icon={AlertCircle}
             title="Failed to load calendar"
-            description={
-              error.message || 'An error occurred while loading the calendar. Please try again.'
-            }
+            description={error.message || 'An error occurred while loading the calendar.'}
             action={
               onRetry && (
                 <Button onClick={onRetry} variant="outline">
@@ -373,7 +335,7 @@ export function ResourceCalendar({
     );
   }
 
-  // No stylists assigned state
+  // No stylists state
   if (!data.stylists || data.stylists.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -381,7 +343,7 @@ export function ResourceCalendar({
           <EmptyState
             icon={Users}
             title="No stylists assigned"
-            description="Assign stylists to this branch to see the calendar and manage appointments."
+            description="Assign stylists to this branch to see the calendar."
             action={
               <Button onClick={() => router.push('/staff')} variant="outline">
                 Manage Staff
@@ -393,210 +355,197 @@ export function ResourceCalendar({
     );
   }
 
+  const numStylists = filteredStylists.length;
+
   return (
     <DndContext
       collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="p-4">
+        <div className="flex-shrink-0 p-4 border-b bg-background">
           <CalendarHeader
             date={selectedDate}
             timeSlotInterval={timeSlotInterval}
             onDateChange={handleDateChange}
             onIntervalChange={setTimeSlotInterval}
             onFilterClick={onFilterClick}
-            hasActiveFilters={hasActiveFilters}
+            activeFilterCount={activeFilterCount}
           />
         </div>
 
-        {/* Calendar Grid */}
-        <div className="flex-1 overflow-hidden">
-          <div className="flex h-full">
-            {/* Time Column */}
-            <div className="flex flex-col border-r bg-muted/30 sticky left-0 z-20 w-16">
-              {/* Empty header cell */}
-              <div className="h-[72px] border-b flex items-end justify-center pb-2">
-                <span className="text-xs text-muted-foreground">Time</span>
+        {/* Calendar Grid Container */}
+        <div className="flex-1 overflow-hidden relative">
+          <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto">
+            {/* CSS Grid Layout */}
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(${numStylists}, minmax(140px, 1fr))`,
+                gridTemplateRows: `${STYLIST_HEADER_HEIGHT}px repeat(${timeSlots.length}, ${slotHeight}px)`,
+              }}
+            >
+              {/* Top-left corner cell (sticky both ways) */}
+              <div
+                className="sticky top-0 left-0 z-30 bg-muted border-b border-r flex items-center justify-center"
+                style={{ gridRow: 1, gridColumn: 1 }}
+              >
+                <span className="text-xs font-medium text-muted-foreground">Time</span>
               </div>
-              {/* Time labels */}
-              {timeSlots.map((time) => {
+
+              {/* Stylist Headers (sticky top) */}
+              {filteredStylists.map((stylist, index) => (
+                <div
+                  key={stylist.id}
+                  className="sticky top-0 z-20 bg-muted border-b border-r"
+                  style={{ gridRow: 1, gridColumn: index + 2 }}
+                >
+                  <StylistColumnHeader stylist={stylist} className="h-full border-0" />
+                </div>
+              ))}
+
+              {/* Time Labels (sticky left) */}
+              {timeSlots.map((time, rowIndex) => {
                 const afterHours = isSlotAfterHours(time);
                 return (
                   <div
-                    key={time}
+                    key={`time-${time}`}
                     className={cn(
-                      'flex items-start justify-end pr-2 text-xs border-b',
-                      afterHours
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20'
-                        : 'text-muted-foreground'
+                      'sticky left-0 z-20 bg-muted border-b border-r flex items-start justify-end pr-2 pt-2',
+                      afterHours && 'bg-orange-100/50 dark:bg-orange-950/30'
                     )}
-                    style={{ height: `${slotHeight}px` }}
+                    style={{ gridRow: rowIndex + 2, gridColumn: 1 }}
                   >
-                    <span className="-mt-2">{time}</span>
+                    <span
+                      className={cn(
+                        'text-xs font-medium -mt-2',
+                        afterHours
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-muted-foreground'
+                      )}
+                    >
+                      {time}
+                    </span>
                   </div>
                 );
               })}
+
+              {/* Grid Cells - Time slots for each stylist */}
+              {filteredStylists.map((stylist, colIndex) =>
+                timeSlots.map((time, rowIndex) => {
+                  const slotMins = parseInt(time.split(':')[0]) * 60 + parseInt(time.split(':')[1]);
+                  const nextSlotMins = slotMins + timeSlotInterval;
+
+                  // Find appointments starting in this slot
+                  const appointmentsStartingInSlot = filteredAppointments.filter((apt) => {
+                    if (apt.stylistId !== stylist.id) return false;
+                    const aptStartMins =
+                      parseInt(apt.startTime.split(':')[0]) * 60 +
+                      parseInt(apt.startTime.split(':')[1]);
+                    return aptStartMins >= slotMins && aptStartMins < nextSlotMins;
+                  });
+
+                  // Check if slot is occupied by ongoing appointment
+                  const isOccupied = filteredAppointments.some((apt) => {
+                    if (apt.stylistId !== stylist.id) return false;
+                    const aptStartMins =
+                      parseInt(apt.startTime.split(':')[0]) * 60 +
+                      parseInt(apt.startTime.split(':')[1]);
+                    const aptEndMins =
+                      parseInt(apt.endTime.split(':')[0]) * 60 +
+                      parseInt(apt.endTime.split(':')[1]);
+                    return aptStartMins < slotMins && aptEndMins > slotMins;
+                  });
+
+                  const isBreak = stylist.breaks.some((b) => time >= b.start && time < b.end);
+                  const isBlocked = stylist.blockedSlots.some(
+                    (s) => s.isFullDay || (time >= s.start && time < s.end)
+                  );
+                  const isOutsideHours =
+                    !stylist.workingHours ||
+                    time < stylist.workingHours.start ||
+                    time >= stylist.workingHours.end;
+                  const isAfterHours = isSlotAfterHours(time);
+                  const hasConflict = draggedAppointment
+                    ? checkSlotConflict(stylist.id, time, draggedAppointment.id)
+                    : false;
+
+                  const slotId = `${stylist.id}-${time}`;
+
+                  return (
+                    <div
+                      key={slotId}
+                      className="relative"
+                      style={{ gridRow: rowIndex + 2, gridColumn: colIndex + 2 }}
+                    >
+                      <DroppableSlot
+                        id={slotId}
+                        stylistId={stylist.id}
+                        date={selectedDate}
+                        time={time}
+                        height={slotHeight}
+                        isBreak={isBreak}
+                        isBlocked={isBlocked}
+                        isOutsideHours={isOutsideHours}
+                        isAfterHours={isAfterHours}
+                        hasConflict={hasConflict}
+                        onClick={
+                          !isOccupied && appointmentsStartingInSlot.length === 0
+                            ? () => onSlotClick(stylist.id, selectedDate, time)
+                            : undefined
+                        }
+                      >
+                        {/* Render appointments starting in this slot */}
+                        {appointmentsStartingInSlot.map((appointment, aptIndex) => {
+                          const startMins =
+                            parseInt(appointment.startTime.split(':')[0]) * 60 +
+                            parseInt(appointment.startTime.split(':')[1]);
+                          const endMins =
+                            parseInt(appointment.endTime.split(':')[0]) * 60 +
+                            parseInt(appointment.endTime.split(':')[1]);
+                          const duration = endMins - startMins;
+                          const height = (duration / timeSlotInterval) * slotHeight;
+                          const offsetMins = startMins - slotMins;
+                          const topOffset = (offsetMins / timeSlotInterval) * slotHeight;
+
+                          const numAppointments = appointmentsStartingInSlot.length;
+                          const widthPercent = 100 / numAppointments;
+                          const leftPercent = aptIndex * widthPercent;
+
+                          return (
+                            <div
+                              key={appointment.id}
+                              className="absolute z-10"
+                              style={{
+                                height: `${height}px`,
+                                top: `${topOffset}px`,
+                                left: `calc(${leftPercent}% + 2px)`,
+                                width: `calc(${widthPercent}% - 4px)`,
+                              }}
+                            >
+                              {renderAppointment(appointment, height)}
+                            </div>
+                          );
+                        })}
+                      </DroppableSlot>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            {/* Scrollable content */}
-            <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
-              {/* Stylist Headers */}
-              <div className="flex sticky top-0 z-10 bg-background">
-                {filteredStylists.map((stylist) => (
-                  <StylistColumnHeader key={stylist.id} stylist={stylist} className="flex-1" />
-                ))}
-              </div>
-
-              {/* Grid Content */}
-              <div className="flex relative">
-                {/* Current Time Indicator */}
-                <CurrentTimeIndicator
-                  workingHours={data.workingHours}
-                  timeSlotInterval={timeSlotInterval}
-                  slotHeight={slotHeight}
-                  selectedDate={selectedDate}
-                />
-
-                {/* Stylist Columns */}
-                {filteredStylists.map((stylist) => (
-                  <div key={stylist.id} className="flex flex-col flex-1 min-w-[140px]">
-                    {timeSlots.map((time) => {
-                      // Convert time slot to minutes for comparison
-                      const slotMins =
-                        parseInt(time.split(':')[0]) * 60 + parseInt(time.split(':')[1]);
-                      const nextSlotMins = slotMins + timeSlotInterval;
-
-                      // Find ALL appointments that START within this time slot (for side-by-side display)
-                      const appointmentsStartingInSlot = filteredAppointments.filter((apt) => {
-                        if (apt.stylistId !== stylist.id) return false;
-                        const aptStartMins =
-                          parseInt(apt.startTime.split(':')[0]) * 60 +
-                          parseInt(apt.startTime.split(':')[1]);
-                        return aptStartMins >= slotMins && aptStartMins < nextSlotMins;
-                      });
-
-                      // Check if this slot is occupied by an appointment that started earlier
-                      const isOccupied = filteredAppointments.some((apt) => {
-                        if (apt.stylistId !== stylist.id) return false;
-                        const aptStartMins =
-                          parseInt(apt.startTime.split(':')[0]) * 60 +
-                          parseInt(apt.startTime.split(':')[1]);
-                        const aptEndMins =
-                          parseInt(apt.endTime.split(':')[0]) * 60 +
-                          parseInt(apt.endTime.split(':')[1]);
-                        return aptStartMins < slotMins && aptEndMins > slotMins;
-                      });
-
-                      const isBreak = stylist.breaks.some((b) => time >= b.start && time < b.end);
-                      const isBlocked = stylist.blockedSlots.some(
-                        (s) => s.isFullDay || (time >= s.start && time < s.end)
-                      );
-                      const isOutsideHours =
-                        !stylist.workingHours ||
-                        time < stylist.workingHours.start ||
-                        time >= stylist.workingHours.end;
-                      const isAfterHours = isSlotAfterHours(time);
-
-                      // Check for conflict when dragging
-                      const hasConflict = draggedAppointment
-                        ? checkSlotConflict(stylist.id, time, draggedAppointment.id)
-                        : false;
-
-                      const slotId = `${stylist.id}-${time}`;
-
-                      // Render appointments at start time (side by side if multiple)
-                      if (appointmentsStartingInSlot.length > 0) {
-                        const numAppointments = appointmentsStartingInSlot.length;
-
-                        return (
-                          <DroppableSlot
-                            key={time}
-                            id={slotId}
-                            stylistId={stylist.id}
-                            date={selectedDate}
-                            time={time}
-                            height={slotHeight}
-                            hasConflict={hasConflict}
-                            isAfterHours={isAfterHours}
-                          >
-                            {appointmentsStartingInSlot.map((appointment, index) => {
-                              const startMins =
-                                parseInt(appointment.startTime.split(':')[0]) * 60 +
-                                parseInt(appointment.startTime.split(':')[1]);
-                              const endMins =
-                                parseInt(appointment.endTime.split(':')[0]) * 60 +
-                                parseInt(appointment.endTime.split(':')[1]);
-                              const duration = endMins - startMins;
-                              const height = (duration / timeSlotInterval) * slotHeight;
-                              const offsetMins = startMins - slotMins;
-                              const topOffset = (offsetMins / timeSlotInterval) * slotHeight;
-
-                              // Calculate width and left position for side-by-side display
-                              const widthPercent = 100 / numAppointments;
-                              const leftPercent = index * widthPercent;
-
-                              return (
-                                <div
-                                  key={appointment.id}
-                                  className="absolute z-10"
-                                  style={{
-                                    height: `${height}px`,
-                                    top: `${topOffset}px`,
-                                    left: `calc(${leftPercent}% + 2px)`,
-                                    width: `calc(${widthPercent}% - 4px)`,
-                                  }}
-                                >
-                                  {renderAppointment(appointment, height)}
-                                </div>
-                              );
-                            })}
-                          </DroppableSlot>
-                        );
-                      }
-
-                      // Occupied slot (appointment spans multiple slots)
-                      if (isOccupied) {
-                        return (
-                          <DroppableSlot
-                            key={time}
-                            id={slotId}
-                            stylistId={stylist.id}
-                            date={selectedDate}
-                            time={time}
-                            height={slotHeight}
-                            hasConflict={hasConflict}
-                            isAfterHours={isAfterHours}
-                          />
-                        );
-                      }
-
-                      // Regular empty slot
-                      return (
-                        <DroppableSlot
-                          key={time}
-                          id={slotId}
-                          stylistId={stylist.id}
-                          date={selectedDate}
-                          time={time}
-                          height={slotHeight}
-                          isBreak={isBreak}
-                          isBlocked={isBlocked}
-                          isOutsideHours={isOutsideHours}
-                          isAfterHours={isAfterHours}
-                          hasConflict={hasConflict}
-                          onClick={() => onSlotClick(stylist.id, selectedDate, time)}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Current Time Indicator */}
+            <CurrentTimeIndicator
+              workingHours={data.workingHours}
+              timeSlotInterval={timeSlotInterval}
+              slotHeight={slotHeight}
+              selectedDate={selectedDate}
+              headerHeight={STYLIST_HEADER_HEIGHT}
+              leftOffset={TIME_COLUMN_WIDTH}
+            />
           </div>
         </div>
       </div>

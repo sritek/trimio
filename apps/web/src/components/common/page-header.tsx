@@ -33,7 +33,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-2 flex-shrink-0 mb-6', className)}>
       {/* Breadcrumbs */}
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav className="flex items-center space-x-1 text-sm text-muted-foreground">

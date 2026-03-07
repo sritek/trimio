@@ -13,6 +13,8 @@ interface CurrentTimeIndicatorProps {
   timeSlotInterval: number;
   slotHeight: number;
   selectedDate?: string;
+  headerHeight?: number;
+  leftOffset?: number;
 }
 
 export function CurrentTimeIndicator({
@@ -20,6 +22,8 @@ export function CurrentTimeIndicator({
   timeSlotInterval,
   slotHeight,
   selectedDate,
+  headerHeight = 72,
+  leftOffset = 64,
 }: CurrentTimeIndicatorProps) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -27,7 +31,7 @@ export function CurrentTimeIndicator({
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Update every minute
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -59,23 +63,27 @@ export function CurrentTimeIndicator({
     return null;
   }
 
-  // Calculate top position
+  // Calculate top position (accounting for header)
   const minutesSinceStart = currentMinutes - startMinutes;
-  const topPosition = (minutesSinceStart / timeSlotInterval) * slotHeight;
+  const topPosition = headerHeight + (minutesSinceStart / timeSlotInterval) * slotHeight;
 
   return (
     <div
-      className="absolute left-0 right-0 z-30 pointer-events-none"
-      style={{ top: `${topPosition}px` }}
+      className="absolute z-30 pointer-events-none"
+      style={{
+        top: `${topPosition}px`,
+        left: `${leftOffset}px`,
+        right: 0,
+      }}
     >
       {/* Time label */}
-      <div className="absolute -left-1 -top-2.5 bg-red-500 text-white text-[10px] px-1 py-0.5 rounded font-medium">
+      <div className="absolute -left-1 -top-2.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium shadow-sm">
         {currentTimeStr}
       </div>
       {/* Line */}
       <div className="h-0.5 bg-red-500 w-full shadow-sm" />
-      {/* Circle indicator */}
-      <div className="absolute -left-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-sm" />
+      {/* Left dot */}
+      <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full" />
     </div>
   );
 }

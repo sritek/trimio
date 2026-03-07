@@ -32,6 +32,7 @@ import { AppointmentStatusBadge } from './appointment-status-badge';
 
 import type { ColumnDef } from '@/components/common';
 import type { Appointment, BookingType } from '@/types/appointments';
+import { formatDate } from 'date-fns';
 
 // ============================================
 // Helper Functions
@@ -76,14 +77,17 @@ export function getAppointmentColumns({
 }: GetColumnsOptions): ColumnDef<Appointment>[] {
   return [
     {
-      accessorKey: 'scheduledTime',
+      accessorKey: 'scheduledDateTime',
       header: 'Time',
       cell: ({ row }) => {
         const apt = row.original;
         return (
           <div className="flex flex-col">
-            <span className="font-medium">{apt.scheduledTime}</span>
-            <span className="text-xs text-muted-foreground">{apt.totalDuration} min</span>
+            <span className="font-medium">{formatDate(apt.scheduledDate, 'PPP')}</span>
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-muted-foreground">{apt.scheduledTime}</span>
+              <span className="text-xs text-muted-foreground">{apt.totalDuration} min</span>
+            </div>
           </div>
         );
       },

@@ -100,6 +100,7 @@ export function VendorTable({
       }
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
+      className="flex-1"
     />
   );
 }

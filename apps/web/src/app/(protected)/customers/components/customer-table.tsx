@@ -72,6 +72,7 @@ export function CustomerTable({
       }
       onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
+      className="flex-1"
     />
   );
 }

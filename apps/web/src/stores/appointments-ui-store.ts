@@ -1,11 +1,10 @@
 /**
  * Appointments UI Store
- * Persists view state across navigation (date, view type, filters)
+ * Manages list view specific state (filters, search, pagination)
+ * Date is synced from calendar-store for consistency between views
  */
 
-import { format } from 'date-fns';
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type CalendarView = 'day' | 'week' | 'month';
 
@@ -23,9 +22,6 @@ export interface ListFiltersState {
 }
 
 interface AppointmentsUIState {
-  // Calendar specific
-  calendarView: CalendarView;
-
   // List specific
   listFilters: ListFiltersState;
   listSearch: string;
@@ -33,75 +29,65 @@ interface AppointmentsUIState {
   listLimit: number;
 
   // Actions
-  setCalendarView: (view: CalendarView) => void;
   setListFilters: (filters: Partial<ListFiltersState>) => void;
   setListSearch: (search: string) => void;
   setListPage: (page: number) => void;
   setListLimit: (limit: number) => void;
-  resetFilters: () => void;
-  resetToToday: () => void;
+  resetFilters: (date: string) => void;
+  syncDateFromCalendar: (date: string) => void;
 }
 
-const getDefaultFilters = (): ListFiltersState => {
-  const today = format(new Date(), 'yyyy-MM-dd');
-  return {
-    dateFrom: today,
-    dateTo: today,
+export const useAppointmentsUIStore = create<AppointmentsUIState>()((set) => ({
+  // Initial state - dates will be synced from calendar store
+  listFilters: {
+    dateFrom: '',
+    dateTo: '',
     statuses: [],
     bookingTypes: [],
     stylistIds: [],
-  };
-};
+  },
+  listSearch: '',
+  listPage: 1,
+  listLimit: 20,
 
-export const useAppointmentsUIStore = create<AppointmentsUIState>()(
-  persist(
-    (set) => ({
-      // Initial state
-      calendarView: 'week',
-      listFilters: getDefaultFilters(),
+  // Actions
+  setListFilters: (filters) =>
+    set((state) => ({
+      listFilters: { ...state.listFilters, ...filters },
+      listPage: 1, // Reset page when filters change
+    })),
+
+  setListSearch: (search) =>
+    set({
+      listSearch: search,
+      listPage: 1,
+    }),
+
+  setListPage: (page) => set({ listPage: page }),
+
+  setListLimit: (limit) => set({ listLimit: limit }),
+
+  resetFilters: (date) =>
+    set({
+      listFilters: {
+        dateFrom: date,
+        dateTo: date,
+        statuses: [],
+        bookingTypes: [],
+        stylistIds: [],
+      },
       listSearch: '',
       listPage: 1,
-      listLimit: 20,
-
-      // Actions
-      setCalendarView: (view) => set({ calendarView: view }),
-
-      setListFilters: (filters) =>
-        set((state) => ({
-          listFilters: { ...state.listFilters, ...filters },
-          listPage: 1, // Reset page when filters change
-        })),
-
-      setListSearch: (search) =>
-        set({
-          listSearch: search,
-          listPage: 1,
-        }),
-
-      setListPage: (page) => set({ listPage: page }),
-
-      setListLimit: (limit) => set({ listLimit: limit }),
-
-      resetFilters: () =>
-        set({
-          listFilters: getDefaultFilters(),
-          listSearch: '',
-          listPage: 1,
-        }),
-
-      resetToToday: () =>
-        set({
-          listFilters: getDefaultFilters(),
-          listSearch: '',
-          listPage: 1,
-        }),
     }),
-    {
-      name: 'appointments-ui-storage',
-      storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => ({
-        calendarView: state.calendarView,
-      }),
-    }
-  )
-);
+
+  // Sync date from calendar store when switching views
+  syncDateFromCalendar: (date) =>
+    set((state) => ({
+      listFilters: {
+        ...state.listFilters,
+        dateFrom: date,
+        dateTo: date,
+      },
+      listPage: 1,
+    })),
+}));

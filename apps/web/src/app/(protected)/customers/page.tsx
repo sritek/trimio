@@ -110,11 +110,13 @@ export default function CustomersPage() {
         />
 
         <PageContent>
-          <CustomerFilters
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            customTags={customTags}
-          />
+          <div className="flex-shrink-0 mb-4">
+            <CustomerFilters
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              customTags={customTags}
+            />
+          </div>
 
           <CustomerTable
             data={customersData?.data || []}

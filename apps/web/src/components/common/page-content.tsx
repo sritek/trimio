@@ -10,5 +10,9 @@ interface PageContentProps {
 }
 
 export function PageContent({ children, className }: PageContentProps) {
-  return <div className={cn('space-y-4', className)}>{children}</div>;
+  return (
+    <div className={cn('flex flex-col flex-1 min-h-0', className)}>
+      {children}
+    </div>
+  );
 }

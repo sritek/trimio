@@ -1,6 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+/**
+ * Billing Page - Invoices List
+ * Displays invoices with filters following the appointments pattern
+ */
+
+import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -17,17 +22,11 @@ import {
   PageHeader,
   PermissionGuard,
   SearchInput,
+  FilterButton,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
-import { InvoiceTable } from './components/invoice-table';
+import { InvoiceTable, InvoiceFiltersSheet, type InvoiceFiltersState } from './components';
 
 import type { InvoiceStatus, PaymentStatus } from '@/types/billing';
 
@@ -37,25 +36,52 @@ export default function BillingPage() {
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.BILLS_WRITE);
 
+  // State
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<string>('all');
-  const [paymentStatus, setPaymentStatus] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-
-  const { data, isLoading } = useInvoices({
-    search: search || undefined,
-    status: status !== 'all' ? (status as InvoiceStatus) : undefined,
-    paymentStatus: paymentStatus !== 'all' ? (paymentStatus as PaymentStatus) : undefined,
-    page,
-    limit,
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<InvoiceFiltersState>({
+    dateFrom: '',
+    dateTo: '',
+    statuses: [],
+    paymentStatuses: [],
   });
+
+  // Build query params
+  const queryParams = useMemo(
+    () => ({
+      search: search || undefined,
+      status: filters.statuses.length === 1 ? (filters.statuses[0] as InvoiceStatus) : undefined,
+      paymentStatus:
+        filters.paymentStatuses.length === 1
+          ? (filters.paymentStatuses[0] as PaymentStatus)
+          : undefined,
+      dateFrom: filters.dateFrom || undefined,
+      dateTo: filters.dateTo || undefined,
+      page,
+      limit,
+      sortBy: 'createdAt' as const,
+      sortOrder: 'desc' as const,
+    }),
+    [search, filters, page, limit]
+  );
+
+  const { data, isLoading } = useInvoices(queryParams);
 
   const invoices = data?.data || [];
   const meta = data?.meta;
 
-  const hasFilters = !!search || status !== 'all' || paymentStatus !== 'all';
+  // Calculate active filter count
+  const activeFilterCount =
+    filters.statuses.length +
+    filters.paymentStatuses.length +
+    (filters.dateFrom ? 1 : 0) +
+    (filters.dateTo ? 1 : 0);
 
+  const hasFilters = activeFilterCount > 0 || !!search;
+
+  // Handlers
   const handlePageSizeChange = useCallback((newLimit: number) => {
     setLimit(newLimit);
     setPage(1);
@@ -71,6 +97,16 @@ export default function BillingPage() {
   const handleCreateNew = useCallback(() => {
     router.push('/billing/new');
   }, [router]);
+
+  const handleFiltersChange = useCallback((newFilters: InvoiceFiltersState) => {
+    setFilters(newFilters);
+    setPage(1); // Reset to first page when filters change
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1); // Reset to first page when search changes
+  }, []);
 
   return (
     <PermissionGuard permission={PERMISSIONS.BILLS_READ} fallback={<AccessDenied />}>
@@ -89,38 +125,18 @@ export default function BillingPage() {
         />
 
         <PageContent>
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-4 flex-shrink-0">
+          {/* Filters Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 flex-shrink-0">
+            {/* Left side: Search */}
             <SearchInput
               value={search}
-              onChange={setSearch}
+              onChange={handleSearchChange}
               placeholder={t('searchPlaceholder')}
-              className="flex-1"
+              className="w-full sm:w-80"
             />
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder={t('filterStatus')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('allStatuses')}</SelectItem>
-                <SelectItem value="draft">{t('status.draft')}</SelectItem>
-                <SelectItem value="finalized">{t('status.finalized')}</SelectItem>
-                <SelectItem value="cancelled">{t('status.cancelled')}</SelectItem>
-                <SelectItem value="refunded">{t('status.refunded')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder={t('filterPayment')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('allPayments')}</SelectItem>
-                <SelectItem value="pending">{t('payment.pending')}</SelectItem>
-                <SelectItem value="partial">{t('payment.partial')}</SelectItem>
-                <SelectItem value="paid">{t('payment.paid')}</SelectItem>
-                <SelectItem value="refunded">{t('payment.refunded')}</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Right side: Filter Button */}
+            <FilterButton onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
           </div>
 
           {/* Table */}
@@ -137,6 +153,14 @@ export default function BillingPage() {
             hasFilters={hasFilters}
           />
         </PageContent>
+
+        {/* Filters Sheet */}
+        <InvoiceFiltersSheet
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+        />
       </PageContainer>
     </PermissionGuard>
   );

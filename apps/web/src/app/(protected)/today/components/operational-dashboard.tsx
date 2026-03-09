@@ -106,8 +106,7 @@ export function OperationalDashboard({
   onAttentionItemClick,
   onDismissAttention,
 }: OperationalDashboardProps) {
-  const { openStationAssignment, openAppointmentDetails, openAddService, openCheckout } =
-    useOpenPanel();
+  const { openStationAssignment, openAppointmentDetails, openCheckout } = useOpenPanel();
   const [activeTab, setActiveTab] = useState('timeline');
   const startMutation = useStartAppointment();
   const completeMutation = useCompleteAppointment();
@@ -125,13 +124,6 @@ export function OperationalDashboard({
       openAppointmentDetails(appointmentId);
     },
     [openAppointmentDetails]
-  );
-
-  const handleAddService = useCallback(
-    (appointmentId: string) => {
-      openAddService(appointmentId);
-    },
-    [openAddService]
   );
 
   const handleComplete = useCallback(
@@ -217,7 +209,6 @@ export function OperationalDashboard({
           branchId={branchId}
           onAssign={handleAssign}
           onViewDetails={handleViewDetails}
-          onAddService={handleAddService}
           onComplete={handleComplete}
           onStartNow={handleStartNow}
         />

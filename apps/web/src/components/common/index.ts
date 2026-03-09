@@ -32,6 +32,7 @@ export { FilterBar } from './filter-bar';
 export { FilterButton } from './filter-button';
 export { DatePicker } from './date-picker';
 export { TimePicker } from './time-picker';
+export { TimeSlotPicker } from './time-slot-picker';
 
 // Combobox components
 export { CustomerCombobox } from './customer-combobox';
@@ -42,6 +43,8 @@ export type { ServiceOption, ServiceComboboxProps } from './service-combobox';
 // Feedback components
 export { LoadingSpinner } from './loading-spinner';
 export { LoadingOverlay } from './loading-overlay';
+export { Notice } from './notice';
+export type { NoticeSeverity } from './notice';
 
 // Access control components
 export { PermissionGuard } from './permission-guard';

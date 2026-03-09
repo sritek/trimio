@@ -30,8 +30,6 @@ import {
   ChevronRight,
   ChevronDown,
   UserPlus,
-  Clock,
-  FileText,
   UserCog,
   CalendarCheck,
   CalendarOff,
@@ -41,6 +39,7 @@ import {
   Crown,
   Gauge,
   ClipboardList,
+  FileText,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -100,25 +99,10 @@ const mainNavItems: NavItem[] = [
     permission: PERMISSIONS.SERVICES_READ,
   },
   {
-    titleKey: 'billing',
+    titleKey: 'invoices',
     href: '/billing',
     icon: Receipt,
     permission: PERMISSIONS.BILLS_READ,
-    children: [
-      { titleKey: 'invoices', href: '/billing', icon: Receipt, permission: PERMISSIONS.BILLS_READ },
-      {
-        titleKey: 'dayClosure',
-        href: '/billing/day-closure',
-        icon: Clock,
-        permission: PERMISSIONS.BILLS_READ,
-      },
-      {
-        titleKey: 'creditNotes',
-        href: '/billing/credit-notes',
-        icon: FileText,
-        permission: PERMISSIONS.BILLS_READ,
-      },
-    ],
   },
   {
     titleKey: 'staff',

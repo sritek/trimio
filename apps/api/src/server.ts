@@ -22,7 +22,6 @@ import servicesRoutes from './modules/services/services.routes';
 import customersRoutes from './modules/customers/customers.routes';
 import { appointmentsRoutes } from './modules/appointments';
 import { billingRoutes } from './modules/billing';
-import { checkoutRoutes } from './modules/checkout';
 import { staffRoutes } from './modules/staff';
 import productRoutes from './modules/inventory/product.routes';
 import vendorRoutes from './modules/inventory/vendor.routes';
@@ -218,7 +217,6 @@ async function registerRoutes() {
   fastify.register(customersRoutes, { prefix: '/api/v1' });
   fastify.register(appointmentsRoutes, { prefix: '/api/v1/appointments' });
   fastify.register(billingRoutes, { prefix: '/api/v1/invoices' });
-  fastify.register(checkoutRoutes, { prefix: '/api/v1/checkout' });
   fastify.register(staffRoutes, { prefix: '/api/v1/staff' });
 
   // Inventory routes (conditionally enabled)

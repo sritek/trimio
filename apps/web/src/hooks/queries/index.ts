@@ -10,7 +10,6 @@ export * from './use-combos';
 export * from './use-customers';
 export * from './use-appointments';
 export * from './use-invoices';
-export * from './use-checkout';
 export * from './use-staff';
 export * from './use-inventory';
 export * from './use-memberships';

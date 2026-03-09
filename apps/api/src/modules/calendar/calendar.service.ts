@@ -114,6 +114,7 @@ import type {
   CalendarStylist,
   CalendarAppointment,
   ResourceCalendarResponse,
+  ConflictInfo,
 } from './calendar.schema';
 
 // Stylist colors for visual distinction
@@ -277,20 +278,28 @@ export class CalendarService {
       orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
     });
 
-    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => ({
-      id: apt.id,
-      stylistId: apt.stylistId,
-      date: format(apt.scheduledDate, 'yyyy-MM-dd'),
-      startTime: apt.scheduledTime,
-      endTime: apt.endTime,
-      customerName: apt.customer?.name || apt.customerName || 'Guest',
-      customerPhone: apt.customer?.phone || apt.customerPhone,
-      services: apt.services.map((s) => s.serviceName),
-      status: apt.status,
-      bookingType: apt.bookingType,
-      totalAmount: Number(apt.totalAmount),
-      hasConflict: apt.hasConflict,
-    }));
+    // Build conflict info for each appointment
+    const appointmentConflicts = this.computeConflictInfo(appointments);
+
+    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => {
+      const conflictData = appointmentConflicts.get(apt.id);
+      return {
+        id: apt.id,
+        stylistId: apt.stylistId,
+        date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+        startTime: apt.scheduledTime,
+        endTime: apt.endTime,
+        customerName: apt.customer?.name || apt.customerName || 'Guest',
+        customerPhone: apt.customer?.phone || apt.customerPhone,
+        services: apt.services.map((s) => s.serviceName),
+        status: apt.status,
+        bookingType: apt.bookingType,
+        totalAmount: Number(apt.totalAmount),
+        hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+        conflictInfo:
+          conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+      };
+    });
 
     return {
       date,
@@ -529,5 +538,105 @@ export class CalendarService {
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
     return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Compute conflict info for all appointments
+   * Groups by stylist and date, then checks for overlaps
+   */
+  private computeConflictInfo(
+    appointments: Array<{
+      id: string;
+      stylistId: string | null;
+      scheduledDate: Date;
+      scheduledTime: string;
+      endTime: string;
+    }>
+  ): Map<string, ConflictInfo> {
+    const conflictMap = new Map<string, ConflictInfo>();
+
+    // Group appointments by stylist and date
+    const groupedByStylistDate = new Map<string, typeof appointments>();
+
+    for (const apt of appointments) {
+      if (!apt.stylistId) continue; // Skip unassigned appointments
+
+      const dateStr = format(apt.scheduledDate, 'yyyy-MM-dd');
+      const key = `${apt.stylistId}-${dateStr}`;
+
+      if (!groupedByStylistDate.has(key)) {
+        groupedByStylistDate.set(key, []);
+      }
+      groupedByStylistDate.get(key)!.push(apt);
+    }
+
+    // Check for conflicts within each group
+    for (const [, group] of groupedByStylistDate) {
+      for (let i = 0; i < group.length; i++) {
+        const apt1 = group[i];
+        const conflictingIds: string[] = [];
+        let maxOverlapMinutes = 0;
+
+        for (let j = 0; j < group.length; j++) {
+          if (i === j) continue;
+
+          const apt2 = group[j];
+          const overlapMinutes = this.calculateOverlapMinutes(
+            apt1.scheduledTime,
+            apt1.endTime,
+            apt2.scheduledTime,
+            apt2.endTime
+          );
+
+          if (overlapMinutes > 0) {
+            conflictingIds.push(apt2.id);
+            maxOverlapMinutes = Math.max(maxOverlapMinutes, overlapMinutes);
+          }
+        }
+
+        if (conflictingIds.length > 0) {
+          // Calculate appointment duration to determine severity
+          const apt1Duration =
+            this.timeToMinutes(apt1.endTime) - this.timeToMinutes(apt1.scheduledTime);
+          const overlapPercentage = (maxOverlapMinutes / apt1Duration) * 100;
+
+          conflictMap.set(apt1.id, {
+            conflictingAppointmentIds: conflictingIds,
+            overlapMinutes: maxOverlapMinutes,
+            severity: overlapPercentage >= 50 ? 'severe' : 'warning',
+          });
+        }
+      }
+    }
+
+    return conflictMap;
+  }
+
+  /**
+   * Helper: Calculate overlap in minutes between two time ranges
+   */
+  private calculateOverlapMinutes(
+    start1: string,
+    end1: string,
+    start2: string,
+    end2: string
+  ): number {
+    const start1Mins = this.timeToMinutes(start1);
+    const end1Mins = this.timeToMinutes(end1);
+    const start2Mins = this.timeToMinutes(start2);
+    const end2Mins = this.timeToMinutes(end2);
+
+    const overlapStart = Math.max(start1Mins, start2Mins);
+    const overlapEnd = Math.min(end1Mins, end2Mins);
+
+    return Math.max(0, overlapEnd - overlapStart);
+  }
+
+  /**
+   * Helper: Convert time string to minutes
+   */
+  private timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
   }
 }

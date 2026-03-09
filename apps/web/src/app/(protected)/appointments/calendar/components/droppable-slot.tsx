@@ -24,6 +24,7 @@ interface DroppableSlotProps {
   isOutsideHours?: boolean;
   isAfterHours?: boolean;
   hasConflict?: boolean;
+  hasConflictingAppointments?: boolean; // Slot contains appointments that conflict with each other
   onClick?: () => void;
   children?: React.ReactNode;
 }
@@ -39,6 +40,7 @@ export function DroppableSlot({
   isOutsideHours = false,
   isAfterHours = false,
   hasConflict = false,
+  hasConflictingAppointments = false,
   onClick,
   children,
 }: DroppableSlotProps) {
@@ -76,13 +78,26 @@ export function DroppableSlot({
       onClick={handleClick}
       style={{ height: `${height}px` }}
       className={cn(
-        'border-b border-r transition-all duration-150 relative bg-background',
-        // Base states
+        'border-b border-r transition-all duration-150 relative',
+        // Base background - default white/dark
+        'bg-background',
+        // Outside working hours (before open or after close for this stylist)
         isOutsideHours && 'bg-muted/40',
+        // Blocked time
         isBlocked && 'bg-red-50 dark:bg-red-950/20',
+        // Break time
         isBreak && 'bg-amber-100/80 dark:bg-amber-900/40',
-        // After-hours styling (overtime)
-        isAfterHours && !isBreak && !isBlocked && 'bg-orange-50/60 dark:bg-orange-950/20',
+        // After-hours styling (overtime) - more visible orange tint
+        isAfterHours &&
+          !isBreak &&
+          !isBlocked &&
+          !isOutsideHours &&
+          'bg-orange-100/70 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800',
+        // Conflict zone highlighting - slot contains conflicting appointments
+        hasConflictingAppointments &&
+          !isBreak &&
+          !isBlocked &&
+          'bg-amber-50/50 dark:bg-amber-950/20',
         // Interactive states
         canDrop && !isDragging && 'cursor-pointer hover:bg-primary/5',
         // Drag hover states
@@ -102,6 +117,13 @@ export function DroppableSlot({
           <span className="text-xs font-semibold text-amber-700 dark:text-amber-200 truncate bg-amber-200/70 dark:bg-amber-700/50 rounded px-2 py-0.5 shadow-sm">
             Break
           </span>
+        </div>
+      )}
+
+      {/* After-hours indicator - subtle label at top of slot */}
+      {isAfterHours && !isBreak && !isBlocked && !isOutsideHours && !children && (
+        <div className="absolute top-0 right-0 px-1">
+          <span className="text-[10px] font-medium text-orange-500 dark:text-orange-400">OT</span>
         </div>
       )}
 

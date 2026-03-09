@@ -25,7 +25,6 @@ interface StationCardProps {
   station: StationCardType;
   onAssign: (stationId: string) => void;
   onViewDetails: (appointmentId: string) => void;
-  onAddService: (appointmentId: string) => void;
   onComplete: (appointmentId: string) => void;
   onStartNow: (appointmentId: string) => void;
 }
@@ -64,7 +63,6 @@ export function StationCard({
   station,
   onAssign,
   onViewDetails,
-  onAddService,
   onComplete,
   onStartNow,
 }: StationCardProps) {
@@ -162,7 +160,7 @@ export function StationCard({
             )}
 
             {/* Actions */}
-            <div className="flex gap-1 pt-1">
+            <div className="flex gap-2 pt-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -171,15 +169,6 @@ export function StationCard({
               >
                 <Eye className="h-3 w-3 mr-1" />
                 View
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => onAddService(appointment.id)}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Add
               </Button>
               <Button size="sm" className="flex-1" onClick={() => onComplete(appointment.id)}>
                 <CheckCircle className="h-3 w-3 mr-1" />
@@ -210,7 +199,7 @@ export function StationCard({
               {appointment.services.length > 2 && ` +${appointment.services.length - 2} more`}
             </div>
 
-            <div className="flex gap-1 pt-1">
+            <div className="flex gap-2 pt-1">
               <Button
                 variant="outline"
                 size="sm"

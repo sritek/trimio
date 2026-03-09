@@ -33,6 +33,12 @@ export interface CalendarStylist {
   }>;
 }
 
+export interface ConflictInfo {
+  conflictingAppointmentIds: string[];
+  overlapMinutes: number;
+  severity: 'warning' | 'severe';
+}
+
 export interface CalendarAppointment {
   id: string;
   stylistId: string | null;
@@ -46,6 +52,9 @@ export interface CalendarAppointment {
   bookingType: string;
   totalAmount: number;
   hasConflict: boolean;
+  conflictInfo: ConflictInfo | null;
+  /** Flag for optimistic updates - appointment is being created */
+  isOptimistic?: boolean;
 }
 
 export interface ResourceCalendarData {
@@ -107,7 +116,7 @@ export function useResourceCalendar(
 }
 
 /**
- * Move appointment (drag-drop)
+ * Move appointment (drag-drop) with optimistic update
  */
 export function useMoveAppointment() {
   const queryClient = useQueryClient();
@@ -115,17 +124,69 @@ export function useMoveAppointment() {
   return useMutation({
     mutationFn: async (params: MoveAppointmentParams) => {
       const { appointmentId, ...body } = params;
-      // api.patch already extracts the data from { success, data } response
       return api.patch<unknown>(`/calendar/appointments/${appointmentId}/move`, body);
     },
+
+    onMutate: async (params) => {
+      const { appointmentId, newStylistId, newDate, newTime } = params;
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Snapshot all calendar data for potential rollback
+      const previousData = new Map<string, ResourceCalendarData>();
+
+      // Update all matching calendar queries optimistically
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+
+          // Store snapshot
+          previousData.set(
+            JSON.stringify(resourceCalendarKeys.list({ branchId: '', date: old.date })),
+            old
+          );
+
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === appointmentId
+                ? {
+                    ...apt,
+                    stylistId: newStylistId ?? apt.stylistId,
+                    date: newDate,
+                    startTime: newTime,
+                    // Note: endTime will be recalculated by server
+                  }
+                : apt
+            ),
+          };
+        }
+      );
+
+      return { previousData };
+    },
+
     onSuccess: () => {
-      // Invalidate calendar queries to refetch
+      // Invalidate to get fresh data with correct endTime
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
-      // Also invalidate appointments queries
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       toast.success('Appointment moved successfully');
     },
-    onError: (error: Error & { response?: { data?: { error?: { message?: string } } } }) => {
+
+    onError: (
+      error: Error & { response?: { data?: { error?: { message?: string } } } },
+      _,
+      context
+    ) => {
+      // Rollback all calendar caches
+      if (context?.previousData) {
+        context.previousData.forEach((data, key) => {
+          queryClient.setQueryData(JSON.parse(key), data);
+        });
+      }
+
       const message = error?.response?.data?.error?.message || 'Failed to move appointment';
       toast.error(message);
     },

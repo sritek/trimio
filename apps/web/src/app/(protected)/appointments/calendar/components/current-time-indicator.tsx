@@ -69,7 +69,7 @@ export function CurrentTimeIndicator({
 
   return (
     <div
-      className="absolute z-30 pointer-events-none"
+      className="absolute z-30 pointer-events-none w-full"
       style={{
         top: `${topPosition}px`,
         left: `${leftOffset}px`,
@@ -77,13 +77,11 @@ export function CurrentTimeIndicator({
       }}
     >
       {/* Time label */}
-      <div className="absolute -left-1 -top-2.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium shadow-sm">
+      <div className="absolute -top-2.5 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium shadow-sm">
         {currentTimeStr}
       </div>
       {/* Line */}
       <div className="h-0.5 bg-red-500 w-full shadow-sm" />
-      {/* Left dot */}
-      <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full" />
     </div>
   );
 }

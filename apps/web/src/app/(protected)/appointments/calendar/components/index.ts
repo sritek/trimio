@@ -4,7 +4,7 @@
 
 export { ResourceCalendar } from './resource-calendar';
 export { CalendarHeader } from './calendar-header';
-export { StylistColumnHeader } from './stylist-column';
+export { StylistColumnHeader } from './stylist-column-header';
 export { TimeSlot } from './time-slot';
 export {
   AppointmentBlock,

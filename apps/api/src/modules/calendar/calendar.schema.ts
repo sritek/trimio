@@ -56,6 +56,12 @@ export const calendarStylistSchema = z.object({
   ),
 });
 
+export const conflictInfoSchema = z.object({
+  conflictingAppointmentIds: z.array(z.string()),
+  overlapMinutes: z.number(),
+  severity: z.enum(['warning', 'severe']), // warning = partial (<50%), severe = significant (>=50%)
+});
+
 export const calendarAppointmentSchema = z.object({
   id: z.string(),
   stylistId: z.string().nullable(),
@@ -69,6 +75,7 @@ export const calendarAppointmentSchema = z.object({
   bookingType: z.string(),
   totalAmount: z.number(),
   hasConflict: z.boolean(),
+  conflictInfo: conflictInfoSchema.nullable(),
 });
 
 export const resourceCalendarResponseSchema = z.object({
@@ -90,4 +97,5 @@ export type GetResourceCalendarInput = z.infer<typeof getResourceCalendarSchema>
 export type MoveAppointmentInput = z.infer<typeof moveAppointmentSchema>;
 export type CalendarStylist = z.infer<typeof calendarStylistSchema>;
 export type CalendarAppointment = z.infer<typeof calendarAppointmentSchema>;
+export type ConflictInfo = z.infer<typeof conflictInfoSchema>;
 export type ResourceCalendarResponse = z.infer<typeof resourceCalendarResponseSchema>;

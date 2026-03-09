@@ -15,10 +15,10 @@ import {
   pointerWithin,
 } from '@dnd-kit/core';
 import { format, addMinutes } from 'date-fns';
-import { AlertCircle, Users } from 'lucide-react';
+import { AlertCircle, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { CalendarHeader } from './calendar-header';
-import { StylistColumnHeader } from './stylist-column';
+import { StylistColumnHeader } from './stylist-column-header';
 import { AppointmentBlock } from './appointment-block';
 import { DroppableSlot } from './droppable-slot';
 import { CurrentTimeIndicator } from './current-time-indicator';
@@ -56,9 +56,10 @@ const SLOT_HEIGHTS: Record<number, number> = {
   60: 80,
 };
 
-// Header heights
+// Header heights and column widths
 const STYLIST_HEADER_HEIGHT = 72;
 const TIME_COLUMN_WIDTH = 64;
+const STYLIST_COLUMN_WIDTH = 300; // Fixed width for each stylist column
 
 export function ResourceCalendar({
   data,
@@ -74,6 +75,7 @@ export function ResourceCalendar({
   const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
+  const [scrollState, setScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
 
   const {
     selectedDate,
@@ -87,6 +89,42 @@ export function ResourceCalendar({
 
   // Calculate slot height based on interval
   const slotHeight = SLOT_HEIGHTS[timeSlotInterval] || 60;
+
+  // Track horizontal scroll state for fade indicators
+  const updateScrollState = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = container;
+    setScrollState({
+      canScrollLeft: scrollLeft > 5,
+      canScrollRight: scrollLeft < scrollWidth - clientWidth - 5,
+    });
+  }, []);
+
+  // Update scroll state on scroll and resize
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    updateScrollState();
+    container.addEventListener('scroll', updateScrollState);
+    window.addEventListener('resize', updateScrollState);
+
+    return () => {
+      container.removeEventListener('scroll', updateScrollState);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [updateScrollState, data?.stylists]);
+
+  // Scroll by one column width
+  const scrollByColumn = useCallback((direction: 'left' | 'right') => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollAmount = direction === 'right' ? STYLIST_COLUMN_WIDTH : -STYLIST_COLUMN_WIDTH;
+    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  }, []);
 
   // Generate time slots based on working hours and interval
   const timeSlots = useMemo(() => {
@@ -379,12 +417,61 @@ export function ResourceCalendar({
 
         {/* Calendar Grid Container */}
         <div className="flex-1 overflow-hidden relative">
+          {/* Left scroll shadow */}
+          <div
+            className={cn(
+              'absolute left-0 top-0 bottom-0 w-8 z-40 pointer-events-none transition-opacity duration-300',
+              'bg-gradient-to-r from-background/80 to-transparent',
+              scrollState.canScrollLeft ? 'opacity-100' : 'opacity-0'
+            )}
+            style={{ left: TIME_COLUMN_WIDTH }}
+          />
+
+          {/* Right scroll indicator with fade and arrow */}
+          <div
+            className={cn(
+              'absolute right-0 top-0 bottom-0 w-16 z-40 pointer-events-none transition-opacity duration-300',
+              'bg-gradient-to-l from-background via-background/60 to-transparent',
+              scrollState.canScrollRight ? 'opacity-100' : 'opacity-0'
+            )}
+          />
+
+          {/* Scroll arrow buttons */}
+          {scrollState.canScrollLeft && (
+            <button
+              onClick={() => scrollByColumn('left')}
+              className={cn(
+                'absolute top-1/2 -translate-y-1/2 z-50 p-2 rounded-full',
+                'bg-background/90 border shadow-lg hover:bg-accent',
+                'transition-all duration-200 hover:scale-110'
+              )}
+              style={{ left: TIME_COLUMN_WIDTH + 8 }}
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
+
+          {scrollState.canScrollRight && (
+            <button
+              onClick={() => scrollByColumn('right')}
+              className={cn(
+                'absolute right-2 top-1/2 -translate-y-1/2 z-50 p-2 rounded-full',
+                'bg-background/90 border shadow-lg hover:bg-accent',
+                'transition-all duration-200 hover:scale-110'
+              )}
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          )}
+
           <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto">
-            {/* CSS Grid Layout */}
+            {/* CSS Grid Layout with fixed column widths */}
             <div
-              className="grid"
+              className="grid min-w-max"
               style={{
-                gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(${numStylists}, minmax(140px, 1fr))`,
+                gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(${numStylists}, ${STYLIST_COLUMN_WIDTH}px)`,
                 gridTemplateRows: `${STYLIST_HEADER_HEIGHT}px repeat(${timeSlots.length}, ${slotHeight}px)`,
               }}
             >
@@ -473,6 +560,11 @@ export function ResourceCalendar({
                     ? checkSlotConflict(stylist.id, time, draggedAppointment.id)
                     : false;
 
+                  // Check if any appointments in this slot have conflicts
+                  const hasConflictingAppointments = appointmentsStartingInSlot.some(
+                    (apt) => apt.hasConflict
+                  );
+
                   const slotId = `${stylist.id}-${time}`;
 
                   return (
@@ -492,6 +584,7 @@ export function ResourceCalendar({
                         isOutsideHours={isOutsideHours}
                         isAfterHours={isAfterHours}
                         hasConflict={hasConflict}
+                        hasConflictingAppointments={hasConflictingAppointments}
                         onClick={
                           !isOccupied && appointmentsStartingInSlot.length === 0
                             ? () => onSlotClick(stylist.id, selectedDate, time)

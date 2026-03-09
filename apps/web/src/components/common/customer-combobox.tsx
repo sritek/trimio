@@ -176,14 +176,18 @@ export function CustomerCombobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0"
+        align="start"
+        // onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <Command shouldFilter={!onSearchChange}>
           <CommandInput
             placeholder={placeholder}
             value={inputValue}
             onValueChange={setInputValue}
           />
-          <CommandList>
+          <CommandList className="max-h-[250px]">
             <CommandEmpty>
               {customers.length === 0 ? 'Type to search customers...' : 'No customers found.'}
             </CommandEmpty>
@@ -193,7 +197,7 @@ export function CustomerCombobox({
                   key={customer.id}
                   value={customer.id}
                   onSelect={handleSelect}
-                  className="py-2"
+                  className="py-2 cursor-pointer"
                 >
                   <Avatar className="h-8 w-8 mr-2">
                     <AvatarFallback className="text-xs">

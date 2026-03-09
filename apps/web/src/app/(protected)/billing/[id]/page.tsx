@@ -15,6 +15,8 @@ import {
   CheckCircle,
   Banknote,
   Plus,
+  Star,
+  Wallet,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -236,6 +238,30 @@ export default function InvoiceDetailPage() {
                     )}
                     {invoice.gstin && (
                       <div className="text-sm text-muted-foreground">GSTIN: {invoice.gstin}</div>
+                    )}
+
+                    {/* Loyalty & Wallet Balance */}
+                    {invoice.customer && (
+                      <div className="mt-4 pt-4 border-t space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <Star className="h-4 w-4 text-yellow-500" />
+                            Loyalty Points
+                          </span>
+                          <span className="font-medium">
+                            {invoice.customer.loyaltyPoints.toLocaleString()} pts
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <Wallet className="h-4 w-4 text-green-500" />
+                            Wallet Balance
+                          </span>
+                          <span className="font-medium">
+                            {formatCurrency(invoice.customer.walletBalance)}
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </CardContent>

@@ -405,6 +405,130 @@ export class AvailabilityService {
   }
 
   /**
+   * Get busy time slots for a stylist on a specific date
+   * Returns all time ranges where the stylist is unavailable (appointments, breaks, blocked slots)
+   */
+  async getStylistBusySlots(
+    tenantId: string,
+    stylistId: string,
+    branchId: string,
+    date: string
+  ): Promise<{
+    date: string;
+    stylistId: string;
+    busySlots: Array<{
+      startTime: string;
+      endTime: string;
+      type: 'appointment' | 'break' | 'blocked';
+      label?: string;
+    }>;
+  }> {
+    const dateObj = parseToUTCDate(date);
+    const dayOfWeek = getDayOfWeek(date);
+    const busySlots: Array<{
+      startTime: string;
+      endTime: string;
+      type: 'appointment' | 'break' | 'blocked';
+      label?: string;
+    }> = [];
+
+    // 1. Get existing appointments
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        tenantId,
+        stylistId,
+        scheduledDate: dateObj,
+        status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
+        deletedAt: null,
+      },
+      select: {
+        scheduledTime: true,
+        endTime: true,
+        customerName: true,
+      },
+      orderBy: { scheduledTime: 'asc' },
+    });
+
+    for (const apt of appointments) {
+      busySlots.push({
+        startTime: apt.scheduledTime,
+        endTime: apt.endTime,
+        type: 'appointment',
+        label: apt.customerName || 'Appointment',
+      });
+    }
+
+    // 2. Get breaks (recurring or specific day)
+    const breaks = await this.prisma.stylistBreak.findMany({
+      where: {
+        tenantId,
+        stylistId,
+        isActive: true,
+        OR: [{ dayOfWeek: null }, { dayOfWeek }],
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+        name: true,
+      },
+    });
+
+    for (const brk of breaks) {
+      busySlots.push({
+        startTime: brk.startTime,
+        endTime: brk.endTime,
+        type: 'break',
+        label: brk.name,
+      });
+    }
+
+    // 3. Get blocked slots
+    const blockedSlots = await this.prisma.stylistBlockedSlot.findMany({
+      where: {
+        tenantId,
+        stylistId,
+        blockedDate: dateObj,
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+        isFullDay: true,
+        reason: true,
+      },
+    });
+
+    // Get branch working hours for full day blocks
+    const workingHours = await this.getBranchWorkingHours(branchId, date);
+
+    for (const block of blockedSlots) {
+      if (block.isFullDay && workingHours) {
+        busySlots.push({
+          startTime: workingHours.start,
+          endTime: workingHours.end,
+          type: 'blocked',
+          label: block.reason || 'Blocked',
+        });
+      } else if (block.startTime && block.endTime) {
+        busySlots.push({
+          startTime: block.startTime,
+          endTime: block.endTime,
+          type: 'blocked',
+          label: block.reason || 'Blocked',
+        });
+      }
+    }
+
+    // Sort by start time
+    busySlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return {
+      date,
+      stylistId,
+      busySlots,
+    };
+  }
+
+  /**
    * Find next available date
    */
   private async findNextAvailableDate(

@@ -62,6 +62,20 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; accent: string }
   },
 };
 
+// Conflict severity styles
+const CONFLICT_STYLES = {
+  warning: {
+    border: 'border-l-4 border-l-amber-500',
+    ring: 'ring-1 ring-amber-400/50',
+    badge: 'bg-amber-500',
+  },
+  severe: {
+    border: 'border-l-4 border-l-red-500',
+    ring: 'ring-2 ring-red-500',
+    badge: 'bg-red-500',
+  },
+};
+
 // Status labels for display
 const STATUS_LABELS: Record<string, string> = {
   booked: 'Booked',
@@ -127,9 +141,18 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
           <span className="font-medium">₹{appointment.totalAmount.toLocaleString('en-IN')}</span>
         </div>
       )}
-      {appointment.hasConflict && (
-        <div className="text-red-600 font-medium border-t border-gray-200 pt-2">
-          ⚠️ This appointment has a conflict
+      {appointment.hasConflict && appointment.conflictInfo && (
+        <div
+          className={cn(
+            'border-t border-gray-200 pt-2',
+            appointment.conflictInfo.severity === 'severe' ? 'text-red-600' : 'text-amber-600'
+          )}
+        >
+          <div className="font-medium flex items-center gap-1">⚠️ Scheduling Conflict</div>
+          <div className="text-xs mt-1">
+            Overlaps by {appointment.conflictInfo.overlapMinutes} min with{' '}
+            {appointment.conflictInfo.conflictingAppointmentIds.length} appointment(s)
+          </div>
         </div>
       )}
     </div>
@@ -139,6 +162,13 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
 // Statuses that allow drag-and-drop rescheduling
 const MOVABLE_STATUSES = ['booked', 'confirmed', 'checked_in'];
 
+// Optimistic appointment styles
+const OPTIMISTIC_STYLES = {
+  bg: 'bg-primary/20 dark:bg-primary/30',
+  text: 'text-primary-foreground dark:text-primary-foreground',
+  accent: 'bg-primary',
+};
+
 export function AppointmentBlock({
   appointment,
   stylistColor,
@@ -146,8 +176,11 @@ export function AppointmentBlock({
   isDragging = false,
   onClick,
 }: AppointmentBlockProps) {
-  // Check if appointment can be moved
-  const canMove = MOVABLE_STATUSES.includes(appointment.status);
+  // Check if this is an optimistic (pending) appointment
+  const isOptimistic = appointment.isOptimistic === true;
+
+  // Check if appointment can be moved (not optimistic ones)
+  const canMove = !isOptimistic && MOVABLE_STATUSES.includes(appointment.status);
 
   const {
     attributes,
@@ -170,9 +203,17 @@ export function AppointmentBlock({
       }
     : undefined;
 
-  const statusStyle = STATUS_STYLES[appointment.status] || STATUS_STYLES.booked;
+  // Use optimistic styles if pending, otherwise use status styles
+  const statusStyle = isOptimistic
+    ? OPTIMISTIC_STYLES
+    : STATUS_STYLES[appointment.status] || STATUS_STYLES.booked;
+  const conflictStyle =
+    !isOptimistic && appointment.hasConflict && appointment.conflictInfo
+      ? CONFLICT_STYLES[appointment.conflictInfo.severity]
+      : null;
   const isCompact = height < 40;
-  const showServices = height >= 50;
+  // const showServices = height >= 50;
+  const showServices = true;
   const services = appointment.services || [];
 
   // Handle click on the appointment body (not drag handle)
@@ -203,13 +244,19 @@ export function AppointmentBlock({
         'shadow-sm hover:shadow-md',
         'border border-black/5 dark:border-white/10',
         statusStyle.bg,
-        // Cursor: pointer for clicking to open details
-        'cursor-pointer',
+        // Cursor: pointer for clicking to open details (not for optimistic)
+        !isOptimistic && 'cursor-pointer',
+        // Optimistic appointment styling - pulsing animation
+        isOptimistic && 'animate-pulse cursor-wait border-2 border-dashed border-primary/50',
         (isDragging || isCurrentlyDragging) &&
           'shadow-xl ring-2 ring-primary/50 opacity-90 scale-[1.02]',
-        appointment.hasConflict && 'ring-2 ring-red-500',
+        // Conflict styling based on severity
+        conflictStyle && conflictStyle.border,
+        conflictStyle && conflictStyle.ring,
         // Unassigned appointment indicator - dashed border
-        !appointment.stylistId && 'border-2 border-dashed border-orange-400 dark:border-orange-500'
+        !isOptimistic &&
+          !appointment.stylistId &&
+          'border-2 border-dashed border-orange-400 dark:border-orange-500'
       )}
     >
       {/* Drag Handle - only for movable appointments */}
@@ -259,22 +306,36 @@ export function AppointmentBlock({
         </span>
       )}
 
-      {/* Conflict indicator */}
-      {appointment.hasConflict && (
-        <span className="absolute top-1 right-4 text-xs bg-red-500 text-white px-1 rounded font-bold">
-          !
+      {/* Conflict indicator with severity */}
+      {appointment.hasConflict && appointment.conflictInfo && (
+        <span
+          className={cn(
+            'absolute top-1 right-4 text-xs text-white px-1 rounded font-bold',
+            conflictStyle?.badge || 'bg-red-500'
+          )}
+        >
+          {appointment.conflictInfo.conflictingAppointmentIds.length > 1
+            ? `${appointment.conflictInfo.conflictingAppointmentIds.length}!`
+            : '!'}
         </span>
       )}
 
       {/* Unassigned indicator */}
-      {!appointment.stylistId && (
+      {!isOptimistic && !appointment.stylistId && (
         <span className="absolute top-1 right-4 text-[10px] font-medium bg-orange-500 text-white px-1 rounded">
           Unassigned
         </span>
       )}
 
+      {/* Optimistic/Creating indicator */}
+      {isOptimistic && (
+        <span className="absolute top-1 right-1 text-[10px] font-medium bg-primary text-primary-foreground px-1.5 rounded animate-pulse">
+          Creating...
+        </span>
+      )}
+
       {/* In-progress animation */}
-      {appointment.status === 'in_progress' && (
+      {!isOptimistic && appointment.status === 'in_progress' && (
         <div className="absolute inset-0 bg-gradient-to-r from-amber-400/20 to-transparent animate-pulse pointer-events-none rounded-lg" />
       )}
 

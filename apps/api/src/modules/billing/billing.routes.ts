@@ -20,19 +20,6 @@ import {
   quickBill,
   calculateTotals,
   getNextInvoiceNumber,
-  // Credit Notes
-  createCreditNote,
-  getCreditNote,
-  listCreditNotes,
-  // Day Closure
-  openDay,
-  closeDay,
-  getCurrentDay,
-  listDayClosures,
-  // Cash Drawer
-  getCashBalance,
-  getCashTransactions,
-  makeCashAdjustment,
 } from './billing.controller';
 
 export async function billingRoutes(fastify: FastifyInstance) {
@@ -174,107 +161,5 @@ export async function billingRoutes(fastify: FastifyInstance) {
       preHandler: requirePermission(PERMISSIONS.BILLS_READ),
     },
     getNextInvoiceNumber
-  );
-
-  // ============================================
-  // Credit Notes
-  // ============================================
-
-  // Create credit note (refund)
-  fastify.post(
-    '/credit-notes',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_WRITE),
-    },
-    createCreditNote
-  );
-
-  // List credit notes
-  fastify.get(
-    '/credit-notes',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    listCreditNotes
-  );
-
-  // Get credit note by ID
-  fastify.get(
-    '/credit-notes/:id',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    getCreditNote
-  );
-
-  // ============================================
-  // Day Closure
-  // ============================================
-
-  // Open day
-  fastify.post(
-    '/day-closure/open',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_WRITE),
-    },
-    openDay
-  );
-
-  // Get current day status
-  fastify.get(
-    '/day-closure/current',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    getCurrentDay
-  );
-
-  // List day closures
-  fastify.get(
-    '/day-closure',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    listDayClosures
-  );
-
-  // Close day
-  fastify.post(
-    '/day-closure/:id/close',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_WRITE),
-    },
-    closeDay
-  );
-
-  // ============================================
-  // Cash Drawer
-  // ============================================
-
-  // Get cash balance
-  fastify.get(
-    '/cash-drawer/balance',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    getCashBalance
-  );
-
-  // Get cash transactions
-  fastify.get(
-    '/cash-drawer/transactions',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_READ),
-    },
-    getCashTransactions
-  );
-
-  // Make cash adjustment
-  fastify.post(
-    '/cash-drawer/adjustment',
-    {
-      preHandler: requirePermission(PERMISSIONS.BILLS_WRITE),
-    },
-    makeCashAdjustment
   );
 }

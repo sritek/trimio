@@ -60,9 +60,6 @@ export function StylistColumnHeader({
       </div>
       <div className="text-center">
         <span className="text-sm font-medium truncate block max-w-[110px]">{stylist.name}</span>
-        {!stylist.isAvailable && (
-          <span className="text-[10px] text-muted-foreground">Unavailable</span>
-        )}
       </div>
     </div>
   );

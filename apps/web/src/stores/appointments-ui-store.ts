@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { format, startOfDay } from 'date-fns';
 
 export type CalendarView = 'day' | 'week' | 'month';
 
@@ -34,6 +35,7 @@ interface AppointmentsUIState {
   setListPage: (page: number) => void;
   setListLimit: (limit: number) => void;
   resetFilters: (date: string) => void;
+  resetToToday: () => void;
   syncDateFromCalendar: (date: string) => void;
 }
 
@@ -79,6 +81,21 @@ export const useAppointmentsUIStore = create<AppointmentsUIState>()((set) => ({
       listSearch: '',
       listPage: 1,
     }),
+
+  resetToToday: () => {
+    const today = format(startOfDay(new Date()), 'yyyy-MM-dd');
+    set({
+      listFilters: {
+        dateFrom: today,
+        dateTo: today,
+        statuses: [],
+        bookingTypes: [],
+        stylistIds: [],
+      },
+      listSearch: '',
+      listPage: 1,
+    });
+  },
 
   // Sync date from calendar store when switching views
   syncDateFromCalendar: (date) =>

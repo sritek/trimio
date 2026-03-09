@@ -159,7 +159,7 @@ export function AddServicePanel({ appointmentId }: AddServicePanelProps) {
               <SelectContent>
                 <SelectItem value="">Same as appointment</SelectItem>
                 {stylists.map((stylist) => (
-                  <SelectItem key={stylist.id} value={stylist.id}>
+                  <SelectItem key={stylist.userId} value={stylist.userId}>
                     {stylist.user?.name || 'Unknown'}
                   </SelectItem>
                 ))}

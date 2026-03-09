@@ -1082,6 +1082,7 @@ model InvoiceItem {
 
   // Staff (for commission)
   stylistId   String? @map("stylist_id")
+  stylistName String? @map("stylist_name") @db.VarChar(255)
   assistantId String? @map("assistant_id")
 
   // Commission (locked at billing)

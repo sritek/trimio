@@ -187,8 +187,6 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
     appointment.status
   );
 
-  console.log('appointment', appointment);
-
   return (
     <div className="flex flex-col h-full">
       {/* Main Content */}
@@ -309,7 +307,7 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
             )}
           </div>
           {appointment.totalAmount != null && appointment.totalAmount > 0 && (
-            <div className="mt-4 pt-3 border-t space-y-2">
+            <div className="mt-8 pt-3 border-t space-y-2">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>Subtotal</span>
                 <span>₹{appointment.subtotal?.toLocaleString('en-IN') || 0}</span>

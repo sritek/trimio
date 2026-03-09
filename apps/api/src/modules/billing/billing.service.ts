@@ -62,6 +62,7 @@ interface CalculatedItem {
   netAmount: number;
   hsnSacCode?: string;
   stylistId?: string;
+  stylistName?: string;
   assistantId?: string;
   commissionType?: string;
   commissionRate?: number;
@@ -178,6 +179,22 @@ class InvoiceCalculator {
   ): Promise<CalculatedItem[]> {
     const calculatedItems: CalculatedItem[] = [];
 
+    // Collect all stylist IDs to fetch names in one query
+    const stylistIds = items
+      .filter((item) => item.stylistId)
+      .map((item) => item.stylistId as string);
+    const uniqueStylistIds = [...new Set(stylistIds)];
+
+    // Fetch stylist names
+    const stylists =
+      uniqueStylistIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: uniqueStylistIds }, tenantId },
+            select: { id: true, name: true },
+          })
+        : [];
+    const stylistMap = new Map(stylists.map((s) => [s.id, s.name]));
+
     for (const item of items) {
       if (item.itemType === 'service') {
         const service = await prisma.service.findFirst({
@@ -243,6 +260,9 @@ class InvoiceCalculator {
           commissionAmount = commissionValue * quantity;
         }
 
+        // Get stylist name
+        const stylistName = item.stylistId ? stylistMap.get(item.stylistId) : undefined;
+
         calculatedItems.push({
           itemType: 'service',
           referenceId: service.id,
@@ -265,6 +285,7 @@ class InvoiceCalculator {
           netAmount: taxableAmount + taxAmount,
           hsnSacCode: service.hsnSacCode || undefined,
           stylistId: item.stylistId,
+          stylistName,
           assistantId: item.assistantId,
           commissionType,
           commissionRate: commissionValue,
@@ -498,16 +519,6 @@ export const billingService = {
         items: { orderBy: { displayOrder: 'asc' } },
         payments: { orderBy: { createdAt: 'desc' } },
         discounts: true,
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-            loyaltyPoints: true,
-            walletBalance: true,
-          },
-        },
       },
     });
 
@@ -1149,10 +1160,36 @@ export const billingService = {
 
   /**
    * Quick bill - create and finalize in one step
+   * If a draft invoice already exists for the appointment, reuse it
    */
   async quickBill(input: QuickBillInput, ctx: TenantContext) {
-    // Create invoice
-    const invoice = await this.createInvoice(input, ctx);
+    let invoice;
+
+    // Check if there's already a draft invoice for this appointment
+    if (input.appointmentId) {
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          appointmentId: input.appointmentId,
+          status: InvoiceStatus.DRAFT,
+        },
+        include: {
+          items: true,
+          payments: true,
+          discounts: true,
+        },
+      });
+
+      if (existingInvoice) {
+        // Reuse existing draft invoice
+        invoice = existingInvoice;
+      }
+    }
+
+    // Create new invoice if no existing draft found
+    if (!invoice) {
+      invoice = await this.createInvoice(input, ctx);
+    }
 
     // Finalize with payments
     return this.finalizeInvoice(invoice.id, { payments: input.payments }, ctx);

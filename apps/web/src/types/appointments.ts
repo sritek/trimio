@@ -81,6 +81,8 @@ export interface Appointment {
     phone: string;
     email?: string | null;
     gender?: string | null;
+    loyaltyPoints?: number;
+    walletBalance?: number;
   } | null;
   branch?: {
     id: string;

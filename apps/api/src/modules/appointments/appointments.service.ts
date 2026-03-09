@@ -151,7 +151,15 @@ export class AppointmentsService {
       },
       include: {
         customer: {
-          select: { id: true, name: true, phone: true, email: true, gender: true },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            gender: true,
+            loyaltyPoints: true,
+            walletBalance: true,
+          },
         },
         branch: {
           select: { id: true, name: true },

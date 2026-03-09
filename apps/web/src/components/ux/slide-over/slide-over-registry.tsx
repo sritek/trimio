@@ -17,6 +17,9 @@ export const PANEL_IDS = {
   UNASSIGNED_APPOINTMENTS: 'unassigned-appointments',
   STATION_ASSIGNMENT: 'station-assignment',
   ADD_SERVICE: 'add-service',
+  NEW_INVOICE: 'new-invoice',
+  INVOICE_PEEK: 'invoice-peek',
+  EDIT_INVOICE: 'edit-invoice',
 } as const;
 
 export type PanelId = (typeof PANEL_IDS)[keyof typeof PANEL_IDS];
@@ -33,7 +36,9 @@ const panelLoaders: Record<PanelId, () => Promise<React.ComponentType<any>>> = {
   [PANEL_IDS.CUSTOMER_PEEK]: () =>
     import('@/components/ux/panels/customer-peek-panel').then((m) => m.CustomerPeekPanel),
   [PANEL_IDS.CHECKOUT]: () =>
-    import('@/components/ux/checkout/checkout-panel').then((m) => m.CheckoutPanel),
+    import('@/app/(protected)/appointments/calendar/components/checkout-panel').then(
+      (m) => m.CheckoutPanel
+    ),
   [PANEL_IDS.UNASSIGNED_APPOINTMENTS]: () =>
     import('@/components/ux/panels/unassigned-appointments-panel').then(
       (m) => m.UnassignedAppointmentsPanel
@@ -42,6 +47,12 @@ const panelLoaders: Record<PanelId, () => Promise<React.ComponentType<any>>> = {
     import('@/components/ux/panels/station-assignment-panel').then((m) => m.StationAssignmentPanel),
   [PANEL_IDS.ADD_SERVICE]: () =>
     import('@/components/ux/panels/add-service-panel').then((m) => m.AddServicePanel),
+  [PANEL_IDS.NEW_INVOICE]: () =>
+    import('@/components/ux/panels/new-invoice-panel').then((m) => m.NewInvoicePanel),
+  [PANEL_IDS.INVOICE_PEEK]: () =>
+    import('@/components/ux/panels/invoice-peek-panel').then((m) => m.InvoicePeekPanel),
+  [PANEL_IDS.EDIT_INVOICE]: () =>
+    import('@/components/ux/panels/edit-invoice-panel').then((m) => m.EditInvoicePanel),
 };
 
 /**
@@ -113,5 +124,17 @@ export function useOpenPanel() {
         { appointmentId },
         { title: 'Add Service', width: 'medium' }
       ),
+
+    openNewInvoice: (options?: { customerId?: string }) =>
+      openPanel(PANEL_IDS.NEW_INVOICE, options || {}, {
+        title: 'New Invoice',
+        width: 'wide',
+      }),
+
+    openInvoicePeek: (invoiceId: string) =>
+      openPanel(PANEL_IDS.INVOICE_PEEK, { invoiceId }, { title: 'Invoice', width: 'medium' }),
+
+    openEditInvoice: (invoiceId: string) =>
+      openPanel(PANEL_IDS.EDIT_INVOICE, { invoiceId }, { title: 'Edit Invoice', width: 'wide' }),
   };
 }

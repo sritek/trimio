@@ -44,3 +44,6 @@ export {
   InternalServerError,
   AppError,
 } from './errors';
+
+// Error handler
+export { errorHandler } from './error-handler';

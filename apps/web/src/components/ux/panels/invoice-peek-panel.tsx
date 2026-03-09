@@ -1,0 +1,299 @@
+'use client';
+
+/**
+ * Invoice Peek Panel
+ * Quick preview panel for invoices from the list view.
+ * Shows summary info and quick actions.
+ */
+
+import { useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { format, parseISO } from 'date-fns';
+import {
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  Hash,
+  CreditCard,
+  Banknote,
+  Smartphone,
+  ExternalLink,
+  Printer,
+  XCircle,
+  CheckCircle,
+  Plus,
+  Edit,
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import { StatusBadge } from '@/components/common';
+import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
+import { useInvoice, useFinalizeInvoice, useCancelInvoice } from '@/hooks/queries/use-invoices';
+import { formatCurrency } from '@/lib/format';
+import type { PaymentMethod } from '@/types/billing';
+
+interface InvoicePeekPanelProps {
+  invoiceId: string;
+}
+
+export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
+  const router = useRouter();
+  const closePanel = useClosePanel();
+  const { openEditInvoice } = useOpenPanel();
+  const { data: invoice, isLoading, refetch } = useInvoice(invoiceId);
+
+  const finalizeInvoice = useFinalizeInvoice();
+  const cancelInvoice = useCancelInvoice();
+
+  const handleViewFull = useCallback(() => {
+    closePanel();
+    router.push(`/billing/${invoiceId}`);
+  }, [closePanel, router, invoiceId]);
+
+  const handleEdit = useCallback(() => {
+    closePanel();
+    openEditInvoice(invoiceId);
+  }, [closePanel, openEditInvoice, invoiceId]);
+
+  const handleFinalize = useCallback(async () => {
+    try {
+      await finalizeInvoice.mutateAsync({ invoiceId });
+      toast.success('Invoice finalized');
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to finalize');
+    }
+  }, [finalizeInvoice, invoiceId, refetch]);
+
+  const handleCancel = useCallback(async () => {
+    const reason = prompt('Please enter a reason for cancellation (min 10 characters):');
+    if (reason && reason.length >= 10) {
+      try {
+        await cancelInvoice.mutateAsync({ invoiceId, reason });
+        toast.success('Invoice cancelled');
+        refetch();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to cancel');
+      }
+    } else if (reason) {
+      toast.error('Reason must be at least 10 characters');
+    }
+  }, [cancelInvoice, invoiceId, refetch]);
+
+  const getPaymentMethodIcon = (method: PaymentMethod) => {
+    switch (method) {
+      case 'cash':
+        return <Banknote className="h-4 w-4 text-green-600" />;
+      case 'card':
+        return <CreditCard className="h-4 w-4 text-blue-600" />;
+      case 'upi':
+        return <Smartphone className="h-4 w-4 text-purple-600" />;
+      default:
+        return <CreditCard className="h-4 w-4" />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="p-6 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6">
+        <p className="text-muted-foreground">Invoice not found</p>
+        <Button variant="outline" className="mt-4" onClick={() => closePanel()}>
+          Close
+        </Button>
+      </div>
+    );
+  }
+
+  const isDraft = invoice.status === 'draft';
+  const canFinalize = isDraft && invoice.amountDue <= 0.01;
+  const canEdit = isDraft;
+
+  return (
+    <div className="flex flex-col h-full">
+      <ScrollArea className="flex-1">
+        <div className="p-6 space-y-6">
+          {/* Header */}
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-xl font-semibold">{invoice.invoiceNumber || 'Draft Invoice'}</h2>
+              <StatusBadge status={invoice.status} size="sm" />
+              <StatusBadge status={invoice.paymentStatus} size="sm" />
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                {format(parseISO(invoice.invoiceDate), 'PPP')}
+              </span>
+              {invoice.invoiceNumber && (
+                <span className="flex items-center gap-1">
+                  <Hash className="h-4 w-4" />
+                  {invoice.invoiceNumber}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div className="rounded-lg border p-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Customer</h3>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{invoice.customerName || 'Guest'}</span>
+              </div>
+              {invoice.customerPhone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  <span>{invoice.customerPhone}</span>
+                </div>
+              )}
+              {invoice.customerEmail && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span>{invoice.customerEmail}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Items Summary */}
+          <div className="rounded-lg border p-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              Items ({invoice.items?.length || 0})
+            </h3>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {invoice.items?.map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span className="truncate flex-1">
+                    {item.name} × {item.quantity}
+                  </span>
+                  <span className="ml-2 font-medium">{formatCurrency(item.netAmount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatCurrency(invoice.subtotal)}</span>
+            </div>
+            {invoice.discountAmount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>Discount</span>
+                <span>-{formatCurrency(invoice.discountAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tax</span>
+              <span>{formatCurrency(invoice.totalTax)}</span>
+            </div>
+            <Separator className="my-2" />
+            <div className="flex justify-between font-semibold">
+              <span>Grand Total</span>
+              <span>{formatCurrency(invoice.grandTotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-green-600">
+              <span>Paid</span>
+              <span>{formatCurrency(invoice.amountPaid)}</span>
+            </div>
+            {invoice.amountDue > 0 && (
+              <div className="flex justify-between text-sm text-red-600 font-medium">
+                <span>Due</span>
+                <span>{formatCurrency(invoice.amountDue)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Payments */}
+          {invoice.payments && invoice.payments.length > 0 && (
+            <div className="rounded-lg border p-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Payments</h3>
+              <div className="space-y-2">
+                {invoice.payments.map((payment) => (
+                  <div key={payment.id} className="flex items-center gap-3 p-2 rounded bg-muted/30">
+                    {getPaymentMethodIcon(payment.paymentMethod)}
+                    <span className="flex-1 text-sm capitalize">{payment.paymentMethod}</span>
+                    <span className="font-medium">{formatCurrency(payment.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Footer Actions */}
+      <div className="border-t p-4 space-y-3 bg-background">
+        {/* Primary Actions */}
+        <div className="flex gap-2">
+          {canEdit && (
+            <Button className="flex-1" onClick={handleEdit}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit Draft
+            </Button>
+          )}
+          {canFinalize && (
+            <Button
+              className="flex-1"
+              onClick={handleFinalize}
+              disabled={finalizeInvoice.isPending}
+            >
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Finalize
+            </Button>
+          )}
+          {isDraft && invoice.amountDue > 0 && (
+            <Button className="flex-1" onClick={handleViewFull}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Payment
+            </Button>
+          )}
+        </div>
+
+        {/* Secondary Actions */}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1" onClick={handleViewFull}>
+            <ExternalLink className="mr-2 h-4 w-4" />
+            View Full Details
+          </Button>
+          {!isDraft && (
+            <Button variant="outline" size="icon">
+              <Printer className="h-4 w-4" />
+            </Button>
+          )}
+          {isDraft && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="text-destructive hover:text-destructive"
+              onClick={handleCancel}
+              disabled={cancelInvoice.isPending}
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

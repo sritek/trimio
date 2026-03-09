@@ -131,7 +131,7 @@ export function getCustomerColumns({
       header: () => <div className="text-right">Loyalty</div>,
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
-          <Star className="h-3 w-3 text-amber-500" />
+          <Star className="size-3 text-amber-500" />
           <span>{row.original.loyaltyPoints.toLocaleString()}</span>
         </div>
       ),

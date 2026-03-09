@@ -59,6 +59,7 @@ export interface InvoiceItem {
   totalTax: number;
   netAmount: number;
   stylistId?: string;
+  stylistName?: string;
   assistantId?: string;
   commissionType?: string;
   commissionRate?: number;

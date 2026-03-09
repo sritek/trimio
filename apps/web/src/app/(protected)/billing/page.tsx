@@ -6,7 +6,6 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -14,6 +13,7 @@ import { PERMISSIONS } from '@salon-ops/shared';
 
 import { useInvoices } from '@/hooks/queries/use-invoices';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useOpenPanel } from '@/components/ux/slide-over';
 
 import {
   AccessDenied,
@@ -31,10 +31,10 @@ import { InvoiceTable, InvoiceFiltersSheet, type InvoiceFiltersState } from './c
 import type { InvoiceStatus, PaymentStatus } from '@/types/billing';
 
 export default function BillingPage() {
-  const router = useRouter();
   const t = useTranslations('billing');
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.BILLS_WRITE);
+  const { openNewInvoice, openInvoicePeek } = useOpenPanel();
 
   // State
   const [search, setSearch] = useState('');
@@ -89,14 +89,14 @@ export default function BillingPage() {
 
   const handleView = useCallback(
     (id: string) => {
-      router.push(`/billing/${id}`);
+      openInvoicePeek(id);
     },
-    [router]
+    [openInvoicePeek]
   );
 
   const handleCreateNew = useCallback(() => {
-    router.push('/billing/new');
-  }, [router]);
+    openNewInvoice();
+  }, [openNewInvoice]);
 
   const handleFiltersChange = useCallback((newFilters: InvoiceFiltersState) => {
     setFilters(newFilters);

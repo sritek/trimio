@@ -5,18 +5,17 @@ import { useParams, useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import {
   ArrowLeft,
-  Calendar,
   CreditCard,
-  FileText,
   Phone,
-  Printer,
   User,
   XCircle,
   CheckCircle,
   Banknote,
   Plus,
-  Star,
-  Wallet,
+  Mail,
+  Smartphone,
+  Calendar,
+  Hash,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -42,7 +41,7 @@ import {
   StatusBadge,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   Table,
@@ -142,9 +141,11 @@ export default function InvoiceDetailPage() {
   const getPaymentMethodIcon = (method: PaymentMethod) => {
     switch (method) {
       case 'cash':
-        return <Banknote className="h-4 w-4" />;
+        return <Banknote className="h-4 w-4 text-green-600" />;
       case 'card':
-        return <CreditCard className="h-4 w-4" />;
+        return <CreditCard className="h-4 w-4 text-blue-600" />;
+      case 'upi':
+        return <Smartphone className="h-4 w-4 text-purple-600" />;
       default:
         return <CreditCard className="h-4 w-4" />;
     }
@@ -154,148 +155,139 @@ export default function InvoiceDetailPage() {
     <PermissionGuard permission={PERMISSIONS.BILLS_READ} fallback={<AccessDenied />}>
       <PageContainer>
         <PageHeader
-          title={invoice.invoiceNumber || `Draft Invoice`}
+          title={invoice.invoiceNumber || 'Draft Invoice'}
           description={`Created on ${format(parseISO(invoice.createdAt), 'PPP')}`}
           actions={
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push('/billing')}>
+              <Button variant="outline" size="sm" onClick={() => router.push('/billing')}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t('detail.backToList')}
+                Back to Invoices
               </Button>
-              {invoice.status === 'finalized' && (
-                <Button variant="outline">
-                  <Printer className="mr-2 h-4 w-4" />
-                  {t('actions.print')}
-                </Button>
+              {canWrite && isDraft && (
+                <>
+                  {canAddPayment && (
+                    <Button size="sm" onClick={() => setShowPaymentDialog(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Payment
+                    </Button>
+                  )}
+                  {canFinalize && (
+                    <Button size="sm" onClick={handleFinalize} disabled={finalizeInvoice.isPending}>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Finalize
+                    </Button>
+                  )}
+                  {canCancel && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleCancel}
+                      disabled={cancelInvoice.isPending}
+                    >
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Cancel
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           }
         />
 
         <PageContent>
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Invoice Header */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      {t('detail.invoiceInfo')}
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <StatusBadge status={invoice.status} label={t(`status.${invoice.status}`)} />
-                      <StatusBadge
-                        status={invoice.paymentStatus}
-                        label={t(`payment.${invoice.paymentStatus}`)}
-                      />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex items-center gap-3">
-                      <Calendar className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <div className="text-sm text-muted-foreground">{t('table.date')}</div>
-                        <div className="font-medium">
-                          {format(parseISO(invoice.invoiceDate), 'PPP')}
-                        </div>
+          <div className="flex gap-4">
+            <div className="flex-1 space-y-4">
+              {/* Invoice Header + Customer - Combined Row */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Invoice Details */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                        Invoice Details
+                      </h3>
+                      <div className="flex gap-1.5">
+                        <StatusBadge status={invoice.status} size="sm" />
+                        <StatusBadge status={invoice.paymentStatus} size="sm" />
                       </div>
                     </div>
-                    {invoice.invoiceNumber && (
-                      <div>
-                        <div className="text-sm text-muted-foreground">
-                          {t('table.invoiceNumber')}
-                        </div>
-                        <div className="font-medium">{invoice.invoiceNumber}</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{format(parseISO(invoice.invoiceDate), 'PPP')}</span>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                      {invoice.invoiceNumber && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Hash className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-mono">{invoice.invoiceNumber}</span>
+                        </div>
+                      )}
+                      {invoice.gstin && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>GSTIN: {invoice.gstin}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
-              {/* Customer Info */}
+                {/* Customer Info */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                      Customer
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{invoice.customerName || 'Guest'}</span>
+                      </div>
+                      {invoice.customerPhone && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="h-4 w-4" />
+                          <span>{invoice.customerPhone}</span>
+                        </div>
+                      )}
+                      {invoice.customerEmail && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Mail className="h-4 w-4" />
+                          <span>{invoice.customerEmail}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Items Table */}
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    {t('detail.customerInfo')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="font-medium text-lg">{invoice.customerName || 'Guest'}</div>
-                    {invoice.customerPhone && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4" />
-                        {invoice.customerPhone}
-                      </div>
-                    )}
-                    {invoice.customerEmail && (
-                      <div className="text-muted-foreground">{invoice.customerEmail}</div>
-                    )}
-                    {invoice.gstin && (
-                      <div className="text-sm text-muted-foreground">GSTIN: {invoice.gstin}</div>
-                    )}
-
-                    {/* Loyalty & Wallet Balance */}
-                    {invoice.customer && (
-                      <div className="mt-4 pt-4 border-t space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Star className="h-4 w-4 text-yellow-500" />
-                            Loyalty Points
-                          </span>
-                          <span className="font-medium">
-                            {invoice.customer.loyaltyPoints.toLocaleString()} pts
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <Wallet className="h-4 w-4 text-green-500" />
-                            Wallet Balance
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(invoice.customer.walletBalance)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Items */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.items')}</CardTitle>
-                </CardHeader>
-                <CardContent>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                    Items
+                  </h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Discount</TableHead>
-                        <TableHead className="text-right">Tax</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="w-[40%]">Item</TableHead>
+                        <TableHead className="text-center w-[10%]">Qty</TableHead>
+                        <TableHead className="text-right w-[15%]">Price</TableHead>
+                        <TableHead className="text-right w-[10%]">Discount</TableHead>
+                        <TableHead className="text-right w-[10%]">Tax</TableHead>
+                        <TableHead className="text-right w-[15%]">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {invoice.items?.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>
-                            <div className="font-medium">{item.name}</div>
+                            <span className="font-medium">{item.name}</span>
                             {item.variantName && (
-                              <div className="text-sm text-muted-foreground">
-                                {item.variantName}
-                              </div>
+                              <span className="text-muted-foreground ml-1">
+                                ({item.variantName})
+                              </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
+                          <TableCell className="text-center">{item.quantity}</TableCell>
                           <TableCell className="text-right">
                             {formatCurrency(item.unitPrice)}
                           </TableCell>
@@ -305,7 +297,7 @@ export default function InvoiceDetailPage() {
                                 -{formatCurrency(item.discountAmount)}
                               </span>
                             ) : (
-                              '-'
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-right">
@@ -319,228 +311,117 @@ export default function InvoiceDetailPage() {
                     </TableBody>
                   </Table>
 
-                  <Separator className="my-4" />
-
-                  {/* Summary */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{t('detail.subtotal')}</span>
-                      <span>{formatCurrency(invoice.subtotal)}</span>
-                    </div>
-                    {invoice.discountAmount > 0 && (
-                      <div className="flex justify-between text-sm text-green-600">
-                        <span>{t('detail.discount')}</span>
-                        <span>-{formatCurrency(invoice.discountAmount)}</span>
+                  {/* Totals - Right aligned */}
+                  <div className="mt-4 flex justify-end">
+                    <div className="w-64 space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span>{formatCurrency(invoice.subtotal)}</span>
                       </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{t('detail.taxable')}</span>
-                      <span>{formatCurrency(invoice.taxableAmount)}</span>
-                    </div>
-                    {invoice.isIgst ? (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{t('detail.igst')}</span>
-                        <span>{formatCurrency(invoice.igstAmount)}</span>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Taxable Amount</span>
+                        <span>{formatCurrency(invoice.taxableAmount)}</span>
                       </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{t('detail.cgst')}</span>
-                          <span>{formatCurrency(invoice.cgstAmount)}</span>
+                      {invoice.isIgst ? (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">IGST</span>
+                          <span>{formatCurrency(invoice.igstAmount)}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{t('detail.sgst')}</span>
-                          <span>{formatCurrency(invoice.sgstAmount)}</span>
+                      ) : (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">CGST</span>
+                            <span>{formatCurrency(invoice.cgstAmount)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">SGST</span>
+                            <span>{formatCurrency(invoice.sgstAmount)}</span>
+                          </div>
+                        </>
+                      )}
+                      <Separator className="my-2" />
+                      <div className="flex justify-between font-semibold text-base">
+                        <span>Grand Total</span>
+                        <span>{formatCurrency(invoice.grandTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-green-600">
+                        <span>Amount Paid</span>
+                        <span>{formatCurrency(invoice.amountPaid)}</span>
+                      </div>
+                      {invoice.amountDue > 0 && (
+                        <div className="flex justify-between text-red-600 font-medium">
+                          <span>Amount Due</span>
+                          <span>{formatCurrency(invoice.amountDue)}</span>
                         </div>
-                      </>
-                    )}
-                    {invoice.roundOff !== 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{t('detail.roundOff')}</span>
-                        <span>{formatCurrency(invoice.roundOff)}</span>
-                      </div>
-                    )}
-                    <Separator />
-                    <div className="flex justify-between font-semibold text-lg">
-                      <span>{t('detail.grandTotal')}</span>
-                      <span>{formatCurrency(invoice.grandTotal)}</span>
+                      )}
+                      {invoice.loyaltyPointsEarned > 0 && (
+                        <div className="flex justify-between text-amber-600 pt-1">
+                          <span>Loyalty Points Earned</span>
+                          <span>+{invoice.loyaltyPointsEarned} pts</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{t('detail.amountPaid')}</span>
-                      <span className="text-green-600">{formatCurrency(invoice.amountPaid)}</span>
-                    </div>
-                    {invoice.amountDue > 0 && (
-                      <div className="flex justify-between font-medium text-red-600">
-                        <span>{t('detail.amountDue')}</span>
-                        <span>{formatCurrency(invoice.amountDue)}</span>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Loyalty & Wallet Info */}
-                  {(invoice.loyaltyPointsEarned > 0 ||
-                    invoice.loyaltyPointsRedeemed > 0 ||
-                    invoice.walletAmountUsed > 0) && (
-                    <>
-                      <Separator className="my-4" />
-                      <div className="space-y-2 text-sm">
-                        {invoice.loyaltyPointsEarned > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              {t('detail.loyaltyEarned')}
-                            </span>
-                            <span className="text-green-600">
-                              +{invoice.loyaltyPointsEarned} pts
-                            </span>
-                          </div>
-                        )}
-                        {invoice.loyaltyPointsRedeemed > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                              {t('detail.loyaltyRedeemed')}
-                            </span>
-                            <span>{invoice.loyaltyPointsRedeemed} pts</span>
-                          </div>
-                        )}
-                        {invoice.walletAmountUsed > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">{t('detail.walletUsed')}</span>
-                            <span>{formatCurrency(invoice.walletAmountUsed)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
                 </CardContent>
               </Card>
 
-              {/* Payments */}
-              {invoice.payments && invoice.payments.length > 0 && (
+              {/* Notes - Only if present */}
+              {(invoice.notes || invoice.internalNotes) && (
                 <Card>
-                  <CardHeader>
-                    <CardTitle>{t('detail.payments')}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {invoice.payments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="flex items-center justify-between p-3 border rounded-md"
-                        >
-                          <div className="flex items-center gap-3">
-                            {getPaymentMethodIcon(payment.paymentMethod)}
-                            <div>
-                              <div className="font-medium">
-                                {t(`paymentMethods.${payment.paymentMethod}`)}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {format(parseISO(payment.paymentDate), 'PPP')} at{' '}
-                                {payment.paymentTime}
-                              </div>
-                              {payment.transactionId && (
-                                <div className="text-xs text-muted-foreground">
-                                  Ref: {payment.transactionId}
-                                </div>
-                              )}
-                            </div>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                      Notes
+                    </h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {invoice.notes && (
+                        <div>
+                          <div className="text-xs font-medium text-muted-foreground mb-1">
+                            Customer Notes
                           </div>
-                          <div className="font-medium">{formatCurrency(payment.amount)}</div>
+                          <p className="text-sm">{invoice.notes}</p>
                         </div>
-                      ))}
+                      )}
+                      {invoice.internalNotes && (
+                        <div>
+                          <div className="text-xs font-medium text-muted-foreground mb-1">
+                            Internal Notes
+                          </div>
+                          <p className="text-sm">{invoice.internalNotes}</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
               )}
             </div>
 
-            {/* Actions Sidebar */}
-            <div className="space-y-6">
-              {canWrite && isDraft && (
+            <div>
+              {/* Payments - Horizontal layout */}
+              {invoice.payments && invoice.payments.length > 0 && (
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Actions</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {canAddPayment && (
-                      <Button className="w-full" onClick={() => setShowPaymentDialog(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        {t('actions.addPayment')}
-                      </Button>
-                    )}
-                    {canFinalize && (
-                      <Button
-                        className="w-full"
-                        variant="default"
-                        onClick={handleFinalize}
-                        disabled={finalizeInvoice.isPending}
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        {t('actions.finalize')}
-                      </Button>
-                    )}
-                    {canCancel && (
-                      <Button
-                        variant="destructive"
-                        className="w-full"
-                        onClick={handleCancel}
-                        disabled={cancelInvoice.isPending}
-                      >
-                        <XCircle className="mr-2 h-4 w-4" />
-                        {t('actions.cancel')}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Invoice Summary Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.summary')}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('detail.grandTotal')}</span>
-                    <span className="font-semibold">{formatCurrency(invoice.grandTotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('detail.amountPaid')}</span>
-                    <span className="text-green-600">{formatCurrency(invoice.amountPaid)}</span>
-                  </div>
-                  {invoice.amountDue > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t('detail.amountDue')}</span>
-                      <span className="text-red-600 font-semibold">
-                        {formatCurrency(invoice.amountDue)}
-                      </span>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                      Payments
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+                      {invoice.payments.map((payment) => (
+                        <div
+                          key={payment.id}
+                          className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30"
+                        >
+                          {getPaymentMethodIcon(payment.paymentMethod)}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm capitalize">
+                              {payment.paymentMethod}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {format(parseISO(payment.paymentDate), 'MMM d, yyyy')}
+                            </div>
+                          </div>
+                          <div className="font-semibold">{formatCurrency(payment.amount)}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Notes */}
-              {(invoice.notes || invoice.internalNotes) && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Notes</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {invoice.notes && (
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">
-                          Customer Notes
-                        </div>
-                        <div className="mt-1">{invoice.notes}</div>
-                      </div>
-                    )}
-                    {invoice.internalNotes && (
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground">
-                          Internal Notes
-                        </div>
-                        <div className="mt-1">{invoice.internalNotes}</div>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               )}

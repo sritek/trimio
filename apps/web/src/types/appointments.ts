@@ -81,6 +81,8 @@ export interface Appointment {
     phone: string;
     email?: string | null;
     gender?: string | null;
+    loyaltyPoints?: number;
+    walletBalance?: number;
   } | null;
   branch?: {
     id: string;
@@ -89,6 +91,15 @@ export interface Appointment {
   stylist?: {
     id: string;
     name: string;
+  } | null;
+  station?: {
+    id: string;
+    name: string;
+    stationType?: {
+      id: string;
+      name: string;
+      color?: string | null;
+    } | null;
   } | null;
   services?: AppointmentService[];
   statusHistory?: AppointmentStatusHistory[];
@@ -444,4 +455,26 @@ export interface StylistScheduleResponse {
     services: string[];
     status: string;
   }[];
+}
+
+// ============================================
+// Stylist Busy Slots Types
+// ============================================
+
+export interface BusySlot {
+  startTime: string;
+  endTime: string;
+  type: 'appointment' | 'break' | 'blocked';
+  label?: string;
+}
+
+export interface StylistBusySlotsFilters {
+  branchId: string;
+  date: string;
+}
+
+export interface StylistBusySlotsResponse {
+  date: string;
+  stylistId: string;
+  busySlots: BusySlot[];
 }

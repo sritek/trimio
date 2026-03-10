@@ -17,12 +17,12 @@ import Fastify from 'fastify';
 
 import { env } from './config/env';
 import { logger } from './lib/logger';
+import { errorHandler } from './lib/error-handler';
 import authRoutes from './modules/auth/auth.routes';
 import servicesRoutes from './modules/services/services.routes';
 import customersRoutes from './modules/customers/customers.routes';
 import { appointmentsRoutes } from './modules/appointments';
 import { billingRoutes } from './modules/billing';
-import { checkoutRoutes } from './modules/checkout';
 import { staffRoutes } from './modules/staff';
 import productRoutes from './modules/inventory/product.routes';
 import vendorRoutes from './modules/inventory/vendor.routes';
@@ -74,78 +74,8 @@ const fastify = Fastify({
 fastify.setValidatorCompiler(validatorCompiler);
 fastify.setSerializerCompiler(serializerCompiler);
 
-// Custom error handler for Zod validation errors
-fastify.setErrorHandler((error, request, reply) => {
-  // Handle Zod validation errors from fastify-type-provider-zod
-  // The error.code is 'FST_ERR_VALIDATION' and error.message contains the Zod error JSON
-  if (error.code === 'FST_ERR_VALIDATION') {
-    let details: Array<{ field: string; message: string }> = [];
-
-    try {
-      // Parse the Zod error from the message
-      const zodErrors = JSON.parse(error.message);
-      details = zodErrors.map((err: any) => ({
-        field: err.path?.join('.') || 'unknown',
-        message: err.message || 'Validation failed',
-      }));
-    } catch {
-      // If parsing fails, use the raw message
-      details = [{ field: 'unknown', message: error.message }];
-    }
-
-    return reply.status(400).send({
-      success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid input data',
-        details,
-      },
-    });
-  }
-
-  // Handle AJV validation errors (from inline JSON schemas)
-  if (error.validation) {
-    return reply.status(400).send({
-      success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid input data',
-        details: error.validation.map((err: any) => ({
-          field: err.instancePath?.replace(/^\//, '') || err.params?.missingProperty || 'unknown',
-          message: err.message || 'Validation failed',
-        })),
-      },
-    });
-  }
-
-  // Handle other Fastify errors
-  if (error.statusCode) {
-    const response: any = {
-      success: false,
-      error: {
-        code: error.code || 'ERROR',
-        message: error.message,
-      },
-    };
-
-    // Include details if present (e.g., conflict data from AppError)
-    if ('details' in error && error.details) {
-      response.error.details = error.details;
-    }
-
-    return reply.status(error.statusCode).send(response);
-  }
-
-  // Handle unexpected errors
-  request.log.error(error);
-  return reply.status(500).send({
-    success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
-    },
-  });
-});
+// Global error handler
+fastify.setErrorHandler(errorHandler);
 
 // Register plugins
 async function registerPlugins() {
@@ -218,7 +148,6 @@ async function registerRoutes() {
   fastify.register(customersRoutes, { prefix: '/api/v1' });
   fastify.register(appointmentsRoutes, { prefix: '/api/v1/appointments' });
   fastify.register(billingRoutes, { prefix: '/api/v1/invoices' });
-  fastify.register(checkoutRoutes, { prefix: '/api/v1/checkout' });
   fastify.register(staffRoutes, { prefix: '/api/v1/staff' });
 
   // Inventory routes (conditionally enabled)

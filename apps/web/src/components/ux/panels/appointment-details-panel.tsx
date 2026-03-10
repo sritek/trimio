@@ -11,6 +11,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import {
   Calendar,
@@ -20,33 +21,40 @@ import {
   Scissors,
   FileText,
   CheckCircle,
-  PlayCircle,
   XCircle,
   AlertCircle,
   CreditCard,
   RefreshCw,
+  Pencil,
+  Armchair,
+  Receipt,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/common';
+import { StatusBadge, Notice } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
 import { CustomerInfoPopover } from '@/components/ux/customer-info-popover';
 import {
-  ConfirmAppointmentDialog,
+  AppointmentStatusDialog,
   CancelAppointmentDialog,
+  EditServicesDialog,
   RescheduleAppointmentDialog,
+  StartServiceDialog,
 } from '@/components/ux/dialogs';
-import { useAppointment, useUpdateAppointmentStatus } from '@/hooks/queries/use-appointments';
+import { useAppointment } from '@/hooks/queries/use-appointments';
 import { useAuthStore } from '@/stores/auth-store';
 import { maskPhoneNumber, shouldMaskPhoneForRole } from '@/lib/phone-masking';
+import { AppointmentStatus } from '@/types/appointments';
+import { cn } from '@/lib/utils';
 
 interface AppointmentDetailsPanelProps {
   appointmentId: string;
 }
 
-// Status action configurations
+// Status action configurations - removed 'complete' from in_progress since checkout handles it
 const STATUS_ACTIONS = {
   booked: [
     { status: 'confirmed', label: 'Confirm', icon: CheckCircle, variant: 'default' as const },
@@ -57,12 +65,10 @@ const STATUS_ACTIONS = {
     { status: 'cancelled', label: 'Cancel', icon: XCircle, variant: 'destructive' as const },
   ],
   checked_in: [
-    { status: 'in_progress', label: 'Start', icon: PlayCircle, variant: 'default' as const },
+    { status: 'in_progress', label: 'Start', icon: Scissors, variant: 'default' as const },
     { status: 'no_show', label: 'No Show', icon: AlertCircle, variant: 'destructive' as const },
   ],
-  in_progress: [
-    { status: 'completed', label: 'Complete', icon: CheckCircle, variant: 'default' as const },
-  ],
+  in_progress: [], // No status actions - only checkout available
   completed: [],
   cancelled: [],
   no_show: [],
@@ -70,17 +76,22 @@ const STATUS_ACTIONS = {
 
 export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPanelProps) {
   const closePanel = useClosePanel();
+  const router = useRouter();
   const { openCheckout } = useOpenPanel();
   const { user } = useAuthStore();
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
 
   // Dialog states
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [statusDialogTarget, setStatusDialogTarget] = useState<
+    'confirmed' | 'checked_in' | 'no_show'
+  >('confirmed');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [editServicesDialogOpen, setEditServicesDialogOpen] = useState(false);
+  const [startServiceDialogOpen, setStartServiceDialogOpen] = useState(false);
 
   const { data: appointment, isLoading, error } = useAppointment(appointmentId);
-  const updateStatusMutation = useUpdateAppointmentStatus();
 
   // Get available actions based on current status
   const availableActions = useMemo(() => {
@@ -89,40 +100,38 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
   }, [appointment]);
 
   // Check if checkout button should be shown
+  // Only show for in_progress appointments (completed means payment already captured)
   const showCheckout = useMemo(() => {
     if (!appointment) return false;
-    return appointment.status === 'in_progress' || appointment.status === 'completed';
+    return appointment.status === 'in_progress';
   }, [appointment]);
 
-  // Handle status change (for non-dialog actions like check-in, start, complete, no-show)
+  // Handle status change - open appropriate dialog
   const handleStatusChange = useCallback(
-    async (newStatus: string) => {
+    (newStatus: string) => {
       if (!appointment) return;
 
-      // Use dialogs for confirm and cancel
-      if (newStatus === 'confirmed') {
-        setConfirmDialogOpen(true);
+      // Use common status dialog for confirm, check-in, no-show
+      if (newStatus === 'confirmed' || newStatus === 'checked_in' || newStatus === 'no_show') {
+        setStatusDialogTarget(newStatus as 'confirmed' | 'checked_in' | 'no_show');
+        setStatusDialogOpen(true);
         return;
       }
+
+      // Use dedicated dialogs for cancel and start
       if (newStatus === 'cancelled') {
         setCancelDialogOpen(true);
         return;
       }
-
-      // Direct status change for other statuses
-      try {
-        await updateStatusMutation.mutateAsync({
-          id: appointmentId,
-          status: newStatus,
-        });
-      } catch (error) {
-        console.error('Failed to update status:', error);
+      if (newStatus === 'in_progress') {
+        setStartServiceDialogOpen(true);
+        return;
       }
     },
-    [appointment, appointmentId, updateStatusMutation]
+    [appointment]
   );
 
-  // Handle checkout click
+  // Handle checkout click - just opens checkout panel, doesn't change status
   const handleCheckout = useCallback(() => {
     openCheckout(appointmentId);
   }, [appointmentId, openCheckout]);
@@ -171,6 +180,12 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
   // Format date and time
   const formattedDate = format(parseISO(appointment.scheduledDate), 'EEEE, MMMM d, yyyy');
   const formattedTime = `${appointment.scheduledTime} - ${appointment.endTime || '--:--'}`;
+  const canEditServices = (
+    ['booked', 'confirmed', 'checked_in', 'in_progress'] as AppointmentStatus[]
+  ).includes(appointment.status);
+  const canReschedule = (['booked', 'confirmed', 'checked_in'] as AppointmentStatus[]).includes(
+    appointment.status
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -231,37 +246,96 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
               <span>{appointment.stylist.name}</span>
             </div>
           )}
+
+          {/* Station (if assigned) */}
+          {appointment.station && (
+            <div className="flex items-center gap-3">
+              <Armchair className="h-5 w-5 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <span>{appointment.station.name}</span>
+                {appointment.station.stationType && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded-full border"
+                    style={{
+                      borderColor: appointment.station.stationType.color || undefined,
+                      color: appointment.station.stationType.color || undefined,
+                    }}
+                  >
+                    {appointment.station.stationType.name}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <Separator />
 
-        {/* Services */}
+        {/* Services - Redesigned as compact cards */}
         <div>
-          <h4 className="font-medium mb-3 flex items-center gap-2">
-            <Scissors className="h-4 w-4" />
-            Services
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium flex items-center gap-2">
+              <Scissors className="h-4 w-4" />
+              Services
+            </h4>
+            {/* Edit Services button - only show for editable statuses */}
+            {canEditServices && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditServicesDialogOpen(true)}
+                className="h-8 px-2"
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
           <div className="space-y-2">
             {appointment.services && appointment.services.length > 0 ? (
               appointment.services.map((service, index) => (
-                <div
+                <ServiceCard
                   key={service.id || index}
-                  className="flex justify-between items-center py-2 px-3 bg-muted/50 rounded-md"
-                >
-                  <span>{service.serviceName}</span>
-                  <span className="font-medium">
-                    ₹{service.unitPrice?.toLocaleString('en-IN') || 0}
-                  </span>
-                </div>
+                  serviceName={service.serviceName}
+                  price={service.unitPrice}
+                  duration={service.durationMinutes}
+                  quantity={service.quantity}
+                />
               ))
             ) : (
               <p className="text-muted-foreground text-sm">No services added</p>
             )}
           </div>
           {appointment.totalAmount != null && appointment.totalAmount > 0 && (
-            <div className="flex justify-between items-center mt-3 pt-3 border-t font-semibold">
-              <span>Total</span>
-              <span>₹{appointment.totalAmount.toLocaleString('en-IN')}</span>
+            <div className="mt-8 pt-3 border-t space-y-2">
+              <div className="flex justify-between items-center text-sm text-muted-foreground">
+                <span>Subtotal</span>
+                <span>₹{appointment.subtotal?.toLocaleString('en-IN') || 0}</span>
+              </div>
+              {appointment.taxAmount > 0 && (
+                <div className="flex justify-between items-center text-sm text-muted-foreground">
+                  <span>
+                    Tax (GST{' '}
+                    {appointment.services && appointment.services.length > 0
+                      ? `${appointment.services[0].taxRate}%`
+                      : '18%'}
+                    )
+                  </span>
+                  <span>₹{appointment.taxAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {appointment.discountAmount > 0 && (
+                <div className="flex justify-between items-center text-sm text-green-600">
+                  <span>Discount</span>
+                  <span>-₹{appointment.discountAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t">
+                <span className="font-semibold">Total</span>
+                <span className="text-lg font-bold text-primary">
+                  ₹{appointment.totalAmount.toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -290,6 +364,70 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
             </div>
           </>
         )}
+
+        {/* Status Notices */}
+        {/* Payment Completed - Show for completed appointments */}
+        {appointment.status === 'completed' && (
+          <>
+            <Separator />
+            <Notice
+              severity="success"
+              title="Payment Completed"
+              description={`This appointment has been completed and paid.${appointment.totalAmount > 0 ? ` Amount: ₹${appointment.totalAmount.toLocaleString('en-IN')}` : ''}`}
+              action={
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-green-700 dark:text-green-300 hover:text-green-900 dark:hover:text-green-100"
+                  onClick={() => {
+                    closePanel();
+                    router.push('/billing');
+                  }}
+                >
+                  <Receipt className="h-4 w-4 mr-1" />
+                  View Invoice
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Button>
+              }
+            />
+          </>
+        )}
+
+        {/* Cancelled - Show cancellation reason */}
+        {appointment.status === 'cancelled' && (
+          <>
+            <Separator />
+            <Notice
+              severity="error"
+              title="Appointment Cancelled"
+              description={
+                appointment.cancellationReason
+                  ? `Reason: ${appointment.cancellationReason}`
+                  : 'This appointment has been cancelled.'
+              }
+            >
+              {appointment.cancelledAt && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                  Cancelled on{' '}
+                  {format(parseISO(appointment.cancelledAt), "MMM d, yyyy 'at' h:mm a")}
+                  {appointment.isSalonCancelled && ' (by salon)'}
+                </p>
+              )}
+            </Notice>
+          </>
+        )}
+
+        {/* No Show */}
+        {appointment.status === 'no_show' && (
+          <>
+            <Separator />
+            <Notice
+              severity="warning"
+              title="Customer No-Show"
+              description="The customer did not show up for this appointment."
+            />
+          </>
+        )}
       </div>
 
       {/* Action Buttons */}
@@ -305,7 +443,6 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
                   variant={action.variant}
                   size="sm"
                   onClick={() => handleStatusChange(action.status)}
-                  disabled={updateStatusMutation.isPending}
                 >
                   <Icon className="h-4 w-4 mr-1" />
                   {action.label}
@@ -314,7 +451,7 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
             })}
 
             {/* Reschedule button for non-completed appointments */}
-            {!['completed', 'cancelled', 'no_show'].includes(appointment.status) && (
+            {canReschedule && (
               <Button variant="outline" size="sm" onClick={handleReschedule}>
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Reschedule
@@ -333,10 +470,11 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
       </div>
 
       {/* Dialogs */}
-      <ConfirmAppointmentDialog
-        open={confirmDialogOpen}
-        onOpenChange={setConfirmDialogOpen}
+      <AppointmentStatusDialog
+        open={statusDialogOpen}
+        onOpenChange={setStatusDialogOpen}
         appointmentId={appointmentId}
+        targetStatus={statusDialogTarget}
         customerName={appointment.customerName || undefined}
         scheduledTime={appointment.scheduledTime}
       />
@@ -353,6 +491,81 @@ export function AppointmentDetailsPanel({ appointmentId }: AppointmentDetailsPan
         onOpenChange={setRescheduleDialogOpen}
         appointment={appointment}
       />
+
+      <EditServicesDialog
+        open={editServicesDialogOpen}
+        onOpenChange={setEditServicesDialogOpen}
+        appointment={appointment}
+        canEdit={canEditServices}
+      />
+
+      <StartServiceDialog
+        open={startServiceDialogOpen}
+        onOpenChange={setStartServiceDialogOpen}
+        appointmentId={appointmentId}
+        customerName={appointment.customerName || undefined}
+        serviceName={appointment.services?.[0]?.serviceName}
+      />
+    </div>
+  );
+}
+
+// ============================================
+// Service Card Component
+// ============================================
+
+interface ServiceCardProps {
+  serviceName: string;
+  price?: number;
+  duration?: number;
+  stylistName?: string;
+  quantity?: number;
+}
+
+function ServiceCard({
+  serviceName,
+  price,
+  duration,
+  stylistName,
+  quantity = 1,
+}: ServiceCardProps) {
+  return (
+    <div
+      className={cn(
+        'p-3 rounded-lg border bg-gradient-to-r from-muted/30 to-transparent',
+        'hover:from-muted/50 transition-colors'
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm truncate">
+            {serviceName}
+            {quantity > 1 && <span className="text-muted-foreground ml-1">×{quantity}</span>}
+          </p>
+          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+            {duration && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {duration} min
+              </span>
+            )}
+            {stylistName && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  {stylistName}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        {price != null && (
+          <span className="font-semibold text-sm whitespace-nowrap">
+            ₹{(price * quantity).toLocaleString('en-IN')}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

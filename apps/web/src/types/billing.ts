@@ -25,7 +25,6 @@ export type DiscountType =
   | 'membership'
   | 'loyalty'
   | 'referral';
-export type RefundMethod = 'original_method' | 'wallet' | 'cash';
 
 // ============================================
 // Invoice Types
@@ -60,6 +59,7 @@ export interface InvoiceItem {
   totalTax: number;
   netAmount: number;
   stylistId?: string;
+  stylistName?: string;
   assistantId?: string;
   commissionType?: string;
   commissionRate?: number;
@@ -152,7 +152,6 @@ export interface Invoice {
   cancelledAt?: string;
   cancelledBy?: string;
   cancellationReason?: string;
-  refundInvoiceId?: string;
   notes?: string;
   internalNotes?: string;
   createdAt: string;
@@ -163,6 +162,14 @@ export interface Invoice {
   items?: InvoiceItem[];
   payments?: Payment[];
   discounts?: InvoiceDiscount[];
+  customer?: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string | null;
+    loyaltyPoints: number;
+    walletBalance: number;
+  } | null;
 }
 
 // ============================================
@@ -238,156 +245,4 @@ export interface ListInvoicesQuery {
   limit?: number;
   sortBy?: 'invoiceDate' | 'grandTotal' | 'createdAt';
   sortOrder?: 'asc' | 'desc';
-}
-
-// ============================================
-// Credit Note Types
-// ============================================
-
-export type CreditNoteStatus = 'pending' | 'issued' | 'cancelled';
-
-export interface CreditNoteItem {
-  id: string;
-  tenantId: string;
-  creditNoteId: string;
-  originalItemId: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate: number;
-  taxAmount: number;
-  totalAmount: number;
-  createdAt: string;
-}
-
-export interface CreditNote {
-  id: string;
-  tenantId: string;
-  branchId: string;
-  creditNoteNumber: string;
-  originalInvoiceId: string;
-  originalInvoiceNumber: string;
-  customerId?: string;
-  customerName: string;
-  subtotal: number;
-  taxAmount: number;
-  totalAmount: number;
-  refundMethod: RefundMethod;
-  reason: string;
-  notes?: string;
-  status: CreditNoteStatus;
-  createdAt: string;
-  createdBy?: string;
-  items?: CreditNoteItem[];
-  originalInvoice?: Invoice;
-}
-
-export interface CreateCreditNoteInput {
-  originalInvoiceId: string;
-  items: Array<{ originalItemId: string; quantity: number }>;
-  refundMethod: RefundMethod;
-  reason: string;
-  notes?: string;
-}
-
-export interface ListCreditNotesQuery {
-  branchId?: string;
-  customerId?: string;
-  dateFrom?: string;
-  dateTo?: string;
-  page?: number;
-  limit?: number;
-}
-
-// ============================================
-// Day Closure Types
-// ============================================
-
-export type DayClosureStatus = 'open' | 'closed' | 'reconciled';
-
-export interface DayClosure {
-  id: string;
-  tenantId: string;
-  branchId: string;
-  closureDate: string;
-  status: DayClosureStatus;
-  expectedCash: number;
-  actualCash?: number;
-  cashDifference?: number;
-  totalRevenue?: number;
-  totalTaxCollected?: number;
-  totalDiscounts?: number;
-  totalRefunds?: number;
-  totalInvoices?: number;
-  cashCollected?: number;
-  cardCollected?: number;
-  upiCollected?: number;
-  walletCollected?: number;
-  otherCollected?: number;
-  reconciliationNotes?: string;
-  openedAt?: string;
-  openedBy?: string;
-  closedAt?: string;
-  closedBy?: string;
-  reconciledAt?: string;
-  reconciledBy?: string;
-  createdAt: string;
-  currentCashBalance?: number;
-}
-
-export interface OpenDayInput {
-  branchId: string;
-  openingCash?: number;
-}
-
-export interface CloseDayInput {
-  actualCash: number;
-  notes?: string;
-}
-
-export interface ListDayClosuresQuery {
-  branchId?: string;
-  status?: DayClosureStatus;
-  dateFrom?: string;
-  dateTo?: string;
-  page?: number;
-  limit?: number;
-}
-
-// ============================================
-// Cash Drawer Types
-// ============================================
-
-export interface CashDrawerTransaction {
-  id: string;
-  tenantId: string;
-  branchId: string;
-  transactionType: string;
-  amount: number;
-  balanceAfter: number;
-  referenceType?: string;
-  referenceId?: string;
-  description?: string;
-  createdAt: string;
-  createdBy?: string;
-}
-
-export interface CashDrawerBalance {
-  balance: number;
-  lastUpdated: string | null;
-}
-
-export interface CashAdjustmentInput {
-  amount: number;
-  description: string;
-  transactionType: 'deposit' | 'withdrawal' | 'correction';
-}
-
-export interface ListCashTransactionsQuery {
-  branchId: string;
-  dateFrom?: string;
-  dateTo?: string;
-  transactionType?: string;
-  page?: number;
-  limit?: number;
 }

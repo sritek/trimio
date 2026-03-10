@@ -34,6 +34,7 @@ export interface ServiceOption {
   basePrice: number;
   categoryId: string;
   categoryName?: string;
+  duration: number;
 }
 
 export interface ServiceComboboxProps {
@@ -126,6 +127,9 @@ export function ServiceCombobox({
           {selectedServices.map((service) => (
             <Badge key={service.id} variant="secondary" className="pl-2 pr-1 py-1 gap-1">
               <span>{service.name}</span>
+              <span>&bull;</span>
+              <span className="text-muted-foreground">{service.duration} mins</span>
+              <span>&bull;</span>
               <span className="text-muted-foreground">{formatPrice(service.basePrice)}</span>
               <button
                 type="button"
@@ -160,10 +164,14 @@ export function ServiceCombobox({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <PopoverContent
+          className="w-[--radix-popover-trigger-width] p-0"
+          align="start"
+          // onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <Command>
             <CommandInput placeholder="Search services..." />
-            <CommandList>
+            <CommandList className="max-h-[300px]">
               <CommandEmpty>No services found.</CommandEmpty>
               {serviceGroups.map(([category, categoryServices], index) => (
                 <div key={category}>
@@ -173,7 +181,7 @@ export function ServiceCombobox({
                         key={service.id}
                         value={`${service.name} ${category}`}
                         onSelect={() => handleSelect(service.id)}
-                        className="py-2"
+                        className="py-2 cursor-pointer"
                       >
                         <Check
                           className={cn(

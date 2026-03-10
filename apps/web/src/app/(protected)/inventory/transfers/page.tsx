@@ -93,9 +93,9 @@ export default function TransfersPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value={activeTab} className="space-y-4">
+          <TabsContent value={activeTab} className="flex flex-col flex-1 min-h-0 space-y-4">
             {/* Filters */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
               <SearchInput
                 value={search}
                 onChange={setSearch}

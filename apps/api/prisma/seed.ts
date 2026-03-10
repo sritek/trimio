@@ -320,6 +320,36 @@ async function seedUsers(tenantId: string, branches: { id: string }[]) {
       role: 'stylist',
       gender: 'female',
     },
+    // Additional Stylists - Andheri
+    {
+      email: 'stylist7@glamourstudio.com',
+      phone: '9876543222',
+      name: 'Neha Kapoor',
+      role: 'stylist',
+      gender: 'female',
+    },
+    {
+      email: 'stylist8@glamourstudio.com',
+      phone: '9876543223',
+      name: 'Rohan Malhotra',
+      role: 'stylist',
+      gender: 'male',
+    },
+    // Additional Stylists - Bandra
+    {
+      email: 'stylist9@glamourstudio.com',
+      phone: '9876543224',
+      name: 'Pooja Shetty',
+      role: 'stylist',
+      gender: 'female',
+    },
+    {
+      email: 'stylist10@glamourstudio.com',
+      phone: '9876543225',
+      name: 'Karthik Iyer',
+      role: 'stylist',
+      gender: 'male',
+    },
     // Accountant
     {
       email: 'accounts@glamourstudio.com',
@@ -361,9 +391,15 @@ async function seedUsers(tenantId: string, branches: { id: string }[]) {
     // Stylists Bandra
     { userId: users[9].id, branchId: branches[1].id, isPrimary: true },
     { userId: users[10].id, branchId: branches[1].id, isPrimary: true },
-    // Accountant - all branches
+    // Additional Stylists Andheri
     { userId: users[11].id, branchId: branches[0].id, isPrimary: true },
-    { userId: users[11].id, branchId: branches[1].id, isPrimary: false },
+    { userId: users[12].id, branchId: branches[0].id, isPrimary: true },
+    // Additional Stylists Bandra
+    { userId: users[13].id, branchId: branches[1].id, isPrimary: true },
+    { userId: users[14].id, branchId: branches[1].id, isPrimary: true },
+    // Accountant - all branches
+    { userId: users[15].id, branchId: branches[0].id, isPrimary: true },
+    { userId: users[15].id, branchId: branches[1].id, isPrimary: false },
   ];
 
   await prisma.userBranch.createMany({ data: branchAssignments });
@@ -1254,6 +1290,31 @@ async function seedAppointments(
     stylistId: string;
   }[] = [];
 
+  // Time slots for more realistic scheduling
+  const timeSlots = [
+    '09:00',
+    '09:30',
+    '10:00',
+    '10:30',
+    '11:00',
+    '11:30',
+    '12:00',
+    '12:30',
+    '14:00',
+    '14:30',
+    '15:00',
+    '15:30',
+    '16:00',
+    '16:30',
+    '17:00',
+    '17:30',
+    '18:00',
+    '18:30',
+    '19:00',
+    '19:30',
+    '20:00',
+  ];
+
   // Generate appointments for past 7 days and next 7 days
   for (let dayOffset = -7; dayOffset <= 7; dayOffset++) {
     const date = new Date(today);
@@ -1262,40 +1323,110 @@ async function seedAppointments(
 
     if (dayOfWeek === 0) continue; // Skip Sundays
 
-    // 5-8 appointments per day
-    const appointmentsPerDay = 5 + Math.floor(Math.random() * 4);
+    // More appointments per day: 8-15 per stylist, distributed throughout the day
+    // This ensures each stylist has a good number of appointments
+    for (const stylist of stylists) {
+      // 3-6 appointments per stylist per day
+      const appointmentsForStylist = 3 + Math.floor(Math.random() * 4);
 
-    for (let i = 0; i < appointmentsPerDay; i++) {
-      const customer = customers[Math.floor(Math.random() * customers.length)];
-      const stylist = stylists[Math.floor(Math.random() * stylists.length)];
-      const service = services[Math.floor(Math.random() * services.length)];
+      // Track used time slots for this stylist to avoid too many overlaps
+      const usedSlots = new Set<string>();
 
-      const hour = 9 + Math.floor(Math.random() * 10); // 9 AM to 7 PM
-      const startTime = `${String(hour).padStart(2, '0')}:00`;
-      const endHour = hour + Math.ceil(service.durationMinutes / 60);
-      const endTime = `${String(Math.min(endHour, 21)).padStart(2, '0')}:00`;
+      for (let i = 0; i < appointmentsForStylist; i++) {
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        const service = services[Math.floor(Math.random() * services.length)];
 
-      let status: string;
-      if (dayOffset < 0) {
-        // Past appointments
-        const rand = Math.random();
-        status = rand < 0.7 ? 'completed' : rand < 0.85 ? 'cancelled' : 'no_show';
-      } else if (dayOffset === 0) {
-        // Today
-        const rand = Math.random();
-        status =
-          rand < 0.3
-            ? 'completed'
-            : rand < 0.5
-              ? 'in_progress'
-              : rand < 0.7
-                ? 'checked_in'
-                : 'booked';
-      } else {
-        // Future
-        status = Math.random() < 0.7 ? 'booked' : 'confirmed';
+        // Pick a time slot that hasn't been used much
+        let startTime: string;
+        let attempts = 0;
+        do {
+          startTime = timeSlots[Math.floor(Math.random() * timeSlots.length)];
+          attempts++;
+        } while (usedSlots.has(startTime) && attempts < 10);
+        usedSlots.add(startTime);
+
+        const startHour = parseInt(startTime.split(':')[0]);
+        const startMin = parseInt(startTime.split(':')[1]);
+        const endMinutes = startHour * 60 + startMin + service.durationMinutes;
+        const endHour = Math.floor(endMinutes / 60);
+        const endMin = endMinutes % 60;
+        const endTime = `${String(Math.min(endHour, 21)).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+        let status: string;
+        if (dayOffset < 0) {
+          // Past appointments
+          const rand = Math.random();
+          status = rand < 0.7 ? 'completed' : rand < 0.85 ? 'cancelled' : 'no_show';
+        } else if (dayOffset === 0) {
+          // Today - more variety in statuses
+          const currentHour = today.getHours();
+          if (startHour < currentHour - 1) {
+            // Past appointments today
+            status = Math.random() < 0.8 ? 'completed' : 'no_show';
+          } else if (startHour <= currentHour + 1) {
+            // Current/near appointments
+            const rand = Math.random();
+            status = rand < 0.3 ? 'in_progress' : rand < 0.6 ? 'checked_in' : 'confirmed';
+          } else {
+            // Future appointments today
+            status = Math.random() < 0.7 ? 'confirmed' : 'booked';
+          }
+        } else {
+          // Future days
+          status = Math.random() < 0.6 ? 'booked' : 'confirmed';
+        }
+
+        const price = Number(service.basePrice);
+        const taxAmount = (price * Number(service.taxRate)) / 100;
+
+        appointmentsData.push({
+          tenantId,
+          branchId,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          scheduledDate: date,
+          scheduledTime: startTime,
+          endTime,
+          totalDuration: service.durationMinutes,
+          stylistId: stylist.id,
+          bookingType: ['online', 'phone', 'walk_in'][Math.floor(Math.random() * 3)],
+          status,
+          subtotal: new Prisma.Decimal(price),
+          taxAmount: new Prisma.Decimal(taxAmount),
+          totalAmount: new Prisma.Decimal(price + taxAmount),
+          priceLockedAt: new Date(),
+        });
+
+        appointmentServicesData.push({
+          appointmentIndex: appointmentsData.length - 1,
+          service,
+          stylistId: stylist.id,
+        });
       }
+    }
+  }
 
+  // Add intentional conflicting appointments for today and tomorrow
+  // This demonstrates the conflict visualization feature
+  const conflictDays = [0, 1]; // Today and tomorrow
+  for (const dayOffset of conflictDays) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + dayOffset);
+
+    if (date.getDay() === 0) continue; // Skip Sunday
+
+    // Create 2-3 overlapping appointments for the first stylist
+    const primaryStylist = stylists[0];
+    const conflictTimes = [
+      { start: '10:00', end: '11:30', status: 'booked' },
+      { start: '10:30', end: '12:00', status: 'confirmed' }, // Overlaps with first
+      { start: '11:00', end: '12:30', status: 'booked' }, // Overlaps with both
+    ];
+
+    for (const timeSlot of conflictTimes) {
+      const customer = customers[Math.floor(Math.random() * customers.length)];
+      const service = services[Math.floor(Math.random() * Math.min(5, services.length))];
       const price = Number(service.basePrice);
       const taxAmount = (price * Number(service.taxRate)) / 100;
 
@@ -1306,23 +1437,152 @@ async function seedAppointments(
         customerName: customer.name,
         customerPhone: customer.phone,
         scheduledDate: date,
-        scheduledTime: startTime,
-        endTime,
-        totalDuration: service.durationMinutes,
-        stylistId: stylist.id,
-        bookingType: ['online', 'phone', 'walk_in'][Math.floor(Math.random() * 3)],
-        status,
+        scheduledTime: timeSlot.start,
+        endTime: timeSlot.end,
+        totalDuration: 90,
+        stylistId: primaryStylist.id,
+        bookingType: 'phone',
+        status: dayOffset === 0 ? timeSlot.status : 'booked',
         subtotal: new Prisma.Decimal(price),
         taxAmount: new Prisma.Decimal(taxAmount),
         totalAmount: new Prisma.Decimal(price + taxAmount),
         priceLockedAt: new Date(),
+        conflictNotes: 'Intentional overlap for demo',
       });
 
       appointmentServicesData.push({
         appointmentIndex: appointmentsData.length - 1,
         service,
-        stylistId: stylist.id,
+        stylistId: primaryStylist.id,
       });
+    }
+
+    // Create a partial overlap scenario for second stylist (if exists)
+    if (stylists.length > 1) {
+      const secondStylist = stylists[1];
+      const partialOverlapTimes = [
+        { start: '14:00', end: '15:00', status: 'confirmed' },
+        { start: '14:45', end: '15:30', status: 'booked' }, // 15 min overlap (partial)
+      ];
+
+      for (const timeSlot of partialOverlapTimes) {
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        const service = services[Math.floor(Math.random() * Math.min(5, services.length))];
+        const price = Number(service.basePrice);
+        const taxAmount = (price * Number(service.taxRate)) / 100;
+
+        appointmentsData.push({
+          tenantId,
+          branchId,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          scheduledDate: date,
+          scheduledTime: timeSlot.start,
+          endTime: timeSlot.end,
+          totalDuration: 60,
+          stylistId: secondStylist.id,
+          bookingType: 'walk_in',
+          status: dayOffset === 0 ? timeSlot.status : 'booked',
+          subtotal: new Prisma.Decimal(price),
+          taxAmount: new Prisma.Decimal(taxAmount),
+          totalAmount: new Prisma.Decimal(price + taxAmount),
+          priceLockedAt: new Date(),
+          conflictNotes: 'Partial overlap for demo',
+        });
+
+        appointmentServicesData.push({
+          appointmentIndex: appointmentsData.length - 1,
+          service,
+          stylistId: secondStylist.id,
+        });
+      }
+    }
+
+    // Add back-to-back appointments for third stylist to test tight scheduling
+    if (stylists.length > 2) {
+      const thirdStylist = stylists[2];
+      const backToBackTimes = [
+        { start: '15:00', end: '15:45' },
+        { start: '15:45', end: '16:30' },
+        { start: '16:30', end: '17:15' },
+        { start: '17:15', end: '18:00' },
+      ];
+
+      for (const timeSlot of backToBackTimes) {
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        const service = services[Math.floor(Math.random() * Math.min(8, services.length))];
+        const price = Number(service.basePrice);
+        const taxAmount = (price * Number(service.taxRate)) / 100;
+
+        appointmentsData.push({
+          tenantId,
+          branchId,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          scheduledDate: date,
+          scheduledTime: timeSlot.start,
+          endTime: timeSlot.end,
+          totalDuration: 45,
+          stylistId: thirdStylist.id,
+          bookingType: 'online',
+          status: dayOffset === 0 ? 'confirmed' : 'booked',
+          subtotal: new Prisma.Decimal(price),
+          taxAmount: new Prisma.Decimal(taxAmount),
+          totalAmount: new Prisma.Decimal(price + taxAmount),
+          priceLockedAt: new Date(),
+        });
+
+        appointmentServicesData.push({
+          appointmentIndex: appointmentsData.length - 1,
+          service,
+          stylistId: thirdStylist.id,
+        });
+      }
+    }
+
+    // Add long appointments (2+ hours) for fourth stylist to test duration display
+    if (stylists.length > 3) {
+      const fourthStylist = stylists[3];
+      const longAppointments = [
+        { start: '10:00', end: '12:30', duration: 150, name: 'Bridal Makeup' },
+        { start: '14:00', end: '17:00', duration: 180, name: 'Keratin Treatment' },
+      ];
+
+      for (const apt of longAppointments) {
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        // Find matching service or use first one
+        const service =
+          services.find((s) => s.name.includes(apt.name.split(' ')[0])) || services[0];
+        const price = Number(service.basePrice);
+        const taxAmount = (price * Number(service.taxRate)) / 100;
+
+        appointmentsData.push({
+          tenantId,
+          branchId,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          scheduledDate: date,
+          scheduledTime: apt.start,
+          endTime: apt.end,
+          totalDuration: apt.duration,
+          stylistId: fourthStylist.id,
+          bookingType: 'phone',
+          status: dayOffset === 0 ? 'confirmed' : 'booked',
+          subtotal: new Prisma.Decimal(price),
+          taxAmount: new Prisma.Decimal(taxAmount),
+          totalAmount: new Prisma.Decimal(price + taxAmount),
+          priceLockedAt: new Date(),
+        });
+
+        appointmentServicesData.push({
+          appointmentIndex: appointmentsData.length - 1,
+          service,
+          stylistId: fourthStylist.id,
+        });
+      }
     }
   }
 
@@ -2089,18 +2349,6 @@ async function seedBilling(
     invoiceId: invoices[invoiceIndex].id,
   }));
   await prisma.payment.createMany({ data: allPayments });
-
-  // Day Closure for today
-  await prisma.dayClosure.create({
-    data: {
-      tenantId,
-      branchId,
-      closureDate: new Date(),
-      expectedCash: new Prisma.Decimal(0),
-      actualCash: new Prisma.Decimal(0),
-      status: 'open',
-    },
-  });
 }
 
 // ============================================

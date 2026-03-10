@@ -4,8 +4,16 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import { api } from '@/lib/api/client';
+import {
+  resourceCalendarKeys,
+  type ResourceCalendarData,
+  type CalendarAppointment,
+  type ResourceCalendarParams,
+} from './use-resource-calendar';
+import { floorViewKeys } from './use-stations';
 import type {
   Appointment,
   AppointmentFilters,
@@ -32,6 +40,7 @@ import type {
   StylistBlockedSlot,
   CreateStylistBreakInput,
   CreateBlockedSlotInput,
+  StylistBusySlotsResponse,
 } from '@/types/appointments';
 
 // ============================================
@@ -65,6 +74,12 @@ export const stylistScheduleKeys = {
     [...stylistScheduleKeys.all, stylistId, filters] as const,
 };
 
+export const stylistBusySlotsKeys = {
+  all: ['stylistBusySlots'] as const,
+  detail: (stylistId: string, branchId: string, date: string) =>
+    [...stylistBusySlotsKeys.all, stylistId, branchId, date] as const,
+};
+
 // ============================================
 // Appointment CRUD Hooks
 // ============================================
@@ -93,7 +108,7 @@ export function useAppointment(id: string) {
 }
 
 /**
- * Create a new appointment
+ * Create a new appointment with optimistic calendar update
  */
 export function useCreateAppointment() {
   const queryClient = useQueryClient();
@@ -101,9 +116,118 @@ export function useCreateAppointment() {
   return useMutation({
     mutationFn: (data: CreateAppointmentInput) =>
       api.post<CreateAppointmentResponse>('/appointments', data),
-    onSuccess: () => {
+
+    onMutate: async (newAppointment) => {
+      // Show loading toast
+      const toastId = toast.loading('Creating appointment...');
+
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Create optimistic appointment for calendar
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticCalendarAppointment: CalendarAppointment = {
+        id: optimisticId,
+        stylistId: newAppointment.stylistId || null,
+        date: newAppointment.scheduledDate,
+        startTime: newAppointment.scheduledTime,
+        endTime: newAppointment.scheduledTime, // Will be calculated by server
+        customerName: newAppointment.customerName || 'New Customer',
+        customerPhone: newAppointment.customerPhone || null,
+        services: [], // Will be populated by server
+        status: 'booked',
+        bookingType: newAppointment.bookingType,
+        totalAmount: 0,
+        hasConflict: false,
+        conflictInfo: null,
+        isOptimistic: true,
+      };
+
+      // Find and update matching calendar queries
+      const calendarParams: ResourceCalendarParams = {
+        branchId: newAppointment.branchId,
+        date: newAppointment.scheduledDate,
+        view: 'day',
+      };
+
+      // Snapshot previous calendar data
+      const previousCalendarData = queryClient.getQueryData<ResourceCalendarData>(
+        resourceCalendarKeys.list(calendarParams)
+      );
+
+      // Optimistically add to calendar
+      if (previousCalendarData) {
+        queryClient.setQueryData<ResourceCalendarData>(
+          resourceCalendarKeys.list(calendarParams),
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              appointments: [...old.appointments, optimisticCalendarAppointment],
+            };
+          }
+        );
+      }
+
+      return { toastId, optimisticId, previousCalendarData, calendarParams };
+    },
+
+    onSuccess: (response, newAppointment, context) => {
+      // Update toast to success
+      toast.success('Appointment created successfully!', { id: context?.toastId });
+
+      // Transform server response to calendar appointment format
+      const apt = response.appointment;
+      const realCalendarAppointment: CalendarAppointment = {
+        id: apt.id,
+        stylistId: apt.stylistId || null,
+        date: apt.scheduledDate,
+        startTime: apt.scheduledTime,
+        endTime: apt.endTime,
+        customerName: apt.customerName || apt.customer?.name || 'Customer',
+        customerPhone: apt.customerPhone || apt.customer?.phone || null,
+        services: apt.services?.map((s) => s.serviceName) || [],
+        status: apt.status,
+        bookingType: apt.bookingType,
+        totalAmount: apt.totalAmount,
+        hasConflict: apt.hasConflict || false,
+        conflictInfo: null,
+        isOptimistic: false,
+      };
+
+      // Replace optimistic appointment with real one in calendar
+      if (context?.calendarParams) {
+        queryClient.setQueryData<ResourceCalendarData>(
+          resourceCalendarKeys.list(context.calendarParams),
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              appointments: old.appointments.map((a) =>
+                a.id === context.optimisticId ? realCalendarAppointment : a
+              ),
+            };
+          }
+        );
+      }
+
+      // Invalidate list queries to refresh in background
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      // Also invalidate calendar to ensure consistency (will refetch in background)
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+
+    onError: (_error, _newAppointment, context) => {
+      // Update toast to error
+      toast.error('Failed to create appointment', { id: context?.toastId });
+
+      // Rollback calendar to previous state
+      if (context?.previousCalendarData && context?.calendarParams) {
+        queryClient.setQueryData(
+          resourceCalendarKeys.list(context.calendarParams),
+          context.previousCalendarData
+        );
+      }
     },
   });
 }
@@ -124,6 +248,39 @@ export function useUpdateAppointment() {
   });
 }
 
+/**
+ * Update appointment services (replace all services)
+ */
+export function useUpdateAppointmentServices() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      services,
+    }: {
+      id: string;
+      services: Array<{ serviceId: string; stylistId?: string; quantity?: number }>;
+    }) => api.put<Appointment>(`/appointments/${id}/services`, { services }),
+
+    onMutate: async () => {
+      const toastId = toast.loading('Updating services...');
+      return { toastId };
+    },
+
+    onSuccess: (_, { id }, context) => {
+      toast.success('Services updated', { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+
+    onError: (_, __, context) => {
+      toast.error('Failed to update services', { id: context?.toastId });
+    },
+  });
+}
+
 // ============================================
 // Appointment Action Hooks
 // ============================================
@@ -136,9 +293,37 @@ export function useCheckIn() {
 
   return useMutation({
     mutationFn: (id: string) => api.post<Appointment>(`/appointments/${id}/check-in`),
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === id ? { ...apt, status: 'checked_in' } : apt
+            ),
+          };
+        }
+      );
+
+      return { id };
+    },
+
     onSuccess: (_, id) => {
+      toast.success('Customer checked in');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to check in');
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -151,9 +336,39 @@ export function useStartAppointment() {
 
   return useMutation({
     mutationFn: (id: string) => api.post<Appointment>(`/appointments/${id}/start`),
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === id ? { ...apt, status: 'in_progress' } : apt
+            ),
+          };
+        }
+      );
+
+      return { id };
+    },
+
     onSuccess: (_, id) => {
+      toast.success('Appointment started');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      // Also invalidate floor view since station status may have changed
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to start appointment');
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -166,9 +381,39 @@ export function useCompleteAppointment() {
 
   return useMutation({
     mutationFn: (id: string) => api.post<Appointment>(`/appointments/${id}/complete`),
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === id ? { ...apt, status: 'completed' } : apt
+            ),
+          };
+        }
+      );
+
+      return { id };
+    },
+
     onSuccess: (_, id) => {
+      toast.success('Appointment completed');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      // Also invalidate floor view since station is now free
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to complete appointment');
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -182,9 +427,37 @@ export function useCancelAppointment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: CancelAppointmentInput }) =>
       api.post<Appointment>(`/appointments/${id}/cancel`, data),
+
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === id ? { ...apt, status: 'cancelled' } : apt
+            ),
+          };
+        }
+      );
+
+      return { id };
+    },
+
     onSuccess: (_, { id }) => {
+      toast.success('Appointment cancelled');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to cancel appointment');
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -197,9 +470,37 @@ export function useMarkNoShow() {
 
   return useMutation({
     mutationFn: (id: string) => api.post<Appointment>(`/appointments/${id}/no-show`),
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) =>
+              apt.id === id ? { ...apt, status: 'no_show' } : apt
+            ),
+          };
+        }
+      );
+
+      return { id };
+    },
+
     onSuccess: (_, id) => {
+      toast.success('Marked as no-show');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to mark as no-show');
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -213,10 +514,47 @@ export function useUpdateAppointmentStatus() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       api.patch<Appointment>(`/appointments/${id}/status`, { status }),
-    onSuccess: (_, { id }) => {
+
+    onMutate: async ({ id, status }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
+
+      // Optimistically update status in all calendar caches
+      queryClient.setQueriesData<ResourceCalendarData>(
+        { queryKey: resourceCalendarKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            appointments: old.appointments.map((apt) => (apt.id === id ? { ...apt, status } : apt)),
+          };
+        }
+      );
+
+      return { id, status };
+    },
+
+    onSuccess: (_, { id, status }) => {
+      const statusLabels: Record<string, string> = {
+        confirmed: 'Appointment confirmed',
+        checked_in: 'Customer checked in',
+        in_progress: 'Appointment started',
+        completed: 'Appointment completed',
+        cancelled: 'Appointment cancelled',
+        no_show: 'Marked as no-show',
+      };
+      toast.success(statusLabels[status] || 'Status updated');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      // Also invalidate floor view since station assignments may have changed
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: () => {
+      toast.error('Failed to update status');
+      // Refetch to restore correct state
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }
@@ -481,6 +819,31 @@ export function useDeleteBlockedSlot() {
       queryClient.invalidateQueries({ queryKey: stylistScheduleKeys.all });
       queryClient.invalidateQueries({ queryKey: availabilityKeys.all });
     },
+  });
+}
+
+// ============================================
+// Stylist Busy Slots Hook
+// ============================================
+
+/**
+ * Get stylist busy slots for a specific date
+ * Returns all time ranges where the stylist is unavailable
+ */
+export function useStylistBusySlots(
+  stylistId: string | undefined,
+  branchId: string | undefined,
+  date: string | undefined
+) {
+  return useQuery({
+    queryKey: stylistBusySlotsKeys.detail(stylistId || '', branchId || '', date || ''),
+    queryFn: () =>
+      api.get<StylistBusySlotsResponse>(`/appointments/stylists/${stylistId}/busy-slots`, {
+        branchId,
+        date,
+      }),
+    enabled: !!stylistId && !!branchId && !!date,
+    staleTime: 30000, // Cache for 30 seconds
   });
 }
 

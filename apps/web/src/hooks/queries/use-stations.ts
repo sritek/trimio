@@ -124,14 +124,27 @@ export function useDeleteStationType() {
 export function useStations(branchId: string, filters: StationFilters = {}) {
   return useQuery({
     queryKey: stationKeys.list(branchId, filters),
-    queryFn: () =>
-      api.getPaginated<Station>(`/branches/${branchId}/stations`, {
-        page: filters.page,
-        limit: filters.limit,
-        stationTypeId: filters.stationTypeId,
-        status: filters.status,
-        search: filters.search,
-      }),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.stationTypeId) params.set('stationTypeId', filters.stationTypeId);
+      if (filters.status) params.set('status', filters.status);
+      if (filters.search) params.set('search', filters.search);
+
+      const queryString = params.toString();
+      const url = `/branches/${branchId}/stations${queryString ? `?${queryString}` : ''}`;
+      const stations = await api.get<Station[]>(url);
+
+      // Return in paginated format for consistency
+      return {
+        data: stations,
+        meta: {
+          page: 1,
+          limit: stations.length,
+          total: stations.length,
+          totalPages: 1,
+        },
+      };
+    },
     enabled: !!branchId,
   });
 }
@@ -246,6 +259,8 @@ export function useAssignStation(branchId?: string) {
       api.patch(`/appointments/${appointmentId}/station`, { stationId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      // Always invalidate all floor view queries to ensure sync
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
       if (branchId) {
         queryClient.invalidateQueries({ queryKey: floorViewKeys.branch(branchId) });
       }

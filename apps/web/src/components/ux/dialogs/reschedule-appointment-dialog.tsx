@@ -265,12 +265,12 @@ export function RescheduleAppointmentDialog({
                 <div className="flex flex-wrap gap-2">
                   {stylists.map((stylist) => (
                     <button
-                      key={stylist.id}
+                      key={stylist.userId}
                       type="button"
-                      onClick={() => setStylistId(stylist.id)}
+                      onClick={() => setStylistId(stylist.userId)}
                       className={cn(
                         'flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all min-w-[70px]',
-                        stylistId === stylist.id
+                        stylistId === stylist.userId
                           ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
                           : 'hover:bg-muted/50'
                       )}
@@ -279,7 +279,7 @@ export function RescheduleAppointmentDialog({
                         <AvatarFallback
                           className={cn(
                             'text-xs font-medium',
-                            stylistId === stylist.id
+                            stylistId === stylist.userId
                               ? 'bg-primary text-primary-foreground'
                               : 'bg-muted'
                           )}

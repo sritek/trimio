@@ -1,5 +1,4 @@
 import { PrismaClient, Prisma, AppointmentStatus } from '@prisma/client';
-import { parseISO, startOfDay, endOfDay } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import type {
   CreateAppointmentInput,
@@ -11,6 +10,23 @@ import type {
 } from './appointments.schema';
 
 const MAX_RESCHEDULES = 3;
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ * This ensures consistent date handling regardless of server timezone
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC end of day (23:59:59.999)
+ */
+function parseToUTCEndOfDay(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+}
 
 // Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -42,7 +58,6 @@ export class AppointmentsService {
       search,
       page = 1,
       limit = 20,
-      sortBy = 'scheduledDate',
       sortOrder = 'desc',
     } = filters;
 
@@ -67,10 +82,10 @@ export class AppointmentsService {
 
     if (dateFrom || dateTo) {
       where.scheduledDate = {};
-      // Use parseISO to create local timezone dates (consistent with calendar service)
-      // Then use startOfDay/endOfDay to ensure we capture the full day
-      if (dateFrom) where.scheduledDate.gte = startOfDay(parseISO(dateFrom));
-      if (dateTo) where.scheduledDate.lte = endOfDay(parseISO(dateTo));
+      // Use UTC dates for comparison since PostgreSQL Date type stores as UTC midnight
+      // This ensures consistent filtering regardless of server timezone
+      if (dateFrom) where.scheduledDate.gte = parseToUTCDate(dateFrom);
+      if (dateTo) where.scheduledDate.lte = parseToUTCEndOfDay(dateTo);
     }
 
     if (search) {
@@ -105,7 +120,8 @@ export class AppointmentsService {
             },
           },
         },
-        orderBy: { [sortBy]: sortOrder },
+        // Sort by date first, then by time for proper chronological order
+        orderBy: [{ scheduledDate: sortOrder }, { scheduledTime: sortOrder }],
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -135,10 +151,24 @@ export class AppointmentsService {
       },
       include: {
         customer: {
-          select: { id: true, name: true, phone: true, email: true, gender: true },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            gender: true,
+            loyaltyPoints: true,
+            walletBalance: true,
+          },
         },
         branch: {
           select: { id: true, name: true },
+        },
+        stylist: {
+          select: { id: true, name: true },
+        },
+        station: {
+          include: { stationType: true },
         },
         services: {
           include: {
@@ -173,7 +203,7 @@ export class AppointmentsService {
     excludeAppointmentId?: string
   ) {
     const endTime = this.calculateEndTime(scheduledTime, duration);
-    const dateObj = startOfDay(parseISO(scheduledDate));
+    const dateObj = parseToUTCDate(scheduledDate);
 
     const where: Prisma.AppointmentWhereInput = {
       tenantId,
@@ -263,34 +293,20 @@ export class AppointmentsService {
     // 3. Calculate end time
     const endTime = this.calculateEndTime(input.scheduledTime, totalDuration);
 
-    // 3.5. Check for conflicts (unless force override)
+    // 3.5. Check for conflicts - we allow conflicts but mark them
+    // Conflicts are shown in UI but don't block appointment creation
     let conflicts: any[] = [];
-    if (!forceOverride) {
-      conflicts = await this.checkConflicts(
-        tenantId,
-        input.branchId,
-        input.scheduledDate,
-        input.scheduledTime,
-        totalDuration,
-        input.stylistId
-      );
+    conflicts = await this.checkConflicts(
+      tenantId,
+      input.branchId,
+      input.scheduledDate,
+      input.scheduledTime,
+      totalDuration,
+      input.stylistId
+    );
 
-      if (conflicts.length > 0) {
-        throw new AppError('Time slot conflicts with existing appointments', 409, 'APT_CONFLICT', {
-          conflicts,
-        });
-      }
-    } else {
-      // Get conflicts for processing actions
-      conflicts = await this.checkConflicts(
-        tenantId,
-        input.branchId,
-        input.scheduledDate,
-        input.scheduledTime,
-        totalDuration,
-        input.stylistId
-      );
-    }
+    // Note: We no longer throw on conflicts - salons need flexibility
+    // Conflicts are tracked and shown in the calendar UI
 
     // 4. Check if customer is blocked (for online bookings)
     if (input.customerId && input.bookingType === 'online') {
@@ -327,10 +343,24 @@ export class AppointmentsService {
       const branchPrice = service.branchPrices[0];
       const unitPrice = branchPrice?.price ? Number(branchPrice.price) : Number(service.basePrice);
       const taxRate = Number(service.taxRate);
-      const serviceTax = (unitPrice * taxRate) / 100;
-      const totalAmount = unitPrice + serviceTax;
 
-      subtotal += unitPrice;
+      // Handle tax-inclusive vs tax-exclusive pricing
+      let serviceTax: number;
+      let totalAmount: number;
+
+      if (service.isTaxInclusive) {
+        // Tax is already included in the price - no additional tax
+        // unitPrice IS the final price customer pays
+        serviceTax = 0;
+        totalAmount = unitPrice;
+        subtotal += unitPrice;
+      } else {
+        // Tax is additional - calculate and add
+        serviceTax = (unitPrice * taxRate) / 100;
+        totalAmount = unitPrice + serviceTax;
+        subtotal += unitPrice;
+      }
+
       taxAmount += serviceTax;
 
       return {
@@ -362,7 +392,7 @@ export class AppointmentsService {
     // 7. Generate token for walk-ins
     let tokenNumber: number | undefined;
     if (input.bookingType === 'walk_in') {
-      const today = startOfDay(parseISO(input.scheduledDate));
+      const today = parseToUTCDate(input.scheduledDate);
       const lastToken = await this.prisma.appointment.findFirst({
         where: {
           branchId: input.branchId,
@@ -457,7 +487,7 @@ export class AppointmentsService {
           customerId: input.customerId,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
-          scheduledDate: startOfDay(parseISO(input.scheduledDate)),
+          scheduledDate: parseToUTCDate(input.scheduledDate),
           scheduledTime: input.scheduledTime,
           endTime,
           totalDuration,
@@ -887,7 +917,7 @@ export class AppointmentsService {
           customerId: appointment.customerId,
           customerName: appointment.customerName,
           customerPhone: appointment.customerPhone,
-          scheduledDate: startOfDay(parseISO(input.newDate)),
+          scheduledDate: parseToUTCDate(input.newDate),
           scheduledTime: input.newTime,
           endTime: newEndTime,
           totalDuration: appointment.totalDuration,
@@ -1083,6 +1113,30 @@ export class AppointmentsService {
   }
 
   /**
+   * Update appointment status (generic status change with validation)
+   */
+  async updateAppointmentStatus(
+    tenantId: string,
+    appointmentId: string,
+    newStatus: string,
+    userId: string
+  ) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    // Validate status transition
+    const allowedTransitions = STATUS_TRANSITIONS[appointment.status] || [];
+    if (!allowedTransitions.includes(newStatus)) {
+      throw new AppError(
+        `Cannot transition from ${appointment.status} to ${newStatus}`,
+        400,
+        'APT_030'
+      );
+    }
+
+    return this.updateStatus(tenantId, appointmentId, newStatus as AppointmentStatus, userId);
+  }
+
+  /**
    * Helper: Calculate end time from start time and duration
    */
   private calculateEndTime(startTime: string, durationMinutes: number): string {
@@ -1102,7 +1156,9 @@ export class AppointmentsService {
    * Defaults to today's date if not specified
    */
   async getUnassignedAppointments(tenantId: string, branchId: string, date?: string) {
-    const targetDate = date ? startOfDay(parseISO(date)) : startOfDay(new Date());
+    const targetDate = date
+      ? parseToUTCDate(date)
+      : parseToUTCDate(new Date().toISOString().split('T')[0]);
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
@@ -1135,7 +1191,7 @@ export class AppointmentsService {
    * Get count of unassigned appointments for a branch (today)
    */
   async getUnassignedCount(tenantId: string, branchId: string): Promise<number> {
-    const today = startOfDay(new Date());
+    const today = parseToUTCDate(new Date().toISOString().split('T')[0]);
 
     return this.prisma.appointment.count({
       where: {
@@ -1373,6 +1429,178 @@ export class AppointmentsService {
   }
 
   // =====================================================
+  // UPDATE APPOINTMENT SERVICES (Before service starts)
+  // =====================================================
+
+  /**
+   * Update services on an appointment (replace all services)
+   * Only allowed for booked, confirmed, or checked_in appointments
+   */
+  async updateServices(
+    tenantId: string,
+    appointmentId: string,
+    input: { services: Array<{ serviceId: string; stylistId?: string; quantity?: number }> },
+    userId: string
+  ) {
+    const appointment = await this.getAppointmentById(tenantId, appointmentId);
+
+    // Only allow updating services before appointment starts
+    const allowedStatuses: AppointmentStatus[] = [
+      'booked',
+      'confirmed',
+      'checked_in',
+      'in_progress',
+    ];
+    if (!allowedStatuses.includes(appointment.status)) {
+      throw new AppError('Can only update services before appointment completes', 400, 'APT_030');
+    }
+
+    // Validate all services exist and are active
+    const serviceIds = input.services.map((s) => s.serviceId);
+    const services = await this.prisma.service.findMany({
+      where: {
+        id: { in: serviceIds },
+        tenantId,
+        deletedAt: null,
+        isActive: true,
+      },
+      include: {
+        branchPrices: {
+          where: { branchId: appointment.branchId },
+        },
+      },
+    });
+
+    if (services.length !== serviceIds.length) {
+      throw new AppError('One or more services are not available', 400, 'APT_010');
+    }
+
+    // Build service map for easy lookup
+    const serviceMap = new Map(services.map((s) => [s.id, s]));
+
+    // Calculate new totals
+    let subtotal = 0;
+    let taxAmount = 0;
+    let totalDuration = 0;
+
+    const appointmentServices = input.services.map((inputService) => {
+      const service = serviceMap.get(inputService.serviceId)!;
+      const branchPrice = service.branchPrices[0];
+      const unitPrice = branchPrice?.price ? Number(branchPrice.price) : Number(service.basePrice);
+      const quantity = inputService.quantity || 1;
+      const taxRate = Number(service.taxRate);
+
+      // Handle tax-inclusive vs tax-exclusive pricing
+      let serviceTax: number;
+      let totalAmount: number;
+
+      if (service.isTaxInclusive) {
+        // Tax is already included in the price - no additional tax
+        serviceTax = 0;
+        totalAmount = unitPrice * quantity;
+      } else {
+        // Tax is additional
+        serviceTax = (unitPrice * quantity * taxRate) / 100;
+        totalAmount = unitPrice * quantity + serviceTax;
+      }
+
+      subtotal += unitPrice * quantity;
+      taxAmount += serviceTax;
+      totalDuration += service.durationMinutes * quantity;
+
+      return {
+        tenantId,
+        serviceId: service.id,
+        serviceName: service.name,
+        serviceSku: service.sku,
+        unitPrice,
+        quantity,
+        discountAmount: 0,
+        taxRate,
+        taxAmount: serviceTax,
+        totalAmount,
+        durationMinutes: service.durationMinutes,
+        activeTimeMinutes: service.activeTimeMinutes,
+        processingTimeMinutes: service.processingTimeMinutes,
+        stylistId: inputService.stylistId || appointment.stylistId,
+        status: 'pending' as const,
+        commissionRate: Number(service.commissionValue),
+        commissionAmount: (unitPrice * quantity * Number(service.commissionValue)) / 100,
+      };
+    });
+
+    const totalAmount = subtotal + taxAmount;
+    const endTime = this.calculateEndTime(appointment.scheduledTime, totalDuration);
+
+    // Update in transaction
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Delete existing services
+      await tx.appointmentService.deleteMany({
+        where: { appointmentId },
+      });
+
+      // Create new services
+      await tx.appointmentService.createMany({
+        data: appointmentServices.map((s) => ({
+          ...s,
+          appointmentId,
+        })),
+      });
+
+      // Update appointment totals
+      const apt = await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          subtotal,
+          taxAmount,
+          totalAmount,
+          totalDuration,
+          endTime,
+          updatedAt: new Date(),
+        },
+        include: {
+          services: {
+            include: {
+              service: { select: { id: true, name: true, sku: true } },
+            },
+          },
+          customer: {
+            select: { id: true, name: true, phone: true },
+          },
+          branch: {
+            select: { id: true, name: true },
+          },
+        },
+      });
+
+      // Create audit log
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          branchId: appointment.branchId,
+          userId,
+          action: 'APPOINTMENT_SERVICES_UPDATED',
+          entityType: 'appointment',
+          entityId: appointmentId,
+          oldValues: {
+            serviceCount: appointment.services?.length || 0,
+            totalAmount: appointment.totalAmount,
+          },
+          newValues: {
+            serviceCount: input.services.length,
+            totalAmount,
+            serviceIds,
+          },
+        },
+      });
+
+      return apt;
+    });
+
+    return updated;
+  }
+
+  // =====================================================
   // ADD SERVICE MID-APPOINTMENT (Upsell)
   // =====================================================
 
@@ -1411,11 +1639,21 @@ export class AppointmentsService {
 
     // Calculate price (lock at current rate)
     const unitPrice = Number(service.basePrice);
-    const totalAmount = unitPrice * quantity;
     const taxRate = Number(service.taxRate);
-    const taxAmount = service.isTaxInclusive
-      ? totalAmount - totalAmount / (1 + taxRate / 100)
-      : totalAmount * (taxRate / 100);
+
+    // Handle tax-inclusive vs tax-exclusive pricing
+    let taxAmount: number;
+    let totalAmount: number;
+
+    if (service.isTaxInclusive) {
+      // Tax is already included in the price - no additional tax
+      taxAmount = 0;
+      totalAmount = unitPrice * quantity;
+    } else {
+      // Tax is additional
+      taxAmount = (unitPrice * quantity * taxRate) / 100;
+      totalAmount = unitPrice * quantity + taxAmount;
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // Create appointment service
@@ -1447,7 +1685,9 @@ export class AppointmentsService {
         where: { appointmentId },
       });
 
-      const subtotal = allServices.reduce((sum, s) => sum + Number(s.totalAmount), 0);
+      // subtotal = sum of (unitPrice * quantity) - the base prices
+      const subtotal = allServices.reduce((sum, s) => sum + Number(s.unitPrice) * s.quantity, 0);
+      // taxAmount = sum of additional tax amounts
       const totalTax = allServices.reduce((sum, s) => sum + Number(s.taxAmount), 0);
       const totalDuration = await this.calculateTotalDuration(tx, allServices);
 

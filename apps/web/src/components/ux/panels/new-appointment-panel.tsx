@@ -20,7 +20,6 @@ import { z } from 'zod';
 import { format } from 'date-fns';
 import {
   Calendar,
-  Clock,
   User,
   Scissors,
   FileText,
@@ -40,22 +39,28 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DatePicker, CustomerCombobox, ServiceCombobox } from '@/components/common';
+import { DatePicker, CustomerCombobox, ServiceCombobox, TimeSlotPicker } from '@/components/common';
 import type { CustomerOption } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useClosePanel, useSlideOverUnsavedChanges } from '@/components/ux/slide-over';
-import { FormFeedbackOverlay, useFormFeedback } from '@/components/ux/feedback';
-import { useCreateAppointment } from '@/hooks/queries/use-appointments';
+import { useCreateAppointment, useStylistBusySlots } from '@/hooks/queries/use-appointments';
 import { useCustomerSearch } from '@/hooks/queries/use-customers';
 import { useServices } from '@/hooks/queries/use-services';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useWaitlistCount, useWaitlistMatches } from '@/hooks/queries/use-waitlist';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // Form validation schema
 const appointmentSchema = z
@@ -120,13 +125,6 @@ export function NewAppointmentPanel({
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [selectedWaitlistEntryId, setSelectedWaitlistEntryId] = useState<string | null>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
-
-  const {
-    status: feedbackStatus,
-    showSuccess,
-    showError,
-    reset: resetFeedback,
-  } = useFormFeedback();
 
   // Fetch data
   const { data: servicesData, isLoading: servicesLoading } = useServices({});
@@ -194,6 +192,25 @@ export function NewAppointmentPanel({
   const watchedStylistId = watch('stylistId');
   const watchedBookingType = watch('bookingType');
   const watchedAssignLater = watch('assignLater');
+
+  console.log('watchedStylistId', watchedStylistId);
+
+  // Fetch stylist busy slots when stylist and date are selected
+  const { data: busySlotsData, isLoading: busySlotsLoading } = useStylistBusySlots(
+    watchedStylistId || undefined,
+    branchId || undefined,
+    watchedDate || undefined
+  );
+
+  // Calculate total duration from selected services
+  const totalDuration = useMemo(() => {
+    if (!selectedServices.length || !servicesData?.data) return 30;
+    const services = servicesData.data;
+    return selectedServices.reduce((total, serviceId) => {
+      const service = services.find((s) => s.id === serviceId);
+      return total + (service?.durationMinutes || 30);
+    }, 0);
+  }, [selectedServices, servicesData?.data]);
 
   // Track unsaved changes
   useEffect(() => {
@@ -263,51 +280,25 @@ export function NewAppointmentPanel({
           waitlistEntryId: selectedWaitlistEntryId || undefined,
         });
 
-        showSuccess('Appointment created successfully!');
-        setTimeout(() => {
-          if (onSuccess && result.appointment?.id) {
-            onSuccess(result.appointment.id);
-          }
-          closePanel();
-        }, 1500);
+        // Toast is handled by the mutation hook
+        if (onSuccess && result.appointment?.id) {
+          onSuccess(result.appointment.id);
+        }
+        closePanel();
       } catch {
-        showError('Failed to create appointment');
+        // Error toast is handled by the mutation hook
       }
     },
-    [
-      branchId,
-      createMutation,
-      closePanel,
-      onSuccess,
-      showSuccess,
-      showError,
-      selectedWaitlistEntryId,
-    ]
+    [branchId, createMutation, closePanel, onSuccess, selectedWaitlistEntryId]
   );
-
-  // Generate time slots
-  const timeSlots = useMemo(() => {
-    const slots: string[] = [];
-    for (let hour = 9; hour <= 20; hour++) {
-      for (let min = 0; min < 60; min += 30) {
-        slots.push(`${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`);
-      }
-    }
-    return slots;
-  }, []);
 
   const services = servicesData?.data || [];
   const stylists = staffData?.data || [];
 
+  console.log('stylists', stylists);
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full relative">
-      <FormFeedbackOverlay
-        status={feedbackStatus}
-        successMessage="Appointment created successfully!"
-        errorMessage="Failed to create appointment"
-        onDismiss={resetFeedback}
-      />
-
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
           {/* Waitlist Indicator Banner */}
@@ -398,7 +389,7 @@ export function NewAppointmentPanel({
             )}
 
             {/* Customer Search Combobox with Add New Button */}
-            {!selectedCustomer && !isNewCustomer && (
+            {!isNewCustomer && (
               <div className="flex gap-2">
                 <div className="flex-1">
                   <CustomerCombobox
@@ -407,19 +398,21 @@ export function NewAppointmentPanel({
                     customers={customerOptions}
                     onSearchChange={setCustomerSearchQuery}
                     placeholder="Search customer..."
-                    hasError={!!errors.customerName}
+                    hasError={!!errors.customerName && !selectedCustomer}
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNewCustomer}
-                  className="shrink-0"
-                  title="Add new customer"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </Button>
+                {!selectedCustomer && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleNewCustomer}
+                    className="shrink-0"
+                    title="Add new customer"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             )}
             {errors.customerName && !isNewCustomer && !selectedCustomer && (
@@ -450,6 +443,7 @@ export function NewAppointmentPanel({
                   basePrice: s.basePrice,
                   categoryId: s.categoryId,
                   categoryName: s.category?.name,
+                  duration: s.durationMinutes,
                 }))}
                 hasError={!!errors.serviceIds}
                 showTotal={true}
@@ -501,43 +495,32 @@ export function NewAppointmentPanel({
             {!watchedAssignLater && (
               <>
                 {staffLoading ? (
-                  <div className="flex gap-3">
-                    <Skeleton className="h-16 w-16 rounded-lg" />
-                    <Skeleton className="h-16 w-16 rounded-lg" />
-                    <Skeleton className="h-16 w-16 rounded-lg" />
-                  </div>
+                  <Skeleton className="h-10 w-full" />
                 ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {stylists.map((stylist) => (
-                      <button
-                        key={stylist.id}
-                        type="button"
-                        onClick={() => setValue('stylistId', stylist.id)}
-                        className={cn(
-                          'flex flex-col items-center gap-2 p-3 rounded-lg border transition-all min-w-[80px]',
-                          watchedStylistId === stylist.id
-                            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                            : 'hover:bg-muted/50'
-                        )}
-                      >
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback
-                            className={cn(
-                              'text-sm font-medium',
-                              watchedStylistId === stylist.id
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                            )}
-                          >
-                            {(stylist.user?.name || 'U').charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="text-xs font-medium text-center truncate max-w-[70px]">
-                          {stylist.user?.name || 'Unknown'}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  <Select
+                    value={watchedStylistId || ''}
+                    onValueChange={(value) => setValue('stylistId', value)}
+                  >
+                    <SelectTrigger
+                      className={cn(errors.stylistId && !watchedStylistId && 'border-destructive')}
+                    >
+                      <SelectValue placeholder="Select a stylist..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stylists.map((stylist) => (
+                        <SelectItem key={stylist.userId} value={stylist.userId}>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">
+                                {(stylist.user?.name || 'U').charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span>{stylist.user?.name || 'Unknown'}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 {errors.stylistId && (
                   <p className="text-xs text-destructive">{errors.stylistId.message}</p>
@@ -568,58 +551,15 @@ export function NewAppointmentPanel({
                 )}
               </div>
               <div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start font-normal',
-                        !watchedTime && 'text-muted-foreground',
-                        errors.time && 'border-destructive'
-                      )}
-                    >
-                      <Clock className="mr-2 h-4 w-4" />
-                      {watchedTime || 'Select time'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-3" align="start">
-                    <div className="space-y-3">
-                      {/* Custom time input */}
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1.5 block">
-                          Enter exact time
-                        </Label>
-                        <Input
-                          type="time"
-                          value={watchedTime || ''}
-                          onChange={(e) => setValue('time', e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-
-                      {/* Quick select buttons */}
-                      <div>
-                        <Label className="text-xs text-muted-foreground mb-1.5 block">
-                          Quick select
-                        </Label>
-                        <div className="grid grid-cols-4 gap-1.5 max-h-48 overflow-y-auto">
-                          {timeSlots.map((time) => (
-                            <Button
-                              key={time}
-                              type="button"
-                              variant={watchedTime === time ? 'default' : 'ghost'}
-                              size="sm"
-                              className="h-8 text-xs"
-                              onClick={() => setValue('time', time)}
-                            >
-                              {time}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <TimeSlotPicker
+                  value={watchedTime || ''}
+                  onChange={(time) => setValue('time', time)}
+                  placeholder="Select time"
+                  hasError={!!errors.time}
+                  busySlots={busySlotsData?.busySlots}
+                  isLoadingBusySlots={busySlotsLoading}
+                  appointmentDuration={totalDuration}
+                />
                 {errors.time && (
                   <p className="text-xs text-destructive mt-1">{errors.time.message}</p>
                 )}

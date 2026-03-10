@@ -103,6 +103,25 @@ export const updateAppointmentSchema = z.object({
 export type UpdateAppointmentInput = z.infer<typeof updateAppointmentSchema>;
 
 // =====================================================
+// UPDATE APPOINTMENT STATUS
+// =====================================================
+
+export const updateStatusSchema = z.object({
+  status: z.enum([
+    'booked',
+    'confirmed',
+    'checked_in',
+    'in_progress',
+    'completed',
+    'cancelled',
+    'no_show',
+    'rescheduled',
+  ]),
+});
+
+export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
+
+// =====================================================
 // RESCHEDULE APPOINTMENT
 // =====================================================
 
@@ -397,6 +416,17 @@ export const getAvailableStylistsSchema = z.object({
 
 export type GetAvailableStylistsInput = z.infer<typeof getAvailableStylistsSchema>;
 
+// =====================================================
+// STYLIST BUSY SLOTS
+// =====================================================
+
+export const getStylistBusySlotsSchema = z.object({
+  branchId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+});
+
+export type GetStylistBusySlotsInput = z.infer<typeof getStylistBusySlotsSchema>;
+
 export const serveQueueBodySchema = z.object({
   stylistId: z.string().uuid(),
 });
@@ -444,6 +474,24 @@ export const addServiceSchema = z.object({
 });
 
 export type AddServiceInput = z.infer<typeof addServiceSchema>;
+
+// =====================================================
+// UPDATE APPOINTMENT SERVICES (Bulk update before service starts)
+// =====================================================
+
+export const updateServicesSchema = z.object({
+  services: z
+    .array(
+      z.object({
+        serviceId: z.string().uuid(),
+        stylistId: z.string().uuid().optional(),
+        quantity: z.number().int().min(1).optional().default(1),
+      })
+    )
+    .min(1, 'At least one service is required'),
+});
+
+export type UpdateServicesInput = z.infer<typeof updateServicesSchema>;
 
 // =====================================================
 // UPDATE STYLISTS (Multi-Stylist Support)

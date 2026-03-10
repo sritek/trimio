@@ -27,7 +27,7 @@ export * from './quick-actions';
 export * from './command-center';
 
 // Calendar components
-export * from './calendar';
+export * from '../../app/(protected)/appointments/calendar/components';
 
 // Checkout components
 export * from './checkout';

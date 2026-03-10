@@ -173,7 +173,7 @@ export default function ProductsPage() {
 
       <PageContent>
         {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
           <SearchInput
             value={search}
             onChange={setSearch}

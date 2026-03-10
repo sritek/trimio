@@ -1,8 +1,23 @@
 import { PrismaClient } from '@prisma/client';
-import { startOfDay, parseISO } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import { AppointmentsService } from './appointments.service';
 import type { AddToQueueInput } from './appointments.schema';
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Get today's date as UTC midnight
+ */
+function getTodayUTC(): Date {
+  const today = new Date();
+  return new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+}
 
 export class WalkInQueueService {
   constructor(
@@ -14,7 +29,7 @@ export class WalkInQueueService {
    * Add customer to walk-in queue
    */
   async addToQueue(tenantId: string, branchId: string, input: AddToQueueInput, _userId: string) {
-    const today = startOfDay(new Date());
+    const today = getTodayUTC();
 
     // Generate token number (sequential per branch per day)
     const tokenNumber = await this.generateToken(branchId, today);
@@ -56,7 +71,7 @@ export class WalkInQueueService {
    * Get current queue for a branch
    */
   async getQueue(tenantId: string, branchId: string, date?: string) {
-    const queueDate = date ? startOfDay(parseISO(date)) : startOfDay(new Date());
+    const queueDate = date ? parseToUTCDate(date) : getTodayUTC();
 
     const queue = await this.prisma.walkInQueue.findMany({
       where: {

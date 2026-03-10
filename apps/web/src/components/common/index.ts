@@ -29,8 +29,10 @@ export { ConfirmDialog } from './confirm-dialog';
 export { ActionMenu } from './action-menu';
 export { SearchInput } from './search-input';
 export { FilterBar } from './filter-bar';
+export { FilterButton } from './filter-button';
 export { DatePicker } from './date-picker';
 export { TimePicker } from './time-picker';
+export { TimeSlotPicker } from './time-slot-picker';
 
 // Combobox components
 export { CustomerCombobox } from './customer-combobox';
@@ -38,9 +40,15 @@ export type { CustomerOption, CustomerComboboxProps } from './customer-combobox'
 export { ServiceCombobox } from './service-combobox';
 export type { ServiceOption, ServiceComboboxProps } from './service-combobox';
 
+// Payment components
+export { SplitPaymentInput, SplitPaymentRow } from './split-payment-input';
+export type { SplitPaymentInputProps, SplitPaymentRowProps } from './split-payment-input';
+
 // Feedback components
 export { LoadingSpinner } from './loading-spinner';
 export { LoadingOverlay } from './loading-overlay';
+export { Notice } from './notice';
+export type { NoticeSeverity } from './notice';
 
 // Access control components
 export { PermissionGuard } from './permission-guard';

@@ -19,7 +19,6 @@ interface FloorViewTabProps {
   branchId: string;
   onAssign: (stationId: string) => void;
   onViewDetails: (appointmentId: string) => void;
-  onAddService: (appointmentId: string) => void;
   onComplete: (appointmentId: string) => void;
   onStartNow: (appointmentId: string) => void;
 }
@@ -28,7 +27,6 @@ export function FloorViewTab({
   branchId,
   onAssign,
   onViewDetails,
-  onAddService,
   onComplete,
   onStartNow,
 }: FloorViewTabProps) {
@@ -73,7 +71,6 @@ export function FloorViewTab({
             station={station}
             onAssign={onAssign}
             onViewDetails={onViewDetails}
-            onAddService={onAddService}
             onComplete={onComplete}
             onStartNow={onStartNow}
           />

@@ -1,6 +1,6 @@
 'use client';
 
-import * as React from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -37,14 +37,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // ============================================================================
@@ -118,7 +110,7 @@ export interface DataTableProps<TData, TValue> {
   /** Number of skeleton rows to show */
   loadingRows?: number;
   /** Custom empty state component */
-  emptyState?: React.ReactNode;
+  emptyState?: ReactNode;
 
   // --- Styling ---
   /** Additional className for the table container */
@@ -165,7 +157,7 @@ export function getSelectionColumn<TData>(): ColumnDef<TData> {
 
 interface SortableHeaderProps {
   column: { getIsSorted: () => false | 'asc' | 'desc'; toggleSorting: (desc?: boolean) => void };
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }
 
@@ -227,11 +219,11 @@ export function DataTable<TData, TValue>({
   const effectiveSearchPlaceholder = searchPlaceholder || t('actions.search');
 
   // Internal state
-  const [internalSorting, setInternalSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
-  const [internalSearch, setInternalSearch] = React.useState('');
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [internalSearch, setInternalSearch] = useState('');
 
   // Determine if using server-side or client-side pagination
   const isServerPagination = !!pagination && !!onPageChange;
@@ -248,7 +240,7 @@ export function DataTable<TData, TValue>({
   const setCurrentSearch = isServerSearch ? onSearchChange : setInternalSearch;
 
   // Prepend selection column if selectable
-  const tableColumns = React.useMemo(() => {
+  const tableColumns = useMemo(() => {
     if (selectable) {
       return [getSelectionColumn<TData>(), ...columns];
     }
@@ -292,7 +284,7 @@ export function DataTable<TData, TValue>({
   });
 
   // Handle selection changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (onSelectionChange) {
       const selectedRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
       onSelectionChange(selectedRows);
@@ -300,7 +292,7 @@ export function DataTable<TData, TValue>({
   }, [rowSelection, onSelectionChange, table]);
 
   // Handle client-side search
-  React.useEffect(() => {
+  useEffect(() => {
     if (searchable && !isServerSearch && searchKey) {
       table.getColumn(searchKey as string)?.setFilterValue(currentSearch);
     }
@@ -316,7 +308,7 @@ export function DataTable<TData, TValue>({
   };
 
   // Pagination info for server-side
-  const paginationInfo = React.useMemo(() => {
+  const paginationInfo = useMemo(() => {
     if (isServerPagination && pagination) {
       const { page, limit, total } = pagination;
       const start = (page - 1) * limit + 1;
@@ -334,11 +326,14 @@ export function DataTable<TData, TValue>({
     return null;
   }, [isServerPagination, isClientPagination, pagination, table]);
 
+  const hasData = !isLoading && table.getRowModel().rows?.length > 0;
+  const showPagination = paginationInfo && (hasData || isLoading);
+
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn('flex flex-col min-h-0', className)}>
       {/* Toolbar */}
       {(searchable || columnToggle) && (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 mb-4 flex-shrink-0">
           {/* Search */}
           {searchable && (
             <div className="relative flex-1 max-w-sm">
@@ -390,82 +385,105 @@ export function DataTable<TData, TValue>({
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                    className={compact ? 'h-10' : undefined}
+      {/* Table Container - flex-1 to fill available space, min-h-0 to allow shrinking */}
+      <div className="flex flex-col min-h-0 flex-1 rounded-md border">
+        {/* Table with sticky header */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full caption-bottom text-sm">
+            <thead className="sticky top-0 z-10 bg-background border-b">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                      className={cn(
+                        'h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 bg-muted',
+                        compact && 'h-10'
+                      )}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0">
+              {isLoading ? (
+                // Loading skeleton
+                Array.from({ length: loadingRows }).map((_, i) => (
+                  <tr
+                    key={`skeleton-${i}`}
+                    className="border-b transition-colors hover:bg-muted/50"
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              // Loading skeleton
-              Array.from({ length: loadingRows }).map((_, i) => (
-                <TableRow key={`skeleton-${i}`}>
-                  {tableColumns.map((_, j) => (
-                    <TableCell key={`skeleton-${i}-${j}`} className={compact ? 'py-2' : undefined}>
-                      <Skeleton className="h-5 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : table.getRowModel().rows?.length ? (
-              // Data rows
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                  className={getRowClass(row)}
-                  onClick={() => onRowClick?.(row.original)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={compact ? 'py-2' : undefined}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              // Empty state
-              <TableRow>
-                <TableCell colSpan={tableColumns.length} className="h-24 text-center">
-                  {emptyState || t('pagination.noResults')}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                    {tableColumns.map((_, j) => (
+                      <td
+                        key={`skeleton-${i}-${j}`}
+                        className={cn('p-4 align-middle', compact && 'py-2')}
+                      >
+                        <Skeleton className="h-5 w-full" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : table.getRowModel().rows?.length ? (
+                // Data rows
+                table.getRowModel().rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    data-state={row.getIsSelected() && 'selected'}
+                    className={cn(
+                      'border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted',
+                      getRowClass(row)
+                    )}
+                    onClick={() => onRowClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          'p-4 align-middle [&:has([role=checkbox])]:pr-0',
+                          compact && 'py-2'
+                        )}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                // Empty state
+                <tr>
+                  <td colSpan={tableColumns.length} className="h-24 text-center">
+                    {emptyState || t('pagination.noResults')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Pagination - always show if there's data or pagination info */}
-      {paginationInfo && (
-        <DataTablePagination
-          info={paginationInfo}
-          isServerPagination={isServerPagination}
-          onPageChange={onPageChange}
-          onPageSizeChange={onPageSizeChange}
-          table={table}
-          pageSizeOptions={pageSizeOptions}
-          showPageSizeSelector={!!onPageSizeChange}
-        />
+      {/* Pagination - fixed at bottom */}
+      {showPagination && (
+        <div className="flex-shrink-0 pt-4">
+          <DataTablePagination
+            info={paginationInfo}
+            isServerPagination={isServerPagination}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+            table={table}
+            pageSizeOptions={pageSizeOptions}
+            showPageSizeSelector={!!onPageSizeChange}
+          />
+        </div>
       )}
 
       {/* Selection info */}
       {selectable && table.getFilteredSelectedRowModel().rows.length > 0 && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground flex-shrink-0 pt-2">
           {table.getFilteredSelectedRowModel().rows.length} of{' '}
           {table.getFilteredRowModel().rows.length} row(s) selected.
         </div>

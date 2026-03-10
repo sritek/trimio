@@ -21,8 +21,11 @@ import {
   getCalendarSchema,
   getAvailableSlotsSchema,
   getAvailableStylistsSchema,
+  getStylistBusySlotsSchema,
   createWithConflictsSchema,
   updateAppointmentSchema,
+  updateStatusSchema,
+  updateServicesSchema,
   cancelAppointmentSchema,
   rescheduleAppointmentSchema,
   addToQueueSchema,
@@ -153,6 +156,39 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
     }
   );
 
+  app.get(
+    '/stylists/:stylistId/busy-slots',
+    {
+      preHandler: [requirePermission('appointments:read')],
+      schema: {
+        tags: ['Availability'],
+        summary: 'Get stylist busy slots for a date',
+        description:
+          'Get all time slots where the stylist is unavailable (appointments, breaks, blocked).',
+        params: stylistIdParamSchema,
+        querystring: getStylistBusySlotsSchema,
+        response: {
+          200: successResponseSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId } = (request as any).user!;
+      const { stylistId } = request.params;
+      const { branchId, date } = request.query;
+      const result = await availabilityService.getStylistBusySlots(
+        tenantId,
+        stylistId,
+        branchId,
+        date
+      );
+      return reply.send({ success: true, data: result });
+    }
+  );
+
   app.post(
     '/check-conflicts',
     {
@@ -238,6 +274,65 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       return controller.update(request as any, reply);
+    }
+  );
+
+  app.patch(
+    '/:id/status',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Appointments'],
+        summary: 'Update appointment status',
+        description: 'Update appointment status with validation of allowed transitions.',
+        params: idParamSchema,
+        body: updateStatusSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = (request as any).user!;
+      const { id } = request.params;
+      const { status } = request.body;
+      const result = await appointmentsService.updateAppointmentStatus(
+        tenantId,
+        id,
+        status,
+        userId
+      );
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.put(
+    '/:id/services',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Appointments'],
+        summary: 'Update appointment services',
+        description:
+          'Replace all services on an appointment. Only allowed before appointment starts (booked, confirmed, checked_in).',
+        params: idParamSchema,
+        body: updateServicesSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = (request as any).user!;
+      const { id } = request.params;
+      const result = await appointmentsService.updateServices(tenantId, id, request.body, userId);
+      return reply.send({ success: true, data: result });
     }
   );
 

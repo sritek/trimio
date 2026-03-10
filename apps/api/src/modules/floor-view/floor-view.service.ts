@@ -13,13 +13,42 @@ const RESERVED_THRESHOLD_MINUTES = 15;
 // Overtime threshold in minutes (appointments exceeding duration by this much show overtime alert)
 const OVERTIME_THRESHOLD_MINUTES = 10;
 
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ * This ensures consistent date handling regardless of server timezone
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Get today's date as UTC midnight
+ */
+function getTodayUTC(): Date {
+  const now = new Date();
+  return parseToUTCDate(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  );
+}
+
+/**
+ * Get end of today as UTC (23:59:59.999)
+ */
+function getTodayEndUTC(): Date {
+  const now = new Date();
+  const [year, month, day] = [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+}
+
 export class FloorViewService {
   /**
    * Get floor view data for a branch
    */
   async getFloorView(tenantId: string, branchId: string): Promise<FloorViewResponse> {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStart = getTodayUTC();
+    const todayEnd = getTodayEndUTC();
 
     // Get all active stations for the branch
     const stations = await prisma.station.findMany({
@@ -33,7 +62,11 @@ export class FloorViewService {
         stationType: true,
         appointments: {
           where: {
-            scheduledDate: today,
+            // Use date range to handle timezone issues with PostgreSQL DATE type
+            scheduledDate: {
+              gte: todayStart,
+              lte: todayEnd,
+            },
             status: { in: ['checked_in', 'in_progress', 'booked', 'confirmed'] },
             deletedAt: null,
           },

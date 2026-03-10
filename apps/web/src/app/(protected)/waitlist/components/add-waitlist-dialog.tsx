@@ -280,7 +280,7 @@ export function AddWaitlistDialog({ open, onOpenChange }: AddWaitlistDialogProps
                     </FormControl>
                     <SelectContent>
                       {stylists.map((stylist) => (
-                        <SelectItem key={stylist.id} value={stylist.id}>
+                        <SelectItem key={stylist.userId} value={stylist.userId}>
                           {stylist.user?.name || 'Unknown'}
                         </SelectItem>
                       ))}

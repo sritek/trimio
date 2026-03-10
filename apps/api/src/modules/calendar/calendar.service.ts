@@ -4,9 +4,55 @@
  */
 
 import { PrismaClient, Prisma } from '@prisma/client';
-import { format, parseISO, startOfWeek, endOfWeek, getDay, startOfDay } from 'date-fns';
+import { format } from 'date-fns';
 import { AppError } from '../../lib/errors';
 import { serializeDecimals } from '../../lib/prisma';
+
+/**
+ * Parse a date string (yyyy-MM-dd) to UTC midnight Date
+ * This ensures consistent date handling regardless of server timezone
+ */
+function parseToUTCDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+/**
+ * Get day of week from a date string (0 = Sunday, 6 = Saturday)
+ */
+function getDayOfWeek(dateStr: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getDay();
+}
+
+/**
+ * Get start of week (Monday) for a date string
+ */
+function getStartOfWeekUTC(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  // Adjust to Monday (1 = Monday, 0 = Sunday becomes 7)
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(year, month - 1, day - diff);
+  return new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate(), 0, 0, 0, 0));
+}
+
+/**
+ * Get end of week (Sunday) for a date string
+ */
+function getEndOfWeekUTC(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  // Adjust to Sunday
+  const diff = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const sunday = new Date(year, month - 1, day + diff);
+  return new Date(
+    Date.UTC(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59, 999)
+  );
+}
 
 // Day-specific working hours structure from branch settings
 interface DayWorkingHours {
@@ -49,8 +95,7 @@ function extractSimpleWorkingHours(
   }
 
   // Get day of week from date (0 = Sunday, 1 = Monday, etc.)
-  const dateObj = parseISO(date);
-  const dayIndex = getDay(dateObj);
+  const dayIndex = getDayOfWeek(date);
   const dayName = DAY_NAMES[dayIndex] as keyof BranchWorkingHours;
   const dayHours = branchWorkingHours[dayName];
 
@@ -69,6 +114,7 @@ import type {
   CalendarStylist,
   CalendarAppointment,
   ResourceCalendarResponse,
+  ConflictInfo,
 } from './calendar.schema';
 
 // Stylist colors for visual distinction
@@ -94,19 +140,18 @@ export class CalendarService {
     input: GetResourceCalendarInput
   ): Promise<ResourceCalendarResponse> {
     const { branchId, date, view } = input;
-    const dateObj = parseISO(date);
 
     // Calculate date range based on view
     let startDate: Date;
     let endDate: Date;
 
     if (view === 'week') {
-      startDate = startOfWeek(dateObj, { weekStartsOn: 1 }); // Monday
-      endDate = endOfWeek(dateObj, { weekStartsOn: 1 }); // Sunday
+      startDate = getStartOfWeekUTC(date); // Monday
+      endDate = getEndOfWeekUTC(date); // Sunday
     } else {
-      // Use startOfDay to ensure consistent date comparison with database
-      startDate = startOfDay(dateObj);
-      endDate = startOfDay(dateObj);
+      // Day view - use UTC midnight for consistent date comparison
+      startDate = parseToUTCDate(date);
+      endDate = parseToUTCDate(date);
     }
 
     // Get branch working hours
@@ -195,9 +240,8 @@ export class CalendarService {
           }));
 
         // Check if stylist has full day blocked for the requested date
-        const isFullDayBlocked = stylistBlocked.some(
-          (bs) => bs.isFullDay && format(parseISO(date), 'yyyy-MM-dd') === date
-        );
+        // Since we already filtered blockedSlots by date range, just check isFullDay
+        const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
 
         return {
           id: ub.user.id,
@@ -234,20 +278,28 @@ export class CalendarService {
       orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
     });
 
-    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => ({
-      id: apt.id,
-      stylistId: apt.stylistId,
-      date: format(apt.scheduledDate, 'yyyy-MM-dd'),
-      startTime: apt.scheduledTime,
-      endTime: apt.endTime,
-      customerName: apt.customer?.name || apt.customerName || 'Guest',
-      customerPhone: apt.customer?.phone || apt.customerPhone,
-      services: apt.services.map((s) => s.serviceName),
-      status: apt.status,
-      bookingType: apt.bookingType,
-      totalAmount: Number(apt.totalAmount),
-      hasConflict: apt.hasConflict,
-    }));
+    // Build conflict info for each appointment
+    const appointmentConflicts = this.computeConflictInfo(appointments);
+
+    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => {
+      const conflictData = appointmentConflicts.get(apt.id);
+      return {
+        id: apt.id,
+        stylistId: apt.stylistId,
+        date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+        startTime: apt.scheduledTime,
+        endTime: apt.endTime,
+        customerName: apt.customer?.name || apt.customerName || 'Guest',
+        customerPhone: apt.customer?.phone || apt.customerPhone,
+        services: apt.services.map((s) => s.serviceName),
+        status: apt.status,
+        bookingType: apt.bookingType,
+        totalAmount: Number(apt.totalAmount),
+        hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+        conflictInfo:
+          conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+      };
+    });
 
     return {
       date,
@@ -356,7 +408,7 @@ export class CalendarService {
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: {
-          scheduledDate: parseISO(newDate),
+          scheduledDate: parseToUTCDate(newDate),
           scheduledTime: newTime,
           endTime: newEndTime,
           stylistId: targetStylistId,
@@ -411,7 +463,7 @@ export class CalendarService {
     excludeAppointmentId?: string
   ) {
     const endTime = this.calculateEndTime(startTime, duration);
-    const dateObj = parseISO(date);
+    const dateObj = parseToUTCDate(date);
 
     const where: Prisma.AppointmentWhereInput = {
       tenantId,
@@ -452,7 +504,7 @@ export class CalendarService {
     startTime: string,
     endTime: string
   ): Promise<boolean> {
-    const dateObj = parseISO(date);
+    const dateObj = parseToUTCDate(date);
 
     const blockedSlots = await this.prisma.stylistBlockedSlot.findMany({
       where: {
@@ -486,5 +538,105 @@ export class CalendarService {
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
     return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Compute conflict info for all appointments
+   * Groups by stylist and date, then checks for overlaps
+   */
+  private computeConflictInfo(
+    appointments: Array<{
+      id: string;
+      stylistId: string | null;
+      scheduledDate: Date;
+      scheduledTime: string;
+      endTime: string;
+    }>
+  ): Map<string, ConflictInfo> {
+    const conflictMap = new Map<string, ConflictInfo>();
+
+    // Group appointments by stylist and date
+    const groupedByStylistDate = new Map<string, typeof appointments>();
+
+    for (const apt of appointments) {
+      if (!apt.stylistId) continue; // Skip unassigned appointments
+
+      const dateStr = format(apt.scheduledDate, 'yyyy-MM-dd');
+      const key = `${apt.stylistId}-${dateStr}`;
+
+      if (!groupedByStylistDate.has(key)) {
+        groupedByStylistDate.set(key, []);
+      }
+      groupedByStylistDate.get(key)!.push(apt);
+    }
+
+    // Check for conflicts within each group
+    for (const [, group] of groupedByStylistDate) {
+      for (let i = 0; i < group.length; i++) {
+        const apt1 = group[i];
+        const conflictingIds: string[] = [];
+        let maxOverlapMinutes = 0;
+
+        for (let j = 0; j < group.length; j++) {
+          if (i === j) continue;
+
+          const apt2 = group[j];
+          const overlapMinutes = this.calculateOverlapMinutes(
+            apt1.scheduledTime,
+            apt1.endTime,
+            apt2.scheduledTime,
+            apt2.endTime
+          );
+
+          if (overlapMinutes > 0) {
+            conflictingIds.push(apt2.id);
+            maxOverlapMinutes = Math.max(maxOverlapMinutes, overlapMinutes);
+          }
+        }
+
+        if (conflictingIds.length > 0) {
+          // Calculate appointment duration to determine severity
+          const apt1Duration =
+            this.timeToMinutes(apt1.endTime) - this.timeToMinutes(apt1.scheduledTime);
+          const overlapPercentage = (maxOverlapMinutes / apt1Duration) * 100;
+
+          conflictMap.set(apt1.id, {
+            conflictingAppointmentIds: conflictingIds,
+            overlapMinutes: maxOverlapMinutes,
+            severity: overlapPercentage >= 50 ? 'severe' : 'warning',
+          });
+        }
+      }
+    }
+
+    return conflictMap;
+  }
+
+  /**
+   * Helper: Calculate overlap in minutes between two time ranges
+   */
+  private calculateOverlapMinutes(
+    start1: string,
+    end1: string,
+    start2: string,
+    end2: string
+  ): number {
+    const start1Mins = this.timeToMinutes(start1);
+    const end1Mins = this.timeToMinutes(end1);
+    const start2Mins = this.timeToMinutes(start2);
+    const end2Mins = this.timeToMinutes(end2);
+
+    const overlapStart = Math.max(start1Mins, start2Mins);
+    const overlapEnd = Math.min(end1Mins, end2Mins);
+
+    return Math.max(0, overlapEnd - overlapStart);
+  }
+
+  /**
+   * Helper: Convert time string to minutes
+   */
+  private timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
   }
 }

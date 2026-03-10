@@ -6,6 +6,7 @@
 import { Prisma, PaymentStatus as PrismaPaymentStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
+import { env } from '../../config/env';
 import { fifoEngine } from '../inventory/fifo-engine';
 import { stockService } from '../inventory/stock.service';
 import type {
@@ -19,7 +20,7 @@ import type {
   QuickBillInput,
   CalculateInput,
 } from './billing.schema';
-import { InvoiceStatus, PaymentStatus, PaymentMethod } from './billing.schema';
+import { InvoiceStatus, PaymentStatus } from './billing.schema';
 
 // ============================================
 // Types
@@ -61,6 +62,7 @@ interface CalculatedItem {
   netAmount: number;
   hsnSacCode?: string;
   stylistId?: string;
+  stylistName?: string;
   assistantId?: string;
   commissionType?: string;
   commissionRate?: number;
@@ -177,6 +179,22 @@ class InvoiceCalculator {
   ): Promise<CalculatedItem[]> {
     const calculatedItems: CalculatedItem[] = [];
 
+    // Collect all stylist IDs to fetch names in one query
+    const stylistIds = items
+      .filter((item) => item.stylistId)
+      .map((item) => item.stylistId as string);
+    const uniqueStylistIds = [...new Set(stylistIds)];
+
+    // Fetch stylist names
+    const stylists =
+      uniqueStylistIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: uniqueStylistIds }, tenantId },
+            select: { id: true, name: true },
+          })
+        : [];
+    const stylistMap = new Map(stylists.map((s) => [s.id, s.name]));
+
     for (const item of items) {
       if (item.itemType === 'service') {
         const service = await prisma.service.findFirst({
@@ -199,9 +217,19 @@ class InvoiceCalculator {
         const grossAmount = unitPrice * quantity;
         const taxRate = Number(service.taxRate);
 
-        // Calculate tax
-        const taxableAmount = grossAmount; // No item-level discount yet
-        const taxAmount = taxableAmount * (taxRate / 100);
+        // Calculate tax - handle tax-inclusive pricing
+        let taxableAmount: number;
+        let taxAmount: number;
+
+        if (service.isTaxInclusive) {
+          // Tax is already included in the price - no additional tax
+          taxableAmount = grossAmount;
+          taxAmount = 0;
+        } else {
+          // Tax is additional
+          taxableAmount = grossAmount;
+          taxAmount = taxableAmount * (taxRate / 100);
+        }
 
         let cgstRate = 0,
           cgstAmount = 0,
@@ -232,6 +260,9 @@ class InvoiceCalculator {
           commissionAmount = commissionValue * quantity;
         }
 
+        // Get stylist name
+        const stylistName = item.stylistId ? stylistMap.get(item.stylistId) : undefined;
+
         calculatedItems.push({
           itemType: 'service',
           referenceId: service.id,
@@ -254,6 +285,7 @@ class InvoiceCalculator {
           netAmount: taxableAmount + taxAmount,
           hsnSacCode: service.hsnSacCode || undefined,
           stylistId: item.stylistId,
+          stylistName,
           assistantId: item.assistantId,
           commissionType,
           commissionRate: commissionValue,
@@ -772,19 +804,6 @@ export const billingService = {
             createdBy: ctx.userId,
           },
         });
-
-        // Update cash drawer for cash payments
-        if (payment.paymentMethod === PaymentMethod.CASH) {
-          await this.updateCashDrawer(
-            tx,
-            ctx.tenantId,
-            invoice.branchId,
-            payment.amount,
-            'sale',
-            invoiceId,
-            ctx.userId
-          );
-        }
       }
 
       await tx.invoice.update({
@@ -798,41 +817,6 @@ export const billingService = {
     });
 
     return this.getInvoice(invoiceId, ctx.tenantId);
-  },
-
-  /**
-   * Update cash drawer balance
-   */
-  async updateCashDrawer(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    branchId: string,
-    amount: number,
-    transactionType: string,
-    referenceId?: string,
-    userId?: string
-  ) {
-    // Get current balance
-    const lastTransaction = await tx.cashDrawerTransaction.findFirst({
-      where: { tenantId, branchId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const currentBalance = lastTransaction ? Number(lastTransaction.balanceAfter) : 0;
-    const newBalance = currentBalance + amount;
-
-    await tx.cashDrawerTransaction.create({
-      data: {
-        tenantId,
-        branchId,
-        transactionType,
-        amount,
-        balanceAfter: newBalance,
-        referenceType: referenceId ? 'invoice' : undefined,
-        referenceId,
-        createdBy: userId,
-      },
-    });
   },
 
   /**
@@ -863,18 +847,21 @@ export const billingService = {
     }
 
     // Validate stock availability for all product items (Requirement 3.4)
+    // Only validate if inventory module is enabled
     const productItems = invoice.items.filter((item) => item.itemType === 'product');
-    for (const item of productItems) {
-      const stockResult = await this.validateProductStock(
-        invoice.branchId,
-        item.referenceId,
-        item.quantity
-      );
-      if (!stockResult.available) {
-        throw new BadRequestError(
-          'INSUFFICIENT_STOCK',
-          `Insufficient stock for product "${item.name}". Available: ${stockResult.currentStock}, Requested: ${item.quantity}`
+    if (env.ENABLE_INVENTORY) {
+      for (const item of productItems) {
+        const stockResult = await this.validateProductStock(
+          invoice.branchId,
+          item.referenceId,
+          item.quantity
         );
+        if (!stockResult.available) {
+          throw new BadRequestError(
+            'INSUFFICIENT_STOCK',
+            `Insufficient stock for product "${item.name}". Available: ${stockResult.currentStock}, Requested: ${item.quantity}`
+          );
+        }
       }
     }
 
@@ -897,22 +884,25 @@ export const billingService = {
 
       // Deduct stock for product items (Requirements 3.1, 3.2, 3.3)
       // This must happen within the transaction for atomicity (Requirement 3.5)
-      for (const item of productItems) {
-        try {
-          await stockService.consumeForSale(
-            ctx.tenantId,
-            invoice.branchId,
-            item.referenceId,
-            item.quantity,
-            invoiceId,
-            ctx.userId
-          );
-        } catch (error) {
-          // Re-throw with specific error code for stock consumption failure
-          throw new BadRequestError(
-            'FINALIZATION_STOCK_ERROR',
-            `Failed to deduct stock for product "${item.name}": ${error instanceof Error ? error.message : 'Unknown error'}`
-          );
+      // Only deduct if inventory module is enabled
+      if (env.ENABLE_INVENTORY) {
+        for (const item of productItems) {
+          try {
+            await stockService.consumeForSale(
+              ctx.tenantId,
+              invoice.branchId,
+              item.referenceId,
+              item.quantity,
+              invoiceId,
+              ctx.userId
+            );
+          } catch (error) {
+            // Re-throw with specific error code for stock consumption failure
+            throw new BadRequestError(
+              'FINALIZATION_STOCK_ERROR',
+              `Failed to deduct stock for product "${item.name}": ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
+          }
         }
       }
 
@@ -959,6 +949,44 @@ export const billingService = {
               });
             }
           }
+        }
+      }
+
+      // Deduct loyalty points if redeemed
+      if (Number(invoice.loyaltyPointsRedeemed) > 0 && invoice.customerId) {
+        const customer = await tx.customer.findUnique({
+          where: { id: invoice.customerId },
+        });
+
+        if (customer) {
+          const pointsToDeduct = Number(invoice.loyaltyPointsRedeemed);
+
+          // Validate customer has enough points
+          if (customer.loyaltyPoints < pointsToDeduct) {
+            throw new BadRequestError(
+              'INSUFFICIENT_LOYALTY_POINTS',
+              `Customer has ${customer.loyaltyPoints} points but ${pointsToDeduct} are required`
+            );
+          }
+
+          const newBalance = customer.loyaltyPoints - pointsToDeduct;
+
+          await tx.customer.update({
+            where: { id: invoice.customerId },
+            data: { loyaltyPoints: newBalance },
+          });
+
+          await tx.loyaltyTransaction.create({
+            data: {
+              tenantId: ctx.tenantId,
+              customerId: invoice.customerId,
+              type: 'redeemed',
+              points: -pointsToDeduct,
+              balance: newBalance,
+              reference: `Invoice #${invoiceNumber}`,
+              createdBy: ctx.userId,
+            },
+          });
         }
       }
 
@@ -1132,10 +1160,36 @@ export const billingService = {
 
   /**
    * Quick bill - create and finalize in one step
+   * If a draft invoice already exists for the appointment, reuse it
    */
   async quickBill(input: QuickBillInput, ctx: TenantContext) {
-    // Create invoice
-    const invoice = await this.createInvoice(input, ctx);
+    let invoice;
+
+    // Check if there's already a draft invoice for this appointment
+    if (input.appointmentId) {
+      const existingInvoice = await prisma.invoice.findFirst({
+        where: {
+          tenantId: ctx.tenantId,
+          appointmentId: input.appointmentId,
+          status: InvoiceStatus.DRAFT,
+        },
+        include: {
+          items: true,
+          payments: true,
+          discounts: true,
+        },
+      });
+
+      if (existingInvoice) {
+        // Reuse existing draft invoice
+        invoice = existingInvoice;
+      }
+    }
+
+    // Create new invoice if no existing draft found
+    if (!invoice) {
+      invoice = await this.createInvoice(input, ctx);
+    }
 
     // Finalize with payments
     return this.finalizeInvoice(invoice.id, { payments: input.payments }, ctx);
@@ -1157,627 +1211,5 @@ export const billingService = {
    */
   async getNextInvoiceNumber(branchId: string, ctx: TenantContext) {
     return this.generateInvoiceNumber(ctx.tenantId, branchId);
-  },
-};
-
-// ============================================
-// Credit Note Service Methods
-// ============================================
-
-export const creditNoteService = {
-  /**
-   * Create a credit note (refund) for a finalized invoice
-   */
-  async createCreditNote(
-    input: {
-      originalInvoiceId: string;
-      items: Array<{ originalItemId: string; quantity: number }>;
-      refundMethod: 'original_method' | 'wallet' | 'cash';
-      reason: string;
-      notes?: string;
-    },
-    ctx: TenantContext
-  ) {
-    const { tenantId, userId } = ctx;
-
-    // Get original invoice
-    const originalInvoice = await prisma.invoice.findFirst({
-      where: { id: input.originalInvoiceId, tenantId },
-      include: { items: true, payments: true },
-    });
-
-    if (!originalInvoice) {
-      throw new NotFoundError('INVOICE_NOT_FOUND', 'Original invoice not found');
-    }
-
-    if (originalInvoice.status !== InvoiceStatus.FINALIZED) {
-      throw new BadRequestError(
-        'INVOICE_NOT_FINALIZED',
-        'Credit notes can only be created for finalized invoices'
-      );
-    }
-
-    // Calculate refund amounts
-    let refundSubtotal = 0;
-    let refundTax = 0;
-    const creditNoteItems: Array<{
-      originalItemId: string;
-      name: string;
-      quantity: number;
-      unitPrice: number;
-      taxRate: number;
-      taxAmount: number;
-      totalAmount: number;
-    }> = [];
-
-    for (const refundItem of input.items) {
-      const originalItem = originalInvoice.items.find((i) => i.id === refundItem.originalItemId);
-      if (!originalItem) {
-        throw new NotFoundError('ITEM_NOT_FOUND', `Item ${refundItem.originalItemId} not found`);
-      }
-
-      if (refundItem.quantity > originalItem.quantity) {
-        throw new BadRequestError(
-          'INVALID_QUANTITY',
-          `Refund quantity exceeds original quantity for ${originalItem.name}`
-        );
-      }
-
-      const unitPrice = Number(originalItem.unitPrice);
-      const grossAmount = unitPrice * refundItem.quantity;
-      const taxRate = Number(originalItem.taxRate);
-      const taxAmount = grossAmount * (taxRate / 100);
-      const totalAmount = grossAmount + taxAmount;
-
-      refundSubtotal += grossAmount;
-      refundTax += taxAmount;
-
-      creditNoteItems.push({
-        originalItemId: originalItem.id,
-        name: originalItem.name,
-        quantity: refundItem.quantity,
-        unitPrice,
-        taxRate,
-        taxAmount,
-        totalAmount,
-      });
-    }
-
-    const refundTotal = refundSubtotal + refundTax;
-
-    // Generate credit note number
-    const creditNoteNumber = await this.generateCreditNoteNumber(
-      tenantId,
-      originalInvoice.branchId
-    );
-
-    // Create credit note
-    const creditNote = await prisma.$transaction(async (tx) => {
-      const cn = await tx.creditNote.create({
-        data: {
-          tenantId,
-          branchId: originalInvoice.branchId,
-          creditNoteNumber,
-          originalInvoiceId: originalInvoice.id,
-          originalInvoiceNumber: originalInvoice.invoiceNumber || '',
-          customerId: originalInvoice.customerId,
-          customerName: originalInvoice.customerName,
-          subtotal: refundSubtotal,
-          taxAmount: refundTax,
-          totalAmount: refundTotal,
-          refundMethod: input.refundMethod,
-          reason: input.reason,
-          notes: input.notes,
-          status: 'issued',
-          createdBy: userId,
-          items: {
-            create: creditNoteItems.map((item) => ({
-              tenantId,
-              originalItemId: item.originalItemId,
-              name: item.name,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              taxRate: item.taxRate,
-              taxAmount: item.taxAmount,
-              totalAmount: item.totalAmount,
-            })),
-          },
-        },
-        include: { items: true },
-      });
-
-      // Process refund based on method
-      if (input.refundMethod === 'wallet' && originalInvoice.customerId) {
-        const customer = await tx.customer.findUnique({
-          where: { id: originalInvoice.customerId },
-        });
-
-        if (customer) {
-          const newBalance = Number(customer.walletBalance) + refundTotal;
-
-          await tx.customer.update({
-            where: { id: originalInvoice.customerId },
-            data: { walletBalance: newBalance },
-          });
-
-          await tx.walletTransaction.create({
-            data: {
-              tenantId,
-              customerId: originalInvoice.customerId,
-              type: 'credit',
-              amount: refundTotal,
-              balance: newBalance,
-              reference: `Credit Note #${creditNoteNumber}`,
-              createdBy: userId,
-            },
-          });
-        }
-      } else if (input.refundMethod === 'cash') {
-        // Record cash refund in drawer
-        await billingService.updateCashDrawer(
-          tx,
-          tenantId,
-          originalInvoice.branchId,
-          -refundTotal,
-          'refund',
-          cn.id,
-          userId
-        );
-      }
-
-      // Update original invoice status
-      await tx.invoice.update({
-        where: { id: originalInvoice.id },
-        data: {
-          status: InvoiceStatus.REFUNDED,
-          paymentStatus: PaymentStatus.REFUNDED,
-          refundInvoiceId: cn.id,
-        },
-      });
-
-      return cn;
-    });
-
-    return creditNote;
-  },
-
-  /**
-   * Get credit note by ID
-   */
-  async getCreditNote(id: string, tenantId: string) {
-    const creditNote = await prisma.creditNote.findFirst({
-      where: { id, tenantId },
-      include: {
-        items: { orderBy: { createdAt: 'asc' } },
-        originalInvoice: true,
-      },
-    });
-
-    if (!creditNote) {
-      throw new NotFoundError('CREDIT_NOTE_NOT_FOUND', 'Credit note not found');
-    }
-
-    return creditNote;
-  },
-
-  /**
-   * List credit notes
-   */
-  async listCreditNotes(
-    query: {
-      branchId?: string;
-      customerId?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      page?: number;
-      limit?: number;
-    },
-    ctx: TenantContext
-  ) {
-    const { tenantId, branchId: userBranchId } = ctx;
-    const { branchId, customerId, dateFrom, dateTo, page = 1, limit = 20 } = query;
-
-    const where: Prisma.CreditNoteWhereInput = {
-      tenantId,
-      ...(branchId && { branchId }),
-      ...(userBranchId && !branchId && { branchId: userBranchId }),
-      ...(customerId && { customerId }),
-      ...(dateFrom && { createdAt: { gte: new Date(dateFrom) } }),
-      ...(dateTo && { createdAt: { lte: new Date(dateTo) } }),
-    };
-
-    const [creditNotes, total] = await Promise.all([
-      prisma.creditNote.findMany({
-        where,
-        include: { items: true },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        // TODO: debug this properly
-        take: Number(limit),
-      }),
-      prisma.creditNote.count({ where }),
-    ]);
-
-    return {
-      data: creditNotes,
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  },
-
-  /**
-   * Generate credit note number
-   */
-  async generateCreditNoteNumber(_tenantId: string, branchId: string): Promise<string> {
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const prefix = `CN-${yearMonth}`;
-
-    const lastCN = await prisma.creditNote.findFirst({
-      where: { branchId, creditNoteNumber: { startsWith: prefix } },
-      orderBy: { creditNoteNumber: 'desc' },
-    });
-
-    let sequence = 1;
-    if (lastCN?.creditNoteNumber) {
-      const lastSequence = parseInt(lastCN.creditNoteNumber.split('-').pop() || '0');
-      sequence = lastSequence + 1;
-    }
-
-    return `${prefix}-${sequence.toString().padStart(4, '0')}`;
-  },
-};
-
-// ============================================
-// Day Closure Service Methods
-// ============================================
-
-export const dayClosureService = {
-  /**
-   * Open a new day for a branch
-   */
-  async openDay(input: { branchId: string; openingCash?: number }, ctx: TenantContext) {
-    const { tenantId, userId } = ctx;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Check if day is already open
-    const existingDay = await prisma.dayClosure.findFirst({
-      where: {
-        tenantId,
-        branchId: input.branchId,
-        closureDate: today,
-      },
-    });
-
-    if (existingDay) {
-      throw new BadRequestError('DAY_ALREADY_OPEN', 'Day is already open for this branch');
-    }
-
-    // Get previous day's closing balance
-    const previousDay = await prisma.dayClosure.findFirst({
-      where: {
-        tenantId,
-        branchId: input.branchId,
-        status: 'closed',
-      },
-      orderBy: { closureDate: 'desc' },
-    });
-
-    const openingCash = input.openingCash ?? (previousDay ? Number(previousDay.actualCash) : 0);
-
-    const dayClosure = await prisma.dayClosure.create({
-      data: {
-        tenantId,
-        branchId: input.branchId,
-        closureDate: today,
-        expectedCash: openingCash,
-        status: 'open',
-        openedBy: userId,
-        openedAt: new Date(),
-      },
-    });
-
-    // Record opening cash in drawer
-    if (openingCash > 0) {
-      await prisma.cashDrawerTransaction.create({
-        data: {
-          tenantId,
-          branchId: input.branchId,
-          transactionType: 'opening',
-          amount: openingCash,
-          balanceAfter: openingCash,
-          description: 'Opening cash balance',
-          createdBy: userId,
-        },
-      });
-    }
-
-    return dayClosure;
-  },
-
-  /**
-   * Close the day for a branch
-   */
-  async closeDay(
-    dayClosureId: string,
-    input: { actualCash: number; notes?: string },
-    ctx: TenantContext
-  ) {
-    const { tenantId, userId } = ctx;
-
-    const dayClosure = await prisma.dayClosure.findFirst({
-      where: { id: dayClosureId, tenantId },
-    });
-
-    if (!dayClosure) {
-      throw new NotFoundError('DAY_CLOSURE_NOT_FOUND', 'Day closure not found');
-    }
-
-    if (dayClosure.status !== 'open') {
-      throw new BadRequestError('DAY_NOT_OPEN', 'Day is not open');
-    }
-
-    // Calculate expected cash from transactions
-    const cashTransactions = await prisma.cashDrawerTransaction.findMany({
-      where: {
-        tenantId,
-        branchId: dayClosure.branchId,
-        createdAt: {
-          gte: dayClosure.openedAt!,
-        },
-      },
-    });
-
-    const expectedCash = cashTransactions.reduce(
-      (sum, t) => sum + Number(t.amount),
-      Number(dayClosure.expectedCash)
-    );
-
-    // Calculate totals for the day
-    const dayStart = new Date(dayClosure.closureDate);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        tenantId,
-        branchId: dayClosure.branchId,
-        status: 'finalized',
-        finalizedAt: { gte: dayStart, lt: dayEnd },
-      },
-    });
-
-    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.grandTotal), 0);
-    const totalTax = invoices.reduce((sum, inv) => sum + Number(inv.totalTax), 0);
-    const totalDiscounts = invoices.reduce((sum, inv) => sum + Number(inv.discountAmount), 0);
-    const totalInvoices = invoices.length;
-
-    // Get payment breakdown
-    const payments = await prisma.payment.findMany({
-      where: {
-        tenantId,
-        branchId: dayClosure.branchId,
-        createdAt: { gte: dayStart, lt: dayEnd },
-        isRefund: false,
-      },
-    });
-
-    const cashCollected = payments
-      .filter((p) => p.paymentMethod === 'cash')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-    const cardCollected = payments
-      .filter((p) => p.paymentMethod === 'card')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-    const upiCollected = payments
-      .filter((p) => p.paymentMethod === 'upi')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-    const walletCollected = payments
-      .filter((p) => p.paymentMethod === 'wallet')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-    const otherCollected = payments
-      .filter((p) => !['cash', 'card', 'upi', 'wallet'].includes(p.paymentMethod))
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-
-    const cashDifference = input.actualCash - expectedCash;
-
-    const updatedDayClosure = await prisma.dayClosure.update({
-      where: { id: dayClosureId },
-      data: {
-        status: 'closed',
-        actualCash: input.actualCash,
-        expectedCash,
-        cashDifference,
-        totalRevenue,
-        totalTaxCollected: totalTax,
-        totalDiscounts,
-        totalInvoices,
-        cashCollected,
-        cardCollected,
-        upiCollected,
-        walletCollected,
-        otherCollected,
-        reconciliationNotes: input.notes,
-        closedBy: userId,
-        closedAt: new Date(),
-      },
-    });
-
-    return updatedDayClosure;
-  },
-
-  /**
-   * Get current day status for a branch
-   */
-  async getCurrentDay(branchId: string, ctx: TenantContext) {
-    const { tenantId } = ctx;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const dayClosure = await prisma.dayClosure.findFirst({
-      where: {
-        tenantId,
-        branchId,
-        closureDate: today,
-      },
-    });
-
-    if (!dayClosure) {
-      return { status: 'not_opened', closureDate: today };
-    }
-
-    // Get current cash balance
-    const lastTransaction = await prisma.cashDrawerTransaction.findFirst({
-      where: { tenantId, branchId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      ...dayClosure,
-      currentCashBalance: lastTransaction ? Number(lastTransaction.balanceAfter) : 0,
-    };
-  },
-
-  /**
-   * List day closures
-   */
-  async listDayClosures(
-    query: {
-      branchId?: string;
-      status?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      page?: number;
-      limit?: number;
-    },
-    ctx: TenantContext
-  ) {
-    const { tenantId, branchId: userBranchId } = ctx;
-    const { branchId, status, dateFrom, dateTo, page = 1, limit = 20 } = query;
-
-    const where: Prisma.DayClosureWhereInput = {
-      tenantId,
-      ...(branchId && { branchId }),
-      ...(userBranchId && !branchId && { branchId: userBranchId }),
-      ...(status && { status }),
-      ...(dateFrom && { closureDate: { gte: new Date(dateFrom) } }),
-      ...(dateTo && { closureDate: { lte: new Date(dateTo) } }),
-    };
-
-    const [dayClosures, total] = await Promise.all([
-      prisma.dayClosure.findMany({
-        where,
-        orderBy: { closureDate: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.dayClosure.count({ where }),
-    ]);
-
-    return {
-      data: dayClosures,
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  },
-};
-
-// ============================================
-// Cash Drawer Service Methods
-// ============================================
-
-export const cashDrawerService = {
-  /**
-   * Get current cash drawer balance
-   */
-  async getBalance(branchId: string, ctx: TenantContext) {
-    const { tenantId } = ctx;
-
-    const lastTransaction = await prisma.cashDrawerTransaction.findFirst({
-      where: { tenantId, branchId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      balance: lastTransaction ? Number(lastTransaction.balanceAfter) : 0,
-      lastUpdated: lastTransaction?.createdAt || null,
-    };
-  },
-
-  /**
-   * Get cash drawer transactions
-   */
-  async getTransactions(
-    query: {
-      branchId: string;
-      dateFrom?: string;
-      dateTo?: string;
-      transactionType?: string;
-      page?: number;
-      limit?: number;
-    },
-    ctx: TenantContext
-  ) {
-    const { tenantId } = ctx;
-    const { branchId, dateFrom, dateTo, transactionType, page = 1, limit = 50 } = query;
-
-    const where: Prisma.CashDrawerTransactionWhereInput = {
-      tenantId,
-      branchId,
-      ...(transactionType && { transactionType }),
-      ...(dateFrom && { createdAt: { gte: new Date(dateFrom) } }),
-      ...(dateTo && { createdAt: { lte: new Date(dateTo) } }),
-    };
-
-    const [transactions, total] = await Promise.all([
-      prisma.cashDrawerTransaction.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.cashDrawerTransaction.count({ where }),
-    ]);
-
-    return {
-      data: transactions,
-      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  },
-
-  /**
-   * Make a cash adjustment (deposit, withdrawal, or correction)
-   */
-  async makeAdjustment(
-    branchId: string,
-    input: { amount: number; description: string; transactionType: string },
-    ctx: TenantContext
-  ) {
-    const { tenantId, userId } = ctx;
-
-    // Get current balance
-    const lastTransaction = await prisma.cashDrawerTransaction.findFirst({
-      where: { tenantId, branchId },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const currentBalance = lastTransaction ? Number(lastTransaction.balanceAfter) : 0;
-    const newBalance = currentBalance + input.amount;
-
-    if (newBalance < 0) {
-      throw new BadRequestError('INSUFFICIENT_CASH', 'Insufficient cash in drawer');
-    }
-
-    const transaction = await prisma.cashDrawerTransaction.create({
-      data: {
-        tenantId,
-        branchId,
-        transactionType: input.transactionType,
-        amount: input.amount,
-        balanceAfter: newBalance,
-        description: input.description,
-        createdBy: userId,
-      },
-    });
-
-    return transaction;
   },
 };

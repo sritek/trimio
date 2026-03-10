@@ -3,28 +3,25 @@
 /**
  * List Filters Sheet
  * Filter panel for appointments list view with multi-select and date range
+ * Uses local state with Apply/Reset buttons
  *
  * Filter Logic:
  * - Multiple selections within same group = OR (e.g., booked OR confirmed)
  * - Across different groups = AND (e.g., status:booked AND bookingType:online)
  */
 
-import { X, Filter } from 'lucide-react';
-import { parseISO, isAfter, startOfDay } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { Filter, RotateCcw } from 'lucide-react';
+import { format, isAfter, startOfDay, parse } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { DatePicker } from '@/components/common';
 import { useTranslations } from 'next-intl';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useBranchContext } from '@/hooks/use-branch-context';
-import type { AppointmentStatus, BookingType } from '@/types/appointments';
+import { BOOKING_TYPE_OPTIONS, STATUS_OPTIONS } from '../utils/constants';
 
 export interface ListFiltersState {
   dateFrom: string;
@@ -41,22 +38,6 @@ interface ListFiltersSheetProps {
   onFiltersChange: (filters: ListFiltersState) => void;
 }
 
-const STATUS_OPTIONS: { value: AppointmentStatus; label: string; color: string }[] = [
-  { value: 'booked', label: 'Booked', color: 'bg-sky-500' },
-  { value: 'confirmed', label: 'Confirmed', color: 'bg-emerald-500' },
-  { value: 'checked_in', label: 'Checked In', color: 'bg-violet-500' },
-  { value: 'in_progress', label: 'In Progress', color: 'bg-amber-500' },
-  { value: 'completed', label: 'Completed', color: 'bg-slate-400' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-500' },
-  { value: 'no_show', label: 'No Show', color: 'bg-rose-500' },
-];
-
-const BOOKING_TYPE_OPTIONS: { value: BookingType; label: string }[] = [
-  { value: 'online', label: 'Online' },
-  { value: 'phone', label: 'Phone' },
-  { value: 'walk_in', label: 'Walk-in' },
-];
-
 export function ListFiltersSheet({
   open,
   onOpenChange,
@@ -65,6 +46,16 @@ export function ListFiltersSheet({
 }: ListFiltersSheetProps) {
   const t = useTranslations('common');
   const { branchId } = useBranchContext();
+
+  // Local state for editing - only applied when user clicks Apply
+  const [localFilters, setLocalFilters] = useState<ListFiltersState>(filters);
+
+  // Sync local state when sheet opens or external filters change
+  useEffect(() => {
+    if (open) {
+      setLocalFilters(filters);
+    }
+  }, [open, filters]);
 
   const { data: staffData } = useStaffList({
     branchId: branchId || '',
@@ -76,73 +67,89 @@ export function ListFiltersSheet({
     name: staff.user?.name || 'Unknown',
   }));
 
-  // Parse dates for DatePicker
-  const dateFromValue = filters.dateFrom ? parseISO(filters.dateFrom) : undefined;
-  const dateToValue = filters.dateTo ? parseISO(filters.dateTo) : undefined;
+  // Parse dates for DatePicker - use parse instead of parseISO to avoid timezone issues
+  // parseISO treats 'yyyy-MM-dd' as UTC midnight, which shows as previous day in IST
+  const dateFromValue = localFilters.dateFrom
+    ? parse(localFilters.dateFrom, 'yyyy-MM-dd', new Date())
+    : undefined;
+  const dateToValue = localFilters.dateTo
+    ? parse(localFilters.dateTo, 'yyyy-MM-dd', new Date())
+    : undefined;
 
   const handleDateFromChange = (date: Date | undefined) => {
     if (!date) return;
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date formatting to avoid timezone issues
+    const dateStr = format(date, 'yyyy-MM-dd');
     // If dateFrom is after dateTo, also update dateTo
     if (dateToValue && isAfter(startOfDay(date), startOfDay(dateToValue))) {
-      onFiltersChange({ ...filters, dateFrom: dateStr, dateTo: dateStr });
+      setLocalFilters({ ...localFilters, dateFrom: dateStr, dateTo: dateStr });
     } else {
-      onFiltersChange({ ...filters, dateFrom: dateStr });
+      setLocalFilters({ ...localFilters, dateFrom: dateStr });
     }
   };
 
   const handleDateToChange = (date: Date | undefined) => {
     if (!date) return;
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date formatting to avoid timezone issues
+    const dateStr = format(date, 'yyyy-MM-dd');
     // If dateTo is before dateFrom, also update dateFrom
     if (dateFromValue && isAfter(startOfDay(dateFromValue), startOfDay(date))) {
-      onFiltersChange({ ...filters, dateFrom: dateStr, dateTo: dateStr });
+      setLocalFilters({ ...localFilters, dateFrom: dateStr, dateTo: dateStr });
     } else {
-      onFiltersChange({ ...filters, dateTo: dateStr });
+      setLocalFilters({ ...localFilters, dateTo: dateStr });
     }
   };
 
   // Toggle functions for multi-select (OR within group)
   const toggleStatus = (status: string) => {
-    const newStatuses = filters.statuses.includes(status)
-      ? filters.statuses.filter((s) => s !== status)
-      : [...filters.statuses, status];
-    onFiltersChange({ ...filters, statuses: newStatuses });
+    const newStatuses = localFilters.statuses.includes(status)
+      ? localFilters.statuses.filter((s) => s !== status)
+      : [...localFilters.statuses, status];
+    setLocalFilters({ ...localFilters, statuses: newStatuses });
   };
 
   const toggleBookingType = (type: string) => {
-    const newTypes = filters.bookingTypes.includes(type)
-      ? filters.bookingTypes.filter((t) => t !== type)
-      : [...filters.bookingTypes, type];
-    onFiltersChange({ ...filters, bookingTypes: newTypes });
+    const newTypes = localFilters.bookingTypes.includes(type)
+      ? localFilters.bookingTypes.filter((t) => t !== type)
+      : [...localFilters.bookingTypes, type];
+    setLocalFilters({ ...localFilters, bookingTypes: newTypes });
   };
 
   const toggleStylist = (stylistId: string) => {
-    const newStylistIds = filters.stylistIds.includes(stylistId)
-      ? filters.stylistIds.filter((id) => id !== stylistId)
-      : [...filters.stylistIds, stylistId];
-    onFiltersChange({ ...filters, stylistIds: newStylistIds });
+    const newStylistIds = localFilters.stylistIds.includes(stylistId)
+      ? localFilters.stylistIds.filter((id) => id !== stylistId)
+      : [...localFilters.stylistIds, stylistId];
+    setLocalFilters({ ...localFilters, stylistIds: newStylistIds });
   };
 
-  const clearFilters = () => {
-    onFiltersChange({
-      ...filters,
+  const handleReset = () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const resetFilter = {
+      dateFrom: today,
+      dateTo: today,
       statuses: [],
       bookingTypes: [],
       stylistIds: [],
-    });
+    };
+    setLocalFilters(resetFilter);
+    onFiltersChange(resetFilter);
+    onOpenChange(false);
   };
 
-  const hasActiveFilters =
-    filters.statuses.length > 0 || filters.bookingTypes.length > 0 || filters.stylistIds.length > 0;
+  const handleApply = () => {
+    onFiltersChange(localFilters);
+    onOpenChange(false);
+  };
 
   const activeFilterCount =
-    filters.statuses.length + filters.bookingTypes.length + filters.stylistIds.length;
+    localFilters.statuses.length +
+    localFilters.bookingTypes.length +
+    localFilters.stylistIds.length;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" size="narrow" className="p-4 space-y-8">
-        <SheetHeader>
+      <SheetContent side="right" className="flex flex-col p-0">
+        <SheetHeader className="px-4 py-4 border-b">
           <SheetTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
             {t('actions.filter')}
@@ -154,7 +161,7 @@ export function ListFiltersSheet({
           </SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
           {/* Date Range */}
           <div>
             <Label className="text-sm font-medium mb-2 block">Date Range</Label>
@@ -185,9 +192,9 @@ export function ListFiltersSheet({
             <div>
               <Label className="text-sm font-medium mb-3 block">
                 Stylists
-                {filters.stylistIds.length > 0 && (
+                {localFilters.stylistIds.length > 0 && (
                   <span className="ml-2 text-xs text-muted-foreground">
-                    ({filters.stylistIds.length} selected)
+                    ({localFilters.stylistIds.length} selected)
                   </span>
                 )}
               </Label>
@@ -196,7 +203,7 @@ export function ListFiltersSheet({
                   <div key={stylist.id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`stylist-${stylist.id}`}
-                      checked={filters.stylistIds.includes(stylist.id)}
+                      checked={localFilters.stylistIds.includes(stylist.id)}
                       onCheckedChange={() => toggleStylist(stylist.id)}
                     />
                     <Label htmlFor={`stylist-${stylist.id}`} className="cursor-pointer">
@@ -212,9 +219,9 @@ export function ListFiltersSheet({
           <div>
             <Label className="text-sm font-medium mb-3 block">
               Status
-              {filters.statuses.length > 0 && (
+              {localFilters.statuses.length > 0 && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  ({filters.statuses.length} selected)
+                  ({localFilters.statuses.length} selected)
                 </span>
               )}
             </Label>
@@ -223,7 +230,7 @@ export function ListFiltersSheet({
                 <div key={status.value} className="flex items-center space-x-2">
                   <Checkbox
                     id={`status-${status.value}`}
-                    checked={filters.statuses.includes(status.value)}
+                    checked={localFilters.statuses.includes(status.value)}
                     onCheckedChange={() => toggleStatus(status.value)}
                   />
                   <Label
@@ -242,9 +249,9 @@ export function ListFiltersSheet({
           <div>
             <Label className="text-sm font-medium mb-3 block">
               Booking Type
-              {filters.bookingTypes.length > 0 && (
+              {localFilters.bookingTypes.length > 0 && (
                 <span className="ml-2 text-xs text-muted-foreground">
-                  ({filters.bookingTypes.length} selected)
+                  ({localFilters.bookingTypes.length} selected)
                 </span>
               )}
             </Label>
@@ -253,7 +260,7 @@ export function ListFiltersSheet({
                 <div key={type.value} className="flex items-center space-x-2">
                   <Checkbox
                     id={`type-${type.value}`}
-                    checked={filters.bookingTypes.includes(type.value)}
+                    checked={localFilters.bookingTypes.includes(type.value)}
                     onCheckedChange={() => toggleBookingType(type.value)}
                   />
                   <Label htmlFor={`type-${type.value}`} className="cursor-pointer">
@@ -263,15 +270,18 @@ export function ListFiltersSheet({
               ))}
             </div>
           </div>
-
-          {/* Clear Filters */}
-          {hasActiveFilters && (
-            <Button variant="outline" className="w-full" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-2" />
-              Clear Filters
-            </Button>
-          )}
         </div>
+
+        {/* Footer with Apply/Reset buttons */}
+        <SheetFooter className="px-4 py-4 border-t gap-2">
+          <Button variant="outline" onClick={handleReset} className="flex-1">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset
+          </Button>
+          <Button onClick={handleApply} className="flex-1">
+            Apply Filters
+          </Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   );

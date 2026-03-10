@@ -23,9 +23,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileNav />
 
           {/* Main Content */}
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col min-w-0">
             <Header />
-            <main className="flex-1 overflow-auto p-4 lg:p-6 pb-20 md:pb-6">
+            <main className="flex-1 overflow-auto p-4 lg:p-6 pb-20 md:pb-6 min-h-0">
               <ResponsiveLayout>{children}</ResponsiveLayout>
             </main>
           </div>

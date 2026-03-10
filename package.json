@@ -5,8 +5,7 @@
   "packageManager": "pnpm@9.0.0",
   "pnpm": {
     "overrides": {
-      "@swc/helpers": "^0.5.17",
-      "ioredis": "^5.10.0"
+      "@swc/helpers": "^0.5.17"
     }
   },
   "scripts": {
@@ -24,8 +23,7 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "db:seed": "turbo run db:seed",
-    "db:studio": "turbo run db:studio",
-    "postinstall": "pnpm db:generate"
+    "db:studio": "turbo run db:studio"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

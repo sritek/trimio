@@ -10,6 +10,7 @@
  */
 
 import { Worker, Job } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import Redis from 'ioredis';
 import { parseISO, getDay } from 'date-fns';
 
@@ -444,7 +445,7 @@ if (isRedisEnabled && env.REDIS_URL) {
       }
     },
     {
-      connection,
+      connection: connection as unknown as ConnectionOptions,
       concurrency: 5,
     }
   );

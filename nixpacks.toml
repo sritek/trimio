@@ -8,6 +8,7 @@ cmds = ["pnpm install --frozen-lockfile --prod=false"]
 cmds = [
   "pnpm install --frozen-lockfile",
   "pnpm turbo run build --filter=@salon-ops/shared",
+  "cd apps/api && pnpm prisma generate && cd ../..",
   "pnpm turbo run build --filter=@salon-ops/api"
 ]
 

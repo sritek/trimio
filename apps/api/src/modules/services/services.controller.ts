@@ -12,7 +12,6 @@ import {
   successResponse,
   paginatedResponse,
   deleteResponse,
-  errorResponse,
   buildPaginationMeta,
 } from '../../lib/response';
 import { servicesService } from './services.service';
@@ -57,25 +56,11 @@ export class ServicesController {
    * Create a new service
    */
   async createService(request: FastifyRequest<{ Body: CreateServiceBody }>, reply: FastifyReply) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const service = await servicesService.createService(tenantId, request.body, sub);
+    const service = await servicesService.createService(tenantId, request.body, sub);
 
-      return reply.code(201).send(successResponse(service));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create service';
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      if (message.includes('not found')) {
-        return reply.code(400).send(errorResponse('INVALID_REFERENCE', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(service));
   }
 
   /**
@@ -85,72 +70,38 @@ export class ServicesController {
     request: FastifyRequest<{ Params: { id: string }; Body: UpdateServiceBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const service = await servicesService.updateService(
-        tenantId,
-        request.params.id,
-        request.body,
-        sub
-      );
+    const service = await servicesService.updateService(
+      tenantId,
+      request.params.id,
+      request.body,
+      sub
+    );
 
-      return reply.send(successResponse(service));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update service';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(service));
   }
 
   /**
    * Delete a service
    */
   async deleteService(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await servicesService.deleteService(tenantId, request.params.id);
+    await servicesService.deleteService(tenantId, request.params.id);
 
-      return reply.send(deleteResponse('Service deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete service';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Service deleted successfully'));
   }
 
   /**
    * Duplicate a service
    */
   async duplicateService(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const service = await servicesService.duplicateService(tenantId, request.params.id, sub);
+    const service = await servicesService.duplicateService(tenantId, request.params.id, sub);
 
-      return reply.code(201).send(successResponse(service));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to duplicate service';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DUPLICATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(service));
   }
 
   /**

@@ -1,13 +1,17 @@
 /**
  * Custom Error Classes
  * HTTP errors for consistent API responses
+ *
+ * All error classes follow the pattern: (code, message)
+ * - code: Error code for programmatic handling (e.g., 'NOT_FOUND', 'DUPLICATE_ENTRY')
+ * - message: Human-readable error message
  */
 
 export class HttpError extends Error {
   constructor(
     public statusCode: number,
-    message: string,
-    public code?: string
+    public code: string,
+    message: string
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -16,32 +20,32 @@ export class HttpError extends Error {
 }
 
 export class BadRequestError extends HttpError {
-  constructor(message = 'Bad Request', code = 'BAD_REQUEST') {
-    super(400, message, code);
+  constructor(code = 'BAD_REQUEST', message = 'Bad Request') {
+    super(400, code, message);
   }
 }
 
 export class UnauthorizedError extends HttpError {
-  constructor(message = 'Unauthorized', code = 'UNAUTHORIZED') {
-    super(401, message, code);
+  constructor(code = 'UNAUTHORIZED', message = 'Unauthorized') {
+    super(401, code, message);
   }
 }
 
 export class ForbiddenError extends HttpError {
-  constructor(message = 'Forbidden', code = 'FORBIDDEN') {
-    super(403, message, code);
+  constructor(code = 'FORBIDDEN', message = 'Forbidden') {
+    super(403, code, message);
   }
 }
 
 export class NotFoundError extends HttpError {
-  constructor(message = 'Not Found', code = 'NOT_FOUND') {
-    super(404, message, code);
+  constructor(code = 'NOT_FOUND', message = 'Not Found') {
+    super(404, code, message);
   }
 }
 
 export class ConflictError extends HttpError {
-  constructor(message = 'Conflict', code = 'CONFLICT') {
-    super(409, message, code);
+  constructor(code = 'CONFLICT', message = 'Conflict') {
+    super(409, code, message);
   }
 }
 
@@ -50,13 +54,13 @@ export class ValidationError extends HttpError {
     message = 'Validation Error',
     public details?: Array<{ field: string; message: string }>
   ) {
-    super(422, message, 'VALIDATION_ERROR');
+    super(422, 'VALIDATION_ERROR', message);
   }
 }
 
 export class InternalServerError extends HttpError {
-  constructor(message = 'Internal Server Error', code = 'INTERNAL_ERROR') {
-    super(500, message, code);
+  constructor(code = 'INTERNAL_ERROR', message = 'Internal Server Error') {
+    super(500, code, message);
   }
 }
 
@@ -67,12 +71,12 @@ export class AppError extends HttpError {
   public details?: unknown;
 
   constructor(
+    code: string = 'APP_ERROR',
     message: string,
     statusCode: number = 400,
-    code: string = 'APP_ERROR',
     details?: unknown
   ) {
-    super(statusCode, message, code);
+    super(statusCode, code, message);
     this.details = details;
   }
 }

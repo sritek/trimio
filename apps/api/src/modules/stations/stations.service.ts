@@ -57,7 +57,7 @@ export class StationsService {
     });
 
     if (!station) {
-      throw new NotFoundError('Station not found', 'STATION_NOT_FOUND');
+      throw new NotFoundError('STATION_NOT_FOUND', 'Station not found');
     }
 
     return station;
@@ -77,7 +77,7 @@ export class StationsService {
     });
 
     if (!stationType) {
-      throw new BadRequestError('Station type not found', 'STATION_TYPE_NOT_FOUND');
+      throw new BadRequestError('STATION_TYPE_NOT_FOUND', 'Station type not found');
     }
 
     // Check for duplicate name in branch
@@ -91,8 +91,8 @@ export class StationsService {
 
     if (existing) {
       throw new ConflictError(
-        'Station with this name already exists in this branch',
-        'DUPLICATE_NAME'
+        'DUPLICATE_NAME',
+        'Station with this name already exists in this branch'
       );
     }
 
@@ -147,8 +147,8 @@ export class StationsService {
 
       if (!stationType) {
         throw new BadRequestError(
-          `Station type ${item.stationTypeId} not found`,
-          'STATION_TYPE_NOT_FOUND'
+          'STATION_TYPE_NOT_FOUND',
+          `Station type ${item.stationTypeId} not found`
         );
       }
 
@@ -203,7 +203,7 @@ export class StationsService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Station not found', 'STATION_NOT_FOUND');
+      throw new NotFoundError('STATION_NOT_FOUND', 'Station not found');
     }
 
     // Check name uniqueness if changed
@@ -219,8 +219,8 @@ export class StationsService {
 
       if (duplicate) {
         throw new ConflictError(
-          'Station with this name already exists in this branch',
-          'DUPLICATE_NAME'
+          'DUPLICATE_NAME',
+          'Station with this name already exists in this branch'
         );
       }
     }
@@ -232,7 +232,7 @@ export class StationsService {
       });
 
       if (!stationType) {
-        throw new BadRequestError('Station type not found', 'STATION_TYPE_NOT_FOUND');
+        throw new BadRequestError('STATION_TYPE_NOT_FOUND', 'Station type not found');
       }
     }
 
@@ -268,14 +268,14 @@ export class StationsService {
     });
 
     if (!station) {
-      throw new NotFoundError('Station not found', 'STATION_NOT_FOUND');
+      throw new NotFoundError('STATION_NOT_FOUND', 'Station not found');
     }
 
     // Prevent deletion if station has active appointments
     if (station.appointments.length > 0) {
       throw new ConflictError(
-        'Cannot delete station with active appointments',
-        'STATION_HAS_APPOINTMENT'
+        'STATION_HAS_APPOINTMENT',
+        'Cannot delete station with active appointments'
       );
     }
 

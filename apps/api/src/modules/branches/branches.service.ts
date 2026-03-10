@@ -95,7 +95,7 @@ export class BranchesService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Branch not found', 'BRANCH_NOT_FOUND');
+      throw new NotFoundError('BRANCH_NOT_FOUND', 'Branch not found');
     }
 
     // Prepare update data - handle workingHours separately for Prisma JSON type

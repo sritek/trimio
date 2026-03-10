@@ -9,7 +9,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { variantsService } from './variants.service';
-import { successResponse, deleteResponse, errorResponse } from '@/lib/response';
+import { successResponse, deleteResponse } from '@/lib/response';
 
 import type { CreateVariantBody, UpdateVariantBody } from './services.schema';
 
@@ -18,21 +18,11 @@ export class VariantsController {
    * Get all variants for a service
    */
   async getVariants(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const variants = await variantsService.getVariants(tenantId, request.params.id);
+    const variants = await variantsService.getVariants(tenantId, request.params.id);
 
-      return reply.send(successResponse(variants));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to get variants';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('FETCH_FAILED', message));
-    }
+    return reply.send(successResponse(variants));
   }
 
   /**
@@ -45,25 +35,11 @@ export class VariantsController {
     }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const variant = await variantsService.createVariant(
-        tenantId,
-        request.params.id,
-        request.body
-      );
+    const variant = await variantsService.createVariant(tenantId, request.params.id, request.body);
 
-      return reply.code(201).send(successResponse(variant));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create variant';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(variant));
   }
 
   /**
@@ -76,26 +52,16 @@ export class VariantsController {
     }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const variant = await variantsService.updateVariant(
-        tenantId,
-        request.params.id,
-        request.params.vid,
-        request.body
-      );
+    const variant = await variantsService.updateVariant(
+      tenantId,
+      request.params.id,
+      request.params.vid,
+      request.body
+    );
 
-      return reply.send(successResponse(variant));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update variant';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(variant));
   }
 
   /**
@@ -105,21 +71,11 @@ export class VariantsController {
     request: FastifyRequest<{ Params: { id: string; vid: string } }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await variantsService.deleteVariant(tenantId, request.params.id, request.params.vid);
+    await variantsService.deleteVariant(tenantId, request.params.id, request.params.vid);
 
-      return reply.send(deleteResponse('Variant deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete variant';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Variant deleted successfully'));
   }
 }
 

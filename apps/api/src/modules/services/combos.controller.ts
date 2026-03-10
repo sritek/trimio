@@ -47,25 +47,11 @@ export class CombosController {
    * Create a new combo
    */
   async createCombo(request: FastifyRequest<{ Body: CreateComboBody }>, reply: FastifyReply) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const combo = await combosService.createCombo(tenantId, request.body, sub);
+    const combo = await combosService.createCombo(tenantId, request.body, sub);
 
-      return reply.code(201).send(successResponse(combo));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create combo';
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      if (message.includes('not found')) {
-        return reply.code(400).send(errorResponse('INVALID_REFERENCE', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(combo));
   }
 
   /**
@@ -78,46 +64,22 @@ export class CombosController {
     }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const combo = await combosService.updateCombo(tenantId, request.params.id, request.body);
+    const combo = await combosService.updateCombo(tenantId, request.params.id, request.body);
 
-      return reply.send(successResponse(combo));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update combo';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(combo));
   }
 
   /**
    * Delete a combo
    */
   async deleteCombo(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await combosService.deleteCombo(tenantId, request.params.id);
+    await combosService.deleteCombo(tenantId, request.params.id);
 
-      return reply.send(deleteResponse('Combo deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete combo';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Combo deleted successfully'));
   }
 }
 

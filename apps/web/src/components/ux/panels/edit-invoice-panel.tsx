@@ -46,6 +46,7 @@ import {
   useDeleteInvoice,
 } from '@/hooks/queries/use-invoices';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useErrorHandler } from '@/hooks/use-error-handler';
 import { formatCurrency } from '@/lib/format';
 import type { PaymentInput } from '@/types/billing';
 
@@ -66,6 +67,7 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
   const closePanel = useClosePanel();
   const { openNewAppointment } = useOpenPanel();
   const { branchId } = useBranchContext();
+  const { handleError } = useErrorHandler();
 
   // Fetch invoice data
   const { data: invoice, isLoading: invoiceLoading, refetch } = useInvoice(invoiceId);
@@ -141,15 +143,15 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
             item: { itemType: 'service', referenceId: serviceId, quantity: 1 },
           });
         } catch (error) {
-          toast.error(
-            `Failed to add service: ${error instanceof Error ? error.message : 'Unknown error'}`
-          );
+          handleError(error, {
+            customMessage: 'Failed to add service. Please try again.',
+          });
         }
       }
       refetch();
       setShowAddService(false);
     },
-    [invoice, invoiceId, addItem, refetch]
+    [invoice, invoiceId, addItem, refetch, handleError]
   );
 
   const handleAddProduct = useCallback(
@@ -163,13 +165,13 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
         });
         refetch();
       } catch (error) {
-        toast.error(
-          `Failed to add product: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
+        handleError(error, {
+          customMessage: 'Failed to add product. Please try again.',
+        });
       }
       setShowAddProduct(false);
     },
-    [invoice, invoiceId, addItem, refetch]
+    [invoice, invoiceId, addItem, refetch, handleError]
   );
 
   const handleRemoveItem = useCallback(
@@ -179,12 +181,12 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
         refetch();
         toast.success('Item removed');
       } catch (error) {
-        toast.error(
-          `Failed to remove item: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
+        handleError(error, {
+          customMessage: 'Failed to remove item. Please try again.',
+        });
       }
     },
-    [invoiceId, removeItem, refetch]
+    [invoiceId, removeItem, refetch, handleError]
   );
 
   const handleFinalize = useCallback(async () => {
@@ -201,11 +203,11 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
       onSuccess?.();
       closePanel();
     } catch (error) {
-      toast.error(
-        `Failed to finalize: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      handleError(error, {
+        customMessage: 'Failed to finalize invoice. Please try again.',
+      });
     }
-  }, [invoice, invoiceId, payments, finalizeInvoice, onSuccess, closePanel]);
+  }, [invoice, invoiceId, payments, finalizeInvoice, onSuccess, closePanel, handleError]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -215,9 +217,11 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
       onSuccess?.();
       closePanel();
     } catch (error) {
-      toast.error(`Failed to delete: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      handleError(error, {
+        customMessage: 'Failed to delete invoice. Please try again.',
+      });
     }
-  }, [invoiceId, deleteInvoice, onSuccess, closePanel]);
+  }, [invoiceId, deleteInvoice, onSuccess, closePanel, handleError]);
 
   const handleCreateAppointmentInstead = useCallback(() => {
     closePanel();

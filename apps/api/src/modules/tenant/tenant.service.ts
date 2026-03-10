@@ -40,7 +40,7 @@ export class TenantService {
     });
 
     if (!tenant) {
-      throw new NotFoundError('Tenant not found', 'TENANT_NOT_FOUND');
+      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
     }
 
     // Get usage statistics
@@ -90,7 +90,7 @@ export class TenantService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Tenant not found', 'TENANT_NOT_FOUND');
+      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
     }
 
     // Update tenant

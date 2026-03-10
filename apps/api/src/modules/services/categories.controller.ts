@@ -52,21 +52,11 @@ export class CategoriesController {
    * Create a new category
    */
   async createCategory(request: FastifyRequest<{ Body: CreateCategoryBody }>, reply: FastifyReply) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const category = await categoriesService.createCategory(tenantId, request.body, sub);
+    const category = await categoriesService.createCategory(tenantId, request.body, sub);
 
-      return reply.code(201).send(successResponse(category));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create category';
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(category));
   }
 
   /**
@@ -76,50 +66,26 @@ export class CategoriesController {
     request: FastifyRequest<{ Params: { id: string }; Body: UpdateCategoryBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const category = await categoriesService.updateCategory(
-        tenantId,
-        request.params.id,
-        request.body
-      );
+    const category = await categoriesService.updateCategory(
+      tenantId,
+      request.params.id,
+      request.body
+    );
 
-      return reply.send(successResponse(category));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update category';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      if (message.includes('already exists')) {
-        return reply.code(409).send(errorResponse('DUPLICATE', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(category));
   }
 
   /**
    * Delete a category
    */
   async deleteCategory(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await categoriesService.deleteCategory(tenantId, request.params.id);
+    await categoriesService.deleteCategory(tenantId, request.params.id);
 
-      return reply.send(deleteResponse('Category deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete category';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Category deleted successfully'));
   }
 
   /**
@@ -129,17 +95,11 @@ export class CategoriesController {
     request: FastifyRequest<{ Body: ReorderCategoriesBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await categoriesService.reorderCategories(tenantId, request.body);
+    await categoriesService.reorderCategories(tenantId, request.body);
 
-      return reply.send(deleteResponse('Categories reordered successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to reorder categories';
-
-      return reply.code(400).send(errorResponse('REORDER_FAILED', message));
-    }
+    return reply.send(deleteResponse('Categories reordered successfully'));
   }
 }
 

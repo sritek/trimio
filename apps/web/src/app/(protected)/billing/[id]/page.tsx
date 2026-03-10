@@ -11,7 +11,6 @@ import {
   XCircle,
   CheckCircle,
   Banknote,
-  Plus,
   Mail,
   Smartphone,
   Calendar,
@@ -22,12 +21,7 @@ import { toast } from 'sonner';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 
-import {
-  useInvoice,
-  useFinalizeInvoice,
-  useCancelInvoice,
-  useAddPayment,
-} from '@/hooks/queries/use-invoices';
+import { useInvoice, useFinalizeInvoice, useCancelInvoice } from '@/hooks/queries/use-invoices';
 import { usePermissions } from '@/hooks/use-permissions';
 import { formatCurrency } from '@/lib/format';
 
@@ -39,6 +33,7 @@ import {
   PermissionGuard,
   LoadingSpinner,
   StatusBadge,
+  SplitPaymentInput,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -62,7 +57,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-import { AddPaymentDialog } from './components/add-payment-dialog';
 import type { PaymentMethod, PaymentInput } from '@/types/billing';
 
 export default function InvoiceDetailPage() {
@@ -72,16 +66,16 @@ export default function InvoiceDetailPage() {
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.BILLS_WRITE);
 
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [payments, setPayments] = useState<PaymentInput[]>([{ paymentMethod: 'cash', amount: 0 }]);
 
   const id = params.id as string;
   const { data: invoice, isLoading, refetch } = useInvoice(id);
 
   const finalizeInvoice = useFinalizeInvoice();
   const cancelInvoice = useCancelInvoice();
-  const addPayment = useAddPayment();
 
   if (isLoading) {
     return (
@@ -110,14 +104,28 @@ export default function InvoiceDetailPage() {
   }
 
   const isDraft = invoice.status === 'draft';
-  const canFinalize = isDraft && invoice.amountDue <= 0.01;
-  const canAddPayment = isDraft && invoice.amountDue > 0;
+  const canFinalize = isDraft;
   const canCancel = isDraft;
 
+  // Reset payments when dialog opens
+  const handleOpenFinalizeDialog = () => {
+    setPayments([{ paymentMethod: 'cash', amount: invoice.amountDue }]);
+    setShowFinalizeDialog(true);
+  };
+
   const handleFinalize = async () => {
+    const validPayments = payments.filter((p) => p.amount > 0);
+    const totalPaid = validPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    if (Math.abs(totalPaid - invoice.amountDue) > 0.01) {
+      toast.error('Payment amount must match the amount due');
+      return;
+    }
+
     try {
-      await finalizeInvoice.mutateAsync({ invoiceId: id });
+      await finalizeInvoice.mutateAsync({ invoiceId: id, payments: validPayments });
       toast.success('Invoice finalized successfully');
+      setShowFinalizeDialog(false);
       refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to finalize invoice');
@@ -137,17 +145,6 @@ export default function InvoiceDetailPage() {
       refetch();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to cancel invoice');
-    }
-  };
-
-  const handleAddPayment = async (payments: PaymentInput[]) => {
-    try {
-      await addPayment.mutateAsync({ invoiceId: id, payments });
-      toast.success('Payment added successfully');
-      setShowPaymentDialog(false);
-      refetch();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to add payment');
     }
   };
 
@@ -178,16 +175,10 @@ export default function InvoiceDetailPage() {
               </Button>
               {canWrite && isDraft && (
                 <>
-                  {canAddPayment && (
-                    <Button size="sm" onClick={() => setShowPaymentDialog(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Payment
-                    </Button>
-                  )}
                   {canFinalize && (
-                    <Button size="sm" onClick={handleFinalize} disabled={finalizeInvoice.isPending}>
+                    <Button size="sm" onClick={handleOpenFinalizeDialog}>
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Finalize
+                      Finalize & Pay
                     </Button>
                   )}
                   {canCancel && (
@@ -443,14 +434,85 @@ export default function InvoiceDetailPage() {
         </PageContent>
       </PageContainer>
 
-      {/* Add Payment Dialog */}
-      <AddPaymentDialog
-        open={showPaymentDialog}
-        onOpenChange={setShowPaymentDialog}
-        amountDue={invoice.amountDue}
-        onSubmit={handleAddPayment}
-        isLoading={addPayment.isPending}
-      />
+      {/* Finalize & Pay Dialog */}
+      <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-primary" />
+              Finalize & Record Payment
+            </DialogTitle>
+            <DialogDescription>
+              Record payment and finalize the invoice. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {/* Amount Summary */}
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Grand Total</span>
+                <span>{formatCurrency(invoice.grandTotal)}</span>
+              </div>
+              {invoice.amountPaid > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Already Paid</span>
+                  <span>{formatCurrency(invoice.amountPaid)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between font-semibold">
+                <span>Amount Due</span>
+                <span>{formatCurrency(invoice.amountDue)}</span>
+              </div>
+            </div>
+
+            {/* Payment Input */}
+            <div>
+              <Label className="text-xs text-muted-foreground mb-2 block">Payment Method</Label>
+              <SplitPaymentInput
+                payments={payments}
+                onChange={setPayments}
+                totalAmount={invoice.amountDue}
+                mode="full"
+                showAdditionalFields
+              />
+            </div>
+
+            {/* Validation Message */}
+            {(() => {
+              const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+              const isFullyPaid = Math.abs(totalPaid - invoice.amountDue) < 0.01;
+              if (!isFullyPaid && totalPaid > 0) {
+                return (
+                  <p className="text-sm text-destructive">
+                    Payment amount ({formatCurrency(totalPaid)}) doesn't match amount due (
+                    {formatCurrency(invoice.amountDue)})
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFinalizeDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFinalize}
+              disabled={
+                finalizeInvoice.isPending ||
+                Math.abs(
+                  payments.reduce((sum, p) => sum + (p.amount || 0), 0) - invoice.amountDue
+                ) > 0.01
+              }
+            >
+              {finalizeInvoice.isPending ? 'Processing...' : 'Confirm & Finalize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel Invoice Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>

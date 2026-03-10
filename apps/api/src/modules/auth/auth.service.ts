@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import { ROLE_PERMISSIONS, type UserRole } from '@salon-ops/shared';
 
 import { prisma } from '../../lib/prisma';
+import { BadRequestError } from '../../lib/errors';
 
 import type { LoginBody, RegisterBody } from './auth.schema';
 
@@ -21,10 +22,10 @@ export class AuthService {
     // Find user by email or phone
     const user = await prisma.user.findFirst({
       where: {
-        OR: [
-          email ? { email } : undefined,
-          phone ? { phone } : undefined,
-        ].filter(Boolean) as { email?: string; phone?: string }[],
+        OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean) as {
+          email?: string;
+          phone?: string;
+        }[],
         isActive: true,
         deletedAt: null,
       },
@@ -39,13 +40,13 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new BadRequestError('INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
-      throw new Error('Invalid credentials');
+      throw new BadRequestError('INVALID_CREDENTIALS', 'Invalid email or password.');
     }
 
     // Update last login
@@ -93,7 +94,10 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new Error('Email or phone already registered');
+      throw new BadRequestError(
+        'DUPLICATE_ENTRY',
+        'This email or phone number is already registered.'
+      );
     }
 
     // Create tenant and owner in a transaction

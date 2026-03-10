@@ -27,6 +27,7 @@ import { SplitPaymentInput } from '@/components/common';
 import { useAppointment } from '@/hooks/queries/use-appointments';
 import { useQuickBill } from '@/hooks/queries/use-invoices';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useErrorHandler } from '@/hooks/use-error-handler';
 import { toast } from 'sonner';
 import {
   User,
@@ -337,6 +338,7 @@ function PaymentConfirmDialog({
 export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps) {
   const closePanel = useClosePanel();
   const { branchId } = useBranchContext();
+  const { handleError } = useErrorHandler();
 
   // State
   const [payments, setPayments] = useState<PaymentInput[]>([{ paymentMethod: 'cash', amount: 0 }]);
@@ -409,17 +411,8 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
           closePanel();
         },
         onError: (error) => {
-          console.error('Checkout error:', error);
-          // Show user-friendly message for server errors
-          const isServerError =
-            error.message?.includes('500') ||
-            error.message?.includes('Internal') ||
-            error.message?.includes('constraint') ||
-            error.message?.includes('database');
-          toast.error('Failed to complete checkout', {
-            description: isServerError
-              ? 'Something went wrong. Please try again or contact support if the issue persists.'
-              : error.message,
+          handleError(error, {
+            customMessage: 'Failed to complete checkout. Please try again.',
           });
         },
       }

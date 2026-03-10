@@ -29,7 +29,7 @@ export class StationTypesService {
     });
 
     if (!stationType) {
-      throw new NotFoundError('Station type not found', 'STATION_TYPE_NOT_FOUND');
+      throw new NotFoundError('STATION_TYPE_NOT_FOUND', 'Station type not found');
     }
 
     return stationType;
@@ -45,7 +45,7 @@ export class StationTypesService {
     });
 
     if (existing) {
-      throw new ConflictError('Station type with this name already exists', 'DUPLICATE_NAME');
+      throw new ConflictError('DUPLICATE_NAME', 'Station type with this name already exists');
     }
 
     // Get next display order if not provided
@@ -83,7 +83,7 @@ export class StationTypesService {
     });
 
     if (!existing) {
-      throw new NotFoundError('Station type not found', 'STATION_TYPE_NOT_FOUND');
+      throw new NotFoundError('STATION_TYPE_NOT_FOUND', 'Station type not found');
     }
 
     // Check name uniqueness if changed
@@ -97,7 +97,7 @@ export class StationTypesService {
       });
 
       if (duplicate) {
-        throw new ConflictError('Station type with this name already exists', 'DUPLICATE_NAME');
+        throw new ConflictError('DUPLICATE_NAME', 'Station type with this name already exists');
       }
     }
 
@@ -127,14 +127,14 @@ export class StationTypesService {
     });
 
     if (!stationType) {
-      throw new NotFoundError('Station type not found', 'STATION_TYPE_NOT_FOUND');
+      throw new NotFoundError('STATION_TYPE_NOT_FOUND', 'Station type not found');
     }
 
     // Prevent deletion if stations exist
     if (stationType.stations.length > 0) {
       throw new ConflictError(
-        'Cannot delete station type with existing stations',
-        'STATION_TYPE_IN_USE'
+        'STATION_TYPE_IN_USE',
+        'Cannot delete station type with existing stations'
       );
     }
 

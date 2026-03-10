@@ -130,7 +130,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('USER_NOT_FOUND', 'User not found');
     }
 
     return user;
@@ -147,7 +147,7 @@ export class UsersService {
     });
 
     if (!tenant) {
-      throw new NotFoundError('Tenant not found', 'TENANT_NOT_FOUND');
+      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
     }
 
     const limits = tenantService.getPlanLimits(tenant.subscriptionPlan);
@@ -172,7 +172,7 @@ export class UsersService {
     });
 
     if (existingPhone) {
-      throw new ConflictError('Phone number already registered', 'DUPLICATE_PHONE');
+      throw new ConflictError('DUPLICATE_PHONE', 'Phone number already registered');
     }
 
     // Check for duplicate email if provided
@@ -186,7 +186,7 @@ export class UsersService {
       });
 
       if (existingEmail) {
-        throw new ConflictError('Email already registered', 'DUPLICATE_EMAIL');
+        throw new ConflictError('DUPLICATE_EMAIL', 'Email already registered');
       }
     }
 
@@ -201,7 +201,7 @@ export class UsersService {
     });
 
     if (validBranches !== branchIds.length) {
-      throw new BadRequestError('One or more branch IDs are invalid', 'INVALID_BRANCH');
+      throw new BadRequestError('INVALID_BRANCH', 'One or more branch IDs are invalid');
     }
 
     // Ensure exactly one primary branch
@@ -211,8 +211,8 @@ export class UsersService {
       data.branchAssignments[0].isPrimary = true;
     } else if (primaryCount > 1) {
       throw new BadRequestError(
-        'Only one branch can be marked as primary',
-        'MULTIPLE_PRIMARY_BRANCHES'
+        'MULTIPLE_PRIMARY_BRANCHES',
+        'Only one branch can be marked as primary'
       );
     }
 
@@ -278,7 +278,7 @@ export class UsersService {
     });
 
     if (!existing) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('USER_NOT_FOUND', 'User not found');
     }
 
     // Check if trying to change role of last super_owner
@@ -295,8 +295,8 @@ export class UsersService {
 
       if (superOwnerCount <= 1) {
         throw new BadRequestError(
-          'Cannot change role of the last super owner',
-          'CANNOT_CHANGE_LAST_SUPER_OWNER'
+          'CANNOT_CHANGE_LAST_SUPER_OWNER',
+          'Cannot change role of the last super owner'
         );
       }
     }
@@ -313,7 +313,7 @@ export class UsersService {
       });
 
       if (existingEmail) {
-        throw new ConflictError('Email already registered', 'DUPLICATE_EMAIL');
+        throw new ConflictError('DUPLICATE_EMAIL', 'Email already registered');
       }
     }
 
@@ -330,7 +330,7 @@ export class UsersService {
       });
 
       if (validBranches !== branchIds.length) {
-        throw new BadRequestError('One or more branch IDs are invalid', 'INVALID_BRANCH');
+        throw new BadRequestError('INVALID_BRANCH', 'One or more branch IDs are invalid');
       }
 
       // Ensure exactly one primary branch
@@ -339,8 +339,8 @@ export class UsersService {
         data.branchAssignments[0].isPrimary = true;
       } else if (primaryCount > 1) {
         throw new BadRequestError(
-          'Only one branch can be marked as primary',
-          'MULTIPLE_PRIMARY_BRANCHES'
+          'MULTIPLE_PRIMARY_BRANCHES',
+          'Only one branch can be marked as primary'
         );
       }
 
@@ -400,7 +400,7 @@ export class UsersService {
   async deleteUser(tenantId: string, userId: string, deletedBy: string) {
     // Prevent self-delete
     if (userId === deletedBy) {
-      throw new BadRequestError('Cannot delete your own account', 'CANNOT_DELETE_SELF');
+      throw new BadRequestError('CANNOT_DELETE_SELF', 'Cannot delete your own account');
     }
 
     // Verify user exists
@@ -413,7 +413,7 @@ export class UsersService {
     });
 
     if (!existing) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('USER_NOT_FOUND', 'User not found');
     }
 
     // Check if trying to delete last super_owner
@@ -428,8 +428,8 @@ export class UsersService {
 
       if (superOwnerCount <= 1) {
         throw new BadRequestError(
-          'Cannot delete the last super owner',
-          'CANNOT_DELETE_LAST_SUPER_OWNER'
+          'CANNOT_DELETE_LAST_SUPER_OWNER',
+          'Cannot delete the last super owner'
         );
       }
     }
@@ -462,13 +462,13 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundError('User not found', 'USER_NOT_FOUND');
+      throw new NotFoundError('USER_NOT_FOUND', 'User not found');
     }
 
     // Verify current password
     const isValidPassword = await bcrypt.compare(data.currentPassword, user.passwordHash);
     if (!isValidPassword) {
-      throw new BadRequestError('Current password is incorrect', 'INVALID_PASSWORD');
+      throw new BadRequestError('INVALID_PASSWORD', 'Current password is incorrect');
     }
 
     // Hash new password

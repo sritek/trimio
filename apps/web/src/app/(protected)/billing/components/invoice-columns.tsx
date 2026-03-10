@@ -1,17 +1,11 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { Eye, MoreHorizontal } from 'lucide-react';
+import { Eye } from 'lucide-react';
 
 import { formatCurrency } from '@/lib/format';
 
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 import { StatusBadge } from '@/components/common';
 import type { ColumnDef } from '@/components/common';
@@ -88,18 +82,13 @@ interface InvoiceActionsProps {
 
 function InvoiceActions({ invoice, onView }: InvoiceActionsProps) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => onView(invoice.id)}>
-          <Eye className="mr-2 h-4 w-4" />
-          View Details
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="View Invoice"
+      onClick={() => onView(invoice.id)}
+    >
+      <Eye className="mr-2 h-4 w-4" />
+    </Button>
   );
 }

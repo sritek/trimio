@@ -124,7 +124,7 @@ export class WaitlistService {
     });
 
     if (!entry) {
-      throw new NotFoundError('Waitlist entry not found', 'WAITLIST_NOT_FOUND');
+      throw new NotFoundError('WAITLIST_NOT_FOUND', 'Waitlist entry not found');
     }
 
     return serializeDecimals(entry);
@@ -139,13 +139,13 @@ export class WaitlistService {
     });
 
     if (!entry) {
-      throw new NotFoundError('Waitlist entry not found', 'WAITLIST_NOT_FOUND');
+      throw new NotFoundError('WAITLIST_NOT_FOUND', 'Waitlist entry not found');
     }
 
     if (entry.status !== 'active') {
       throw new ConflictError(
-        'Cannot update waitlist entry that is not active',
-        'WAITLIST_NOT_ACTIVE'
+        'WAITLIST_NOT_ACTIVE',
+        'Cannot update waitlist entry that is not active'
       );
     }
 
@@ -188,13 +188,13 @@ export class WaitlistService {
     });
 
     if (!entry) {
-      throw new NotFoundError('Waitlist entry not found', 'WAITLIST_NOT_FOUND');
+      throw new NotFoundError('WAITLIST_NOT_FOUND', 'Waitlist entry not found');
     }
 
     if (entry.status === 'converted') {
       throw new ConflictError(
-        'Cannot remove waitlist entry that has been converted',
-        'WAITLIST_ALREADY_CONVERTED'
+        'WAITLIST_ALREADY_CONVERTED',
+        'Cannot remove waitlist entry that has been converted'
       );
     }
 
@@ -219,22 +219,22 @@ export class WaitlistService {
     });
 
     if (!entry) {
-      throw new NotFoundError('Waitlist entry not found', 'WAITLIST_NOT_FOUND');
+      throw new NotFoundError('WAITLIST_NOT_FOUND', 'Waitlist entry not found');
     }
 
     if (entry.status === 'converted') {
       throw new ConflictError(
-        'Waitlist entry has already been converted',
-        'WAITLIST_ALREADY_CONVERTED'
+        'WAITLIST_ALREADY_CONVERTED',
+        'Waitlist entry has already been converted'
       );
     }
 
     if (entry.status === 'expired') {
-      throw new ConflictError('Waitlist entry has expired', 'WAITLIST_EXPIRED');
+      throw new ConflictError('WAITLIST_EXPIRED', 'Waitlist entry has expired');
     }
 
     if (entry.status === 'removed') {
-      throw new ConflictError('Waitlist entry has been removed', 'WAITLIST_REMOVED');
+      throw new ConflictError('WAITLIST_REMOVED', 'Waitlist entry has been removed');
     }
 
     // Return the data needed to create an appointment

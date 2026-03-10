@@ -13,7 +13,6 @@ import {
   successResponse,
   paginatedResponse,
   deleteResponse,
-  errorResponse,
   buildPaginationMeta,
 } from '../../lib/response';
 import { vendorService } from './vendor.service';
@@ -53,7 +52,9 @@ export class VendorController {
     const vendor = await vendorService.getVendor(tenantId, request.params.id);
 
     if (!vendor) {
-      return reply.code(404).send(errorResponse('VENDOR_NOT_FOUND', 'Vendor not found'));
+      return reply
+        .code(404)
+        .send({ success: false, error: { code: 'VENDOR_NOT_FOUND', message: 'Vendor not found' } });
     }
 
     return reply.send(successResponse(vendor));
@@ -63,21 +64,11 @@ export class VendorController {
    * Create a new vendor
    */
   async createVendor(request: FastifyRequest<{ Body: CreateVendorBody }>, reply: FastifyReply) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const vendor = await vendorService.createVendor(tenantId, request.body, sub);
+    const vendor = await vendorService.createVendor(tenantId, request.body, sub);
 
-      return reply.code(201).send(successResponse(vendor));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create vendor';
-
-      if (message.includes('required')) {
-        return reply.code(400).send(errorResponse('VALIDATION_ERROR', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(vendor));
   }
 
   /**
@@ -87,51 +78,22 @@ export class VendorController {
     request: FastifyRequest<{ Params: { id: string }; Body: UpdateVendorBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId, sub } = request.user;
+    const { tenantId, sub } = request.user;
 
-      const vendor = await vendorService.updateVendor(
-        tenantId,
-        request.params.id,
-        request.body,
-        sub
-      );
+    const vendor = await vendorService.updateVendor(tenantId, request.params.id, request.body, sub);
 
-      return reply.send(successResponse(vendor));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update vendor';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('VENDOR_NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(vendor));
   }
 
   /**
    * Delete a vendor
    */
   async deleteVendor(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await vendorService.deleteVendor(tenantId, request.params.id);
+    await vendorService.deleteVendor(tenantId, request.params.id);
 
-      return reply.send(deleteResponse('Vendor deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete vendor';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('VENDOR_NOT_FOUND', message));
-      }
-
-      if (message.includes('active purchase orders')) {
-        return reply.code(400).send(errorResponse('VENDOR_HAS_ACTIVE_POS', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Vendor deleted successfully'));
   }
 
   // ============================================
@@ -150,7 +112,9 @@ export class VendorController {
     // Verify vendor exists
     const vendor = await vendorService.getVendor(tenantId, request.params.vendorId);
     if (!vendor) {
-      return reply.code(404).send(errorResponse('VENDOR_NOT_FOUND', 'Vendor not found'));
+      return reply
+        .code(404)
+        .send({ success: false, error: { code: 'VENDOR_NOT_FOUND', message: 'Vendor not found' } });
     }
 
     const products = await vendorService.getProductsForVendor(tenantId, request.params.vendorId);
@@ -179,29 +143,11 @@ export class VendorController {
     request: FastifyRequest<{ Body: CreateVendorProductBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const mapping = await vendorService.mapProductToVendor(tenantId, request.body);
+    const mapping = await vendorService.mapProductToVendor(tenantId, request.body);
 
-      return reply.code(201).send(successResponse(mapping));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create mapping';
-
-      if (message.includes('Vendor not found')) {
-        return reply.code(404).send(errorResponse('VENDOR_NOT_FOUND', message));
-      }
-
-      if (message.includes('Product not found')) {
-        return reply.code(404).send(errorResponse('PRODUCT_NOT_FOUND', message));
-      }
-
-      if (message.includes('already mapped')) {
-        return reply.code(409).send(errorResponse('DUPLICATE_MAPPING', message));
-      }
-
-      return reply.code(400).send(errorResponse('CREATE_FAILED', message));
-    }
+    return reply.code(201).send(successResponse(mapping));
   }
 
   /**
@@ -211,25 +157,15 @@ export class VendorController {
     request: FastifyRequest<{ Params: { mappingId: string }; Body: UpdateVendorProductBody }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      const mapping = await vendorService.updateVendorProduct(
-        tenantId,
-        request.params.mappingId,
-        request.body
-      );
+    const mapping = await vendorService.updateVendorProduct(
+      tenantId,
+      request.params.mappingId,
+      request.body
+    );
 
-      return reply.send(successResponse(mapping));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update mapping';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('MAPPING_NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('UPDATE_FAILED', message));
-    }
+    return reply.send(successResponse(mapping));
   }
 
   /**
@@ -239,21 +175,11 @@ export class VendorController {
     request: FastifyRequest<{ Params: { mappingId: string } }>,
     reply: FastifyReply
   ) {
-    try {
-      const { tenantId } = request.user;
+    const { tenantId } = request.user;
 
-      await vendorService.deleteVendorProduct(tenantId, request.params.mappingId);
+    await vendorService.deleteVendorProduct(tenantId, request.params.mappingId);
 
-      return reply.send(deleteResponse('Vendor-product mapping deleted successfully'));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete mapping';
-
-      if (message.includes('not found')) {
-        return reply.code(404).send(errorResponse('MAPPING_NOT_FOUND', message));
-      }
-
-      return reply.code(400).send(errorResponse('DELETE_FAILED', message));
-    }
+    return reply.send(deleteResponse('Vendor-product mapping deleted successfully'));
   }
 }
 

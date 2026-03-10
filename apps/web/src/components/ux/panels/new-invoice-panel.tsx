@@ -63,6 +63,7 @@ import { useStaffList } from '@/hooks/queries/use-staff';
 import { useProductsForBilling } from '@/hooks/queries/use-inventory';
 import { useCreateInvoice, useQuickBill, useCalculateTotals } from '@/hooks/queries/use-invoices';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useErrorHandler } from '@/hooks/use-error-handler';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { PaymentInput, InvoiceItemInput } from '@/types/billing';
@@ -166,14 +167,13 @@ function LineItemRow({
   );
 }
 
-interface ConfirmDialogProps {
+interface FinalizePaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: (payments: PaymentInput[]) => void;
   isLoading: boolean;
   customerName?: string;
   items: InvoiceLineItem[];
-  payments: PaymentInput[];
   totals: {
     subtotal: number;
     taxAmount: number;
@@ -181,28 +181,45 @@ interface ConfirmDialogProps {
   };
 }
 
-function ConfirmDialog({
+function FinalizePaymentDialog({
   open,
   onOpenChange,
   onConfirm,
   isLoading,
   customerName,
   items,
-  payments,
   totals,
-}: ConfirmDialogProps) {
+}: FinalizePaymentDialogProps) {
+  const [payments, setPayments] = useState<PaymentInput[]>([
+    { paymentMethod: 'cash', amount: Math.round(totals.grandTotal) },
+  ]);
+
+  // Reset payments when dialog opens with new total
+  useEffect(() => {
+    if (open) {
+      setPayments([{ paymentMethod: 'cash', amount: Math.round(totals.grandTotal) }]);
+    }
+  }, [open, totals.grandTotal]);
+
   const totalPayment = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const isFullyPaid = Math.abs(totalPayment - totals.grandTotal) < 0.01;
+  const isFullyPaid = Math.abs(totalPayment - Math.round(totals.grandTotal)) < 0.01;
+
+  const handleConfirm = () => {
+    const validPayments = payments.filter((p) => p.amount > 0);
+    onConfirm(validPayments);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-primary" />
-            Confirm Invoice
+            Finalize & Record Payment
           </DialogTitle>
-          <DialogDescription>Review the details before creating the invoice.</DialogDescription>
+          <DialogDescription>
+            Record payment and finalize the invoice. This action cannot be undone.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
@@ -212,10 +229,10 @@ function ConfirmDialog({
             <span className="font-medium">{customerName || 'Guest'}</span>
           </div>
 
-          {/* Items */}
+          {/* Items Summary */}
           <div>
             <Label className="text-xs text-muted-foreground">Items ({items.length})</Label>
-            <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
+            <div className="mt-1 space-y-1 max-h-24 overflow-y-auto">
               {items.map((item) => (
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <span className="truncate flex-1">
@@ -240,36 +257,32 @@ function ConfirmDialog({
             {totals.taxAmount > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax (GST)</span>
-                <span>₹{totals.taxAmount.toLocaleString('en-IN')}</span>
+                <span>₹{Math.round(totals.taxAmount).toLocaleString('en-IN')}</span>
               </div>
             )}
             <div className="flex justify-between font-semibold text-base pt-1">
-              <span>Grand Total</span>
-              <span>₹{totals.grandTotal.toLocaleString('en-IN')}</span>
+              <span>Amount to Pay</span>
+              <span>₹{Math.round(totals.grandTotal).toLocaleString('en-IN')}</span>
             </div>
           </div>
 
           <Separator />
 
-          {/* Payment Breakdown */}
+          {/* Payment Input */}
           <div>
-            <Label className="text-xs text-muted-foreground">Payment</Label>
-            <div className="mt-1 space-y-1">
-              {payments
-                .filter((p) => p.amount > 0)
-                .map((p, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span className="capitalize">{p.paymentMethod}</span>
-                    <span>₹{p.amount.toLocaleString('en-IN')}</span>
-                  </div>
-                ))}
-            </div>
+            <Label className="text-xs text-muted-foreground mb-2 block">Payment Method</Label>
+            <SplitPaymentInput
+              payments={payments}
+              onChange={setPayments}
+              totalAmount={Math.round(totals.grandTotal)}
+              mode="compact"
+            />
           </div>
 
-          {!isFullyPaid && (
+          {!isFullyPaid && totalPayment > 0 && (
             <p className="text-sm text-destructive">
               Payment amount (₹{totalPayment.toLocaleString('en-IN')}) doesn't match total (₹
-              {totals.grandTotal.toLocaleString('en-IN')})
+              {Math.round(totals.grandTotal).toLocaleString('en-IN')})
             </p>
           )}
         </div>
@@ -278,8 +291,8 @@ function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={!isFullyPaid || isLoading}>
-            {isLoading ? 'Creating...' : 'Confirm & Create'}
+          <Button onClick={handleConfirm} disabled={!isFullyPaid || isLoading}>
+            {isLoading ? 'Processing...' : 'Confirm & Finalize'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -299,6 +312,7 @@ export function NewInvoicePanel({
   const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { openNewAppointment } = useOpenPanel();
   const { branchId } = useBranchContext();
+  const { handleError } = useErrorHandler();
 
   // State
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
@@ -306,8 +320,7 @@ export function NewInvoicePanel({
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
-  const [payments, setPayments] = useState<PaymentInput[]>([{ paymentMethod: 'cash', amount: 0 }]);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [_productSearchQuery, _setProductSearchQuery] = useState('');
 
@@ -449,12 +462,7 @@ export function NewInvoicePanel({
     });
   }, [closePanel, openNewAppointment, selectedCustomer?.id]);
 
-  // Auto-fill payment amount when totals change
-  useEffect(() => {
-    if (totals.grandTotal > 0 && payments.length === 1 && payments[0].amount === 0) {
-      setPayments([{ ...payments[0], amount: Math.round(totals.grandTotal) }]);
-    }
-  }, [totals.grandTotal]);
+  // Auto-fill payment amount when totals change - removed, payment is now in dialog
 
   // Track unsaved changes
   const hasChanges = lineItems.length > 0 || !!selectedCustomer || isNewCustomer;
@@ -587,52 +595,38 @@ export function NewInvoicePanel({
       onSuccess?.(result.id);
       closePanel();
     } catch (error) {
-      const isServerError =
-        error instanceof Error &&
-        (error.message?.includes('500') || error.message?.includes('Internal'));
-      toast.error('Failed to save invoice', {
-        description: isServerError
-          ? 'Something went wrong. Please try again.'
-          : error instanceof Error
-            ? error.message
-            : 'Unknown error',
+      handleError(error, {
+        customMessage: 'Failed to save invoice. Please try again.',
       });
     }
-  }, [branchId, lineItems, buildInvoiceInput, createInvoice, onSuccess, closePanel]);
+  }, [branchId, lineItems, buildInvoiceInput, createInvoice, onSuccess, closePanel, handleError]);
 
   // Create & Finalize
-  const handleCreateInvoice = useCallback(async () => {
-    if (!branchId || lineItems.length === 0) return;
+  const handleFinalizeInvoice = useCallback(
+    async (payments: PaymentInput[]) => {
+      if (!branchId || lineItems.length === 0) return;
 
-    try {
-      const input = buildInvoiceInput();
-      const validPayments = payments.filter((p) => p.amount > 0);
-      const result = await quickBill.mutateAsync({ ...input, payments: validPayments });
-      toast.success('Invoice created successfully', {
-        description: `Invoice #${result.invoiceNumber}`,
-      });
-      setShowConfirmDialog(false);
-      onSuccess?.(result.id);
-      closePanel();
-    } catch (error) {
-      const isServerError =
-        error instanceof Error &&
-        (error.message?.includes('500') || error.message?.includes('Internal'));
-      toast.error('Failed to create invoice', {
-        description: isServerError
-          ? 'Something went wrong. Please try again.'
-          : error instanceof Error
-            ? error.message
-            : 'Unknown error',
-      });
-    }
-  }, [branchId, lineItems, buildInvoiceInput, payments, quickBill, onSuccess, closePanel]);
+      try {
+        const input = buildInvoiceInput();
+        const result = await quickBill.mutateAsync({ ...input, payments });
+        toast.success('Invoice finalized successfully', {
+          description: `Invoice #${result.invoiceNumber}`,
+        });
+        setShowFinalizeDialog(false);
+        onSuccess?.(result.id);
+        closePanel();
+      } catch (error) {
+        handleError(error, {
+          customMessage: 'Failed to finalize invoice. Please try again.',
+        });
+      }
+    },
+    [branchId, lineItems, buildInvoiceInput, quickBill, onSuccess, closePanel, handleError]
+  );
 
   // Validation
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const isFullyPaid = Math.abs(totalPaid - Math.round(totals.grandTotal)) < 0.01;
-  const canCreate = lineItems.length > 0 && isFullyPaid;
   const canSaveDraft = lineItems.length > 0;
+  const canFinalize = lineItems.length > 0;
 
   // No branch selected
   if (!branchId) {
@@ -824,16 +818,6 @@ export function NewInvoicePanel({
               </div>
             </div>
           )}
-
-          {/* Payment Section */}
-          {lineItems.length > 0 && (
-            <SplitPaymentInput
-              payments={payments}
-              onChange={setPayments}
-              totalAmount={Math.round(totals.grandTotal)}
-              mode="compact"
-            />
-          )}
         </div>
       </ScrollArea>
 
@@ -854,23 +838,22 @@ export function NewInvoicePanel({
         <Button
           type="button"
           className="flex-1"
-          onClick={() => setShowConfirmDialog(true)}
-          disabled={!canCreate}
+          onClick={() => setShowFinalizeDialog(true)}
+          disabled={!canFinalize}
         >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Invoice
+          <CheckCircle className="mr-2 h-4 w-4" />
+          Finalize & Pay
         </Button>
       </div>
 
-      {/* Confirmation Dialog */}
-      <ConfirmDialog
-        open={showConfirmDialog}
-        onOpenChange={setShowConfirmDialog}
-        onConfirm={handleCreateInvoice}
+      {/* Finalize & Payment Dialog */}
+      <FinalizePaymentDialog
+        open={showFinalizeDialog}
+        onOpenChange={setShowFinalizeDialog}
+        onConfirm={handleFinalizeInvoice}
         isLoading={quickBill.isPending}
         customerName={selectedCustomer?.name || newCustomerName || undefined}
         items={lineItems}
-        payments={payments}
         totals={totals}
       />
     </div>

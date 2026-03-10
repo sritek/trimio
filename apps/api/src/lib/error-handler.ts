@@ -92,6 +92,46 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError, reply: F
 }
 
 /**
+ * Handle Prisma runtime errors (connection issues, etc.)
+ */
+function handlePrismaRuntimeError(error: Error, reply: FastifyReply) {
+  const message = error.message || '';
+
+  // Database connection errors
+  if (
+    message.includes("Can't reach database server") ||
+    message.includes('connect ECONNREFUSED') ||
+    message.includes('ENOTFOUND') ||
+    message.includes('connection refused')
+  ) {
+    return reply
+      .status(503)
+      .send(
+        buildErrorResponse(
+          'DATABASE_UNAVAILABLE',
+          'Database is temporarily unavailable. Please try again in a moment.'
+        )
+      );
+  }
+
+  // Network timeout
+  if (message.includes('timeout') || message.includes('ETIMEDOUT')) {
+    return reply
+      .status(503)
+      .send(
+        buildErrorResponse('DATABASE_TIMEOUT', 'Database operation timed out. Please try again.')
+      );
+  }
+
+  // Default database error
+  return reply
+    .status(503)
+    .send(
+      buildErrorResponse('DATABASE_ERROR', 'A database error occurred. Please try again later.')
+    );
+}
+
+/**
  * Handle Zod validation errors from fastify-type-provider-zod
  */
 function handleZodValidationError(error: FastifyError, reply: FastifyReply) {
@@ -145,12 +185,22 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
     return reply.status(400).send(buildErrorResponse('INVALID_INPUT', 'Invalid data format'));
   }
 
-  // Handle Prisma initialization errors
+  // Handle Prisma initialization errors (connection issues)
   if (error instanceof Prisma.PrismaClientInitializationError) {
     request.log.error(error, 'Database connection error');
-    return reply
-      .status(503)
-      .send(buildErrorResponse('DATABASE_UNAVAILABLE', 'Database is temporarily unavailable'));
+    return handlePrismaRuntimeError(error, reply);
+  }
+
+  // Handle Prisma runtime errors (connection issues, timeouts, etc.)
+  if (error instanceof Prisma.PrismaClientRustPanicError) {
+    request.log.error(error, 'Prisma runtime error');
+    return handlePrismaRuntimeError(error, reply);
+  }
+
+  // Handle generic Prisma errors (catch-all for other Prisma errors)
+  if (error.name === 'PrismaClientError' || error.message?.includes('Prisma')) {
+    request.log.error(error, 'Prisma error');
+    return handlePrismaRuntimeError(error, reply);
   }
 
   // Handle Zod validation errors from fastify-type-provider-zod

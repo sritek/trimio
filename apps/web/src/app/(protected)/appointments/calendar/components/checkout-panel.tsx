@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -24,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SplitPaymentInput } from '@/components/common';
 import { useAppointment } from '@/hooks/queries/use-appointments';
 import { useQuickBill } from '@/hooks/queries/use-invoices';
 import { useBranchContext } from '@/hooks/use-branch-context';
@@ -33,19 +33,14 @@ import {
   Phone,
   Mail,
   Banknote,
-  CreditCard,
-  Smartphone,
   Scissors,
-  Plus,
-  X,
   CheckCircle,
   Calendar,
   Clock,
   Star,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import type { PaymentMethod, PaymentInput } from '@/types/billing';
+import type { PaymentInput } from '@/types/billing';
 
 // ============================================
 // Props
@@ -55,16 +50,6 @@ interface CheckoutPanelProps {
   appointmentId: string;
   onComplete?: (invoiceId: string) => void;
 }
-
-// ============================================
-// Payment Method Config
-// ============================================
-
-const PAYMENT_METHODS: { method: PaymentMethod; icon: React.ElementType; label: string }[] = [
-  { method: 'cash', icon: Banknote, label: 'Cash' },
-  { method: 'card', icon: CreditCard, label: 'Card' },
-  { method: 'upi', icon: Smartphone, label: 'UPI' },
-];
 
 // ============================================
 // Sub-Components
@@ -217,75 +202,6 @@ function TotalsSection({
         <span>Total</span>
         <span>₹{grandTotal.toFixed(2)}</span>
       </div>
-    </div>
-  );
-}
-
-interface SplitPaymentRowProps {
-  payment: PaymentInput;
-  index: number;
-  onUpdate: (index: number, payment: PaymentInput) => void;
-  onRemove: (index: number) => void;
-  canRemove: boolean;
-  maxAmount: number;
-}
-
-function SplitPaymentRow({
-  payment,
-  index,
-  onUpdate,
-  onRemove,
-  canRemove,
-  maxAmount,
-}: SplitPaymentRowProps) {
-  return (
-    <div className="flex items-center gap-2 p-3 rounded-lg border bg-card">
-      <div className="flex-1 grid grid-cols-2 gap-2">
-        <div className="flex flex-wrap gap-1">
-          {PAYMENT_METHODS.map(({ method, icon: Icon, label }) => (
-            <Button
-              key={method}
-              type="button"
-              variant={payment.paymentMethod === method ? 'default' : 'outline'}
-              size="sm"
-              className="h-8 px-2"
-              onClick={() => onUpdate(index, { ...payment, paymentMethod: method })}
-            >
-              <Icon className="h-3.5 w-3.5 mr-1" />
-              <span className="text-xs">{label}</span>
-            </Button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">₹</span>
-          <Input
-            type="number"
-            value={payment.amount || ''}
-            onChange={(e) =>
-              onUpdate(index, {
-                ...payment,
-                amount: Math.min(parseFloat(e.target.value) || 0, maxAmount),
-              })
-            }
-            className="h-8"
-            placeholder="Amount"
-            min={0}
-            max={maxAmount}
-            step={0.01}
-          />
-        </div>
-      </div>
-      {canRemove && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(index)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
     </div>
   );
 }
@@ -453,21 +369,6 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
     }
   }, [totals.grandTotal]);
 
-  // Payment handlers
-  const handleUpdatePayment = useCallback((index: number, payment: PaymentInput) => {
-    setPayments((prev) => prev.map((p, i) => (i === index ? payment : p)));
-  }, []);
-
-  const handleRemovePayment = useCallback((index: number) => {
-    setPayments((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleAddPayment = useCallback(() => {
-    const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const remaining = Math.max(0, totals.grandTotal - totalPaid);
-    setPayments((prev) => [...prev, { paymentMethod: 'cash', amount: remaining }]);
-  }, [payments, totals.grandTotal]);
-
   // Calculate remaining amount
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const remainingAmount = totals.grandTotal - totalPaid;
@@ -628,48 +529,12 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
         />
 
         {/* Split Payments */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Payment</h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddPayment}
-              disabled={isFullyPaid}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Split Payment
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            {payments.map((payment, index) => (
-              <SplitPaymentRow
-                key={index}
-                payment={payment}
-                index={index}
-                onUpdate={handleUpdatePayment}
-                onRemove={handleRemovePayment}
-                canRemove={payments.length > 1}
-                maxAmount={totals.grandTotal}
-              />
-            ))}
-          </div>
-
-          {/* Payment Summary */}
-          <div className="flex items-center justify-between text-sm pt-2 border-t">
-            <span className="text-muted-foreground">Total Paid</span>
-            <span className={cn('font-medium', !isFullyPaid && 'text-destructive')}>
-              ₹{totalPaid.toFixed(2)}
-              {!isFullyPaid && (
-                <span className="text-xs ml-1">
-                  ({remainingAmount > 0 ? `₹${remainingAmount.toFixed(2)} remaining` : 'overpaid'})
-                </span>
-              )}
-            </span>
-          </div>
-        </div>
+        <SplitPaymentInput
+          payments={payments}
+          onChange={setPayments}
+          totalAmount={totals.grandTotal}
+          mode="compact"
+        />
       </SlideOverContent>
 
       <SlideOverFooter>

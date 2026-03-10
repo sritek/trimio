@@ -6,7 +6,7 @@
  * Shows summary info and quick actions.
  */
 
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import {
@@ -31,6 +31,16 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/common';
 import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
 import { useInvoice, useFinalizeInvoice, useCancelInvoice } from '@/hooks/queries/use-invoices';
@@ -46,6 +56,10 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
   const closePanel = useClosePanel();
   const { openEditInvoice } = useOpenPanel();
   const { data: invoice, isLoading, refetch } = useInvoice(invoiceId);
+
+  // Cancel dialog state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const finalizeInvoice = useFinalizeInvoice();
   const cancelInvoice = useCancelInvoice();
@@ -70,20 +84,21 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
     }
   }, [finalizeInvoice, invoiceId, refetch]);
 
-  const handleCancel = useCallback(async () => {
-    const reason = prompt('Please enter a reason for cancellation (min 10 characters):');
-    if (reason && reason.length >= 10) {
-      try {
-        await cancelInvoice.mutateAsync({ invoiceId, reason });
-        toast.success('Invoice cancelled');
-        refetch();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to cancel');
-      }
-    } else if (reason) {
+  const handleCancelConfirm = useCallback(async () => {
+    if (cancelReason.length < 10) {
       toast.error('Reason must be at least 10 characters');
+      return;
     }
-  }, [cancelInvoice, invoiceId, refetch]);
+    try {
+      await cancelInvoice.mutateAsync({ invoiceId, reason: cancelReason });
+      toast.success('Invoice cancelled');
+      setShowCancelDialog(false);
+      setCancelReason('');
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel');
+    }
+  }, [cancelInvoice, invoiceId, cancelReason, refetch]);
 
   const getPaymentMethodIcon = (method: PaymentMethod) => {
     switch (method) {
@@ -286,7 +301,7 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
               variant="outline"
               size="icon"
               className="text-destructive hover:text-destructive"
-              onClick={handleCancel}
+              onClick={() => setShowCancelDialog(true)}
               disabled={cancelInvoice.isPending}
             >
               <XCircle className="h-4 w-4" />
@@ -294,6 +309,51 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Cancel Invoice Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Invoice</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this invoice? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="cancel-reason">Reason for cancellation</Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Please provide a reason (minimum 10 characters)..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+            />
+            {cancelReason.length > 0 && cancelReason.length < 10 && (
+              <p className="text-sm text-destructive">
+                {10 - cancelReason.length} more characters required
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCancelDialog(false);
+                setCancelReason('');
+              }}
+            >
+              Keep Invoice
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelConfirm}
+              disabled={cancelReason.length < 10 || cancelInvoice.isPending}
+            >
+              {cancelInvoice.isPending ? 'Cancelling...' : 'Cancel Invoice'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

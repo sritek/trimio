@@ -11,11 +11,7 @@ import {
   User,
   Package,
   Scissors,
-  Plus,
   X,
-  Banknote,
-  CreditCard,
-  Smartphone,
   CheckCircle,
   AlertTriangle,
   Calendar,
@@ -24,7 +20,6 @@ import {
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ServiceCombobox, ConfirmDialog } from '@/components/common';
+import { ServiceCombobox, ConfirmDialog, SplitPaymentInput } from '@/components/common';
 import type { ServiceOption } from '@/components/common';
 import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
 import { useServices } from '@/hooks/queries/use-services';
@@ -51,9 +46,8 @@ import {
   useDeleteInvoice,
 } from '@/hooks/queries/use-invoices';
 import { useBranchContext } from '@/hooks/use-branch-context';
-import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
-import type { PaymentMethod, PaymentInput } from '@/types/billing';
+import type { PaymentInput } from '@/types/billing';
 
 // ============================================
 // Types
@@ -63,16 +57,6 @@ interface EditInvoicePanelProps {
   invoiceId: string;
   onSuccess?: () => void;
 }
-
-// ============================================
-// Constants
-// ============================================
-
-const PAYMENT_METHODS: { method: PaymentMethod; icon: React.ElementType; label: string }[] = [
-  { method: 'cash', icon: Banknote, label: 'Cash' },
-  { method: 'card', icon: CreditCard, label: 'Card' },
-  { method: 'upi', icon: Smartphone, label: 'UPI' },
-];
 
 // ============================================
 // Main Component
@@ -202,20 +186,6 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
     },
     [invoiceId, removeItem, refetch]
   );
-
-  const handleUpdatePayment = useCallback((index: number, payment: PaymentInput) => {
-    setPayments((prev) => prev.map((p, i) => (i === index ? payment : p)));
-  }, []);
-
-  const handleAddPayment = useCallback(() => {
-    const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const remaining = Math.max(0, Math.round(invoice?.amountDue || 0) - totalPaid);
-    setPayments((prev) => [...prev, { paymentMethod: 'cash', amount: remaining }]);
-  }, [payments, invoice?.amountDue]);
-
-  const handleRemovePayment = useCallback((index: number) => {
-    setPayments((prev) => prev.filter((_, i) => i !== index));
-  }, []);
 
   const handleFinalize = useCallback(async () => {
     if (!invoice) return;
@@ -437,92 +407,13 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
 
           {/* Payment Section (for finalization) */}
           {invoice.items && invoice.items.length > 0 && invoice.amountDue > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Payment (to finalize)</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddPayment}
-                  disabled={isFullyPaid}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Split
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {payments.map((payment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 p-3 rounded-lg border bg-card"
-                  >
-                    <div className="flex-1 grid grid-cols-2 gap-2">
-                      <div className="flex flex-wrap gap-1">
-                        {PAYMENT_METHODS.map(({ method, icon: Icon, label }) => (
-                          <Button
-                            key={method}
-                            type="button"
-                            variant={payment.paymentMethod === method ? 'default' : 'outline'}
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() =>
-                              handleUpdatePayment(index, { ...payment, paymentMethod: method })
-                            }
-                          >
-                            <Icon className="h-3.5 w-3.5 mr-1" />
-                            <span className="text-xs">{label}</span>
-                          </Button>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">₹</span>
-                        <Input
-                          type="number"
-                          value={payment.amount || ''}
-                          onChange={(e) =>
-                            handleUpdatePayment(index, {
-                              ...payment,
-                              amount: Math.min(parseFloat(e.target.value) || 0, invoice.amountDue),
-                            })
-                          }
-                          className="h-8"
-                          placeholder="Amount"
-                          min={0}
-                          max={invoice.amountDue}
-                        />
-                      </div>
-                    </div>
-                    {payments.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleRemovePayment(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Payment Summary */}
-              <div className="flex items-center justify-between text-sm pt-2 border-t">
-                <span className="text-muted-foreground">Total Payment</span>
-                <span className={cn('font-medium', !isFullyPaid && 'text-destructive')}>
-                  {formatCurrency(totalPaid)}
-                  {!isFullyPaid && (
-                    <span className="text-xs ml-1">
-                      ({formatCurrency(Math.abs(invoice.amountDue - totalPaid))}{' '}
-                      {totalPaid < invoice.amountDue ? 'remaining' : 'overpaid'})
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
+            <SplitPaymentInput
+              payments={payments}
+              onChange={setPayments}
+              totalAmount={invoice.grandTotal}
+              amountPaid={invoice.amountPaid}
+              mode="compact"
+            />
           )}
         </div>
       </ScrollArea>

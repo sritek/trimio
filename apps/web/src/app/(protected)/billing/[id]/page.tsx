@@ -43,6 +43,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -63,6 +73,8 @@ export default function InvoiceDetailPage() {
   const canWrite = hasPermission(PERMISSIONS.BILLS_WRITE);
 
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const id = params.id as string;
   const { data: invoice, isLoading, refetch } = useInvoice(id);
@@ -112,18 +124,19 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
-    const reason = prompt('Please enter a reason for cancellation:');
-    if (reason && reason.length >= 10) {
-      try {
-        await cancelInvoice.mutateAsync({ invoiceId: id, reason });
-        toast.success('Invoice cancelled');
-        refetch();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to cancel invoice');
-      }
-    } else if (reason) {
+  const handleCancelConfirm = async () => {
+    if (cancelReason.length < 10) {
       toast.error('Reason must be at least 10 characters');
+      return;
+    }
+    try {
+      await cancelInvoice.mutateAsync({ invoiceId: id, reason: cancelReason });
+      toast.success('Invoice cancelled');
+      setShowCancelDialog(false);
+      setCancelReason('');
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel invoice');
     }
   };
 
@@ -181,7 +194,7 @@ export default function InvoiceDetailPage() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={handleCancel}
+                      onClick={() => setShowCancelDialog(true)}
                       disabled={cancelInvoice.isPending}
                     >
                       <XCircle className="mr-2 h-4 w-4" />
@@ -438,6 +451,51 @@ export default function InvoiceDetailPage() {
         onSubmit={handleAddPayment}
         isLoading={addPayment.isPending}
       />
+
+      {/* Cancel Invoice Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Invoice</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this invoice? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Label htmlFor="cancel-reason">Reason for cancellation</Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Please provide a reason (minimum 10 characters)..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+            />
+            {cancelReason.length > 0 && cancelReason.length < 10 && (
+              <p className="text-sm text-destructive">
+                {10 - cancelReason.length} more characters required
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCancelDialog(false);
+                setCancelReason('');
+              }}
+            >
+              Keep Invoice
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelConfirm}
+              disabled={cancelReason.length < 10 || cancelInvoice.isPending}
+            >
+              {cancelInvoice.isPending ? 'Cancelling...' : 'Cancel Invoice'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PermissionGuard>
   );
 }

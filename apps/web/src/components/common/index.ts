@@ -40,6 +40,10 @@ export type { CustomerOption, CustomerComboboxProps } from './customer-combobox'
 export { ServiceCombobox } from './service-combobox';
 export type { ServiceOption, ServiceComboboxProps } from './service-combobox';
 
+// Payment components
+export { SplitPaymentInput, SplitPaymentRow } from './split-payment-input';
+export type { SplitPaymentInputProps, SplitPaymentRowProps } from './split-payment-input';
+
 // Feedback components
 export { LoadingSpinner } from './loading-spinner';
 export { LoadingOverlay } from './loading-overlay';

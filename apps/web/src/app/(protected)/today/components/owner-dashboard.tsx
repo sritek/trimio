@@ -75,8 +75,7 @@ export function OwnerDashboardViewToggle() {
 export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
   const { data, isLoading } = useOwnerDashboard({ branchId });
   const { ownerDashboardView } = useUIStore();
-  const { openStationAssignment, openAppointmentDetails, openAddService, openCheckout } =
-    useOpenPanel();
+  const { openStationAssignment, openAppointmentDetails, openCheckout } = useOpenPanel();
   const startMutation = useStartAppointment();
   const completeMutation = useCompleteAppointment();
 
@@ -93,13 +92,6 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
       openAppointmentDetails(appointmentId);
     },
     [openAppointmentDetails]
-  );
-
-  const handleAddService = useCallback(
-    (appointmentId: string) => {
-      openAddService(appointmentId);
-    },
-    [openAddService]
   );
 
   const handleComplete = useCallback(
@@ -137,7 +129,6 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
         branchId={branchId}
         onAssign={handleAssign}
         onViewDetails={handleViewDetails}
-        onAddService={handleAddService}
         onComplete={handleComplete}
         onStartNow={handleStartNow}
       />

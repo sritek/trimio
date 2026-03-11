@@ -5,12 +5,7 @@
 
 import { useCallback } from 'react';
 import { toast } from 'sonner';
-import {
-  formatErrorMessage,
-  parseApiError,
-  isDatabaseError,
-  isNetworkError,
-} from '@/lib/error-handler';
+import { formatErrorMessage, parseApiError } from '@/lib/error-handler';
 
 interface ErrorHandlerOptions {
   /**

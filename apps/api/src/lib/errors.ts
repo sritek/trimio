@@ -71,9 +71,9 @@ export class AppError extends HttpError {
   public details?: unknown;
 
   constructor(
-    code: string = 'APP_ERROR',
     message: string,
     statusCode: number = 400,
+    code: string = 'APP_ERROR',
     details?: unknown
   ) {
     super(statusCode, code, message);

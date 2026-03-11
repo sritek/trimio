@@ -486,7 +486,7 @@ export default function InvoiceDetailPage() {
               if (!isFullyPaid && totalPaid > 0) {
                 return (
                   <p className="text-sm text-destructive">
-                    Payment amount ({formatCurrency(totalPaid)}) doesn't match amount due (
+                    Payment amount ({formatCurrency(totalPaid)}) doesn&apos;t match amount due (
                     {formatCurrency(invoice.amountDue)})
                   </p>
                 );

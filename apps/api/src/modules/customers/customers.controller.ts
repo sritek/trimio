@@ -11,6 +11,7 @@ import {
   deleteResponse,
   buildPaginationMeta,
 } from '../../lib/response';
+import { NotFoundError } from '../../lib/errors';
 import { customersService, maskPhone } from './customers.service';
 
 import type {
@@ -76,7 +77,7 @@ export class CustomersController {
     });
 
     if (!customer) {
-      return reply.code(404).send(errorResponse('NOT_FOUND', 'Customer not found'));
+      throw new NotFoundError('NOT_FOUND', 'Customer not found');
     }
 
     // Mask phone for stylists

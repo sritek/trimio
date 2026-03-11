@@ -9,7 +9,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { addOnsService } from './addons.service';
-import { successResponse, deleteResponse, errorResponse } from '@/lib/response';
+import { successResponse, deleteResponse } from '@/lib/response';
 
 import type { CreateAddOnBody, MapAddOnsToServiceBody, UpdateAddOnBody } from './services.schema';
 

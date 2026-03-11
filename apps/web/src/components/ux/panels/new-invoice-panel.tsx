@@ -19,7 +19,6 @@ import {
   User,
   Package,
   Scissors,
-  Plus,
   X,
   UserPlus,
   CheckCircle,
@@ -281,7 +280,7 @@ function FinalizePaymentDialog({
 
           {!isFullyPaid && totalPayment > 0 && (
             <p className="text-sm text-destructive">
-              Payment amount (₹{totalPayment.toLocaleString('en-IN')}) doesn't match total (₹
+              Payment amount (₹{totalPayment.toLocaleString('en-IN')}) doesn&apos;t match total (₹
               {Math.round(totals.grandTotal).toLocaleString('en-IN')})
             </p>
           )}

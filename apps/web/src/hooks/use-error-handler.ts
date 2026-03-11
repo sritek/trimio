@@ -61,14 +61,6 @@ export function useErrorHandler() {
       const message = customMessage || formatErrorMessage(error);
       const parsed = parseApiError(error);
 
-      // Determine toast variant based on error type
-      let variant: 'default' | 'destructive' = 'destructive';
-      if (isDatabaseError(error)) {
-        variant = 'destructive';
-      } else if (isNetworkError(error)) {
-        variant = 'destructive';
-      }
-
       toast.error(message, {
         description:
           parsed.details && typeof parsed.details === 'object'

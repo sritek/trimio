@@ -282,7 +282,7 @@ export class WalkInQueueService {
     serviceIds: string[]
   ): Promise<number> {
     // Get waiting customers ahead
-    const today = startOfDay(new Date());
+    const today = getTodayUTC();
 
     const waitingAhead = await this.prisma.walkInQueue.count({
       where: {

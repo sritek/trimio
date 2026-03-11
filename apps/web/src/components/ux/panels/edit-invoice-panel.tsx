@@ -6,7 +6,7 @@
  * Allows modifying items, customer, and finalizing with payment.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   User,
   Package,
@@ -32,7 +32,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ServiceCombobox, ConfirmDialog, SplitPaymentInput } from '@/components/common';
 import type { ServiceOption } from '@/components/common';
 import { useClosePanel, useOpenPanel } from '@/components/ux/slide-over';
@@ -118,12 +125,13 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
     return invoice.items.some((item) => item.itemType === 'service') && !invoice.appointmentId;
   }, [invoice]);
 
-  // Auto-fill payment amount
-  useEffect(() => {
-    if (invoice && invoice.amountDue > 0 && payments.length === 1 && payments[0].amount === 0) {
-      setPayments([{ ...payments[0], amount: Math.round(invoice.amountDue) }]);
+  // Reset payments when finalize dialog opens
+  const handleOpenFinalizeDialog = useCallback(() => {
+    if (invoice) {
+      setPayments([{ paymentMethod: 'cash', amount: Math.round(invoice.amountDue) }]);
     }
-  }, [invoice?.amountDue]);
+    setShowFinalizeDialog(true);
+  }, [invoice]);
 
   // Handlers
   const handleAddService = useCallback(
@@ -193,6 +201,13 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
     if (!invoice) return;
 
     const validPayments = payments.filter((p) => p.amount > 0);
+    const totalPaid = validPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    if (Math.abs(totalPaid - invoice.amountDue) > 0.01) {
+      toast.error('Payment amount must match the amount due');
+      return;
+    }
+
     try {
       await finalizeInvoice.mutateAsync({
         invoiceId,
@@ -231,9 +246,7 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
   }, [closePanel, openNewAppointment, invoice?.customerId]);
 
   // Validation
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const isFullyPaid = invoice ? Math.abs(totalPaid - invoice.amountDue) < 0.01 : false;
-  const canFinalize = invoice && invoice.items && invoice.items.length > 0 && isFullyPaid;
+  const canFinalize = invoice && invoice.items && invoice.items.length > 0;
 
   // Loading state
   if (invoiceLoading) {
@@ -402,22 +415,13 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
                   <span>{formatCurrency(invoice.amountPaid)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm font-medium">
-                <span>Amount Due</span>
-                <span>{formatCurrency(invoice.amountDue)}</span>
-              </div>
+              {invoice.amountDue > 0 && (
+                <div className="flex justify-between text-sm font-medium text-red-600">
+                  <span>Amount Due</span>
+                  <span>{formatCurrency(invoice.amountDue)}</span>
+                </div>
+              )}
             </div>
-          )}
-
-          {/* Payment Section (for finalization) */}
-          {invoice.items && invoice.items.length > 0 && invoice.amountDue > 0 && (
-            <SplitPaymentInput
-              payments={payments}
-              onChange={setPayments}
-              totalAmount={invoice.grandTotal}
-              amountPaid={invoice.amountPaid}
-              mode="compact"
-            />
           )}
         </div>
       </ScrollArea>
@@ -431,11 +435,11 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
           <Button
             type="button"
             className="flex-1"
-            onClick={() => setShowFinalizeDialog(true)}
+            onClick={handleOpenFinalizeDialog}
             disabled={!canFinalize}
           >
             <CheckCircle className="mr-2 h-4 w-4" />
-            Finalize Invoice
+            Finalize & Pay
           </Button>
         </div>
         <Button
@@ -485,16 +489,114 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
         </DialogContent>
       </Dialog>
 
-      {/* Finalize Confirmation */}
-      <ConfirmDialog
-        open={showFinalizeDialog}
-        onOpenChange={setShowFinalizeDialog}
-        title="Finalize Invoice"
-        description={`This will finalize the invoice for ${formatCurrency(invoice.grandTotal)}. This action cannot be undone.`}
-        confirmText="Finalize"
-        onConfirm={handleFinalize}
-        isLoading={finalizeInvoice.isPending}
-      />
+      {/* Finalize & Pay Dialog */}
+      <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-primary" />
+              Finalize & Record Payment
+            </DialogTitle>
+            <DialogDescription>
+              Record payment and finalize the invoice. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Customer */}
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{invoice.customerName || 'Guest'}</span>
+            </div>
+
+            {/* Items Summary */}
+            <div>
+              <Label className="text-xs text-muted-foreground">
+                Items ({invoice.items?.length || 0})
+              </Label>
+              <div className="mt-1 space-y-1 max-h-24 overflow-y-auto">
+                {invoice.items?.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span className="truncate flex-1">
+                      {item.name} × {item.quantity}
+                    </span>
+                    <span className="ml-2">{formatCurrency(item.netAmount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Totals */}
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Grand Total</span>
+                <span>{formatCurrency(invoice.grandTotal)}</span>
+              </div>
+              {invoice.amountPaid > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Already Paid</span>
+                  <span>{formatCurrency(invoice.amountPaid)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold text-base pt-1">
+                <span>Amount to Pay</span>
+                <span>{formatCurrency(invoice.amountDue)}</span>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Payment Input */}
+            <div>
+              <Label className="text-xs text-muted-foreground mb-2 block">Payment Method</Label>
+              <SplitPaymentInput
+                payments={payments}
+                onChange={setPayments}
+                totalAmount={invoice.amountDue}
+                mode="compact"
+              />
+            </div>
+
+            {/* Validation Message */}
+            {(() => {
+              const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+              const isFullyPaid = Math.abs(totalPaid - invoice.amountDue) < 0.01;
+              if (!isFullyPaid && totalPaid > 0) {
+                return (
+                  <p className="text-sm text-destructive">
+                    Payment amount ({formatCurrency(totalPaid)}) doesn't match amount due (
+                    {formatCurrency(invoice.amountDue)})
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowFinalizeDialog(false)}
+              disabled={finalizeInvoice.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFinalize}
+              disabled={
+                finalizeInvoice.isPending ||
+                Math.abs(
+                  payments.reduce((sum, p) => sum + (p.amount || 0), 0) - invoice.amountDue
+                ) > 0.01
+              }
+            >
+              {finalizeInvoice.isPending ? 'Processing...' : 'Confirm & Finalize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <ConfirmDialog

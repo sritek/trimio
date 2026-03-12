@@ -161,7 +161,7 @@ export class CalendarService {
     });
 
     if (!branch) {
-      throw new AppError('Branch not found', 404, 'CAL_001');
+      throw new AppError('CAL_001', 'Branch not found', 404);
     }
 
     // Extract simple working hours for the requested date from day-specific config
@@ -334,16 +334,16 @@ export class CalendarService {
     });
 
     if (!appointment) {
-      throw new AppError('Appointment not found', 404, 'CAL_002');
+      throw new AppError('CAL_002', 'Appointment not found', 404);
     }
 
     // Check if appointment can be moved (only allow booked, confirmed, checked_in statuses)
     const movableStatuses = ['booked', 'confirmed', 'checked_in'];
     if (!movableStatuses.includes(appointment.status)) {
       throw new AppError(
+        'CAL_003',
         `Cannot move appointment with status "${appointment.status}". Only booked, confirmed, or checked-in appointments can be moved.`,
-        400,
-        'CAL_003'
+        400
       );
     }
 
@@ -380,7 +380,7 @@ export class CalendarService {
       );
 
       if (conflicts.length > 0) {
-        throw new AppError('Time slot conflicts with existing appointments', 409, 'CAL_CONFLICT', {
+        throw new AppError('CAL_CONFLICT', 'Time slot conflicts with existing appointments', 409, {
           conflicts,
         });
       }
@@ -395,7 +395,7 @@ export class CalendarService {
       );
 
       if (isBlocked) {
-        throw new AppError('Stylist is not available at this time', 400, 'CAL_004');
+        throw new AppError('CAL_004', 'Stylist is not available at this time', 400);
       }
     }
 

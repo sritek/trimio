@@ -38,7 +38,7 @@ export class StylistScheduleService {
     });
 
     if (!stylist) {
-      throw new AppError('Stylist not found', 404, 'STYLIST_NOT_FOUND');
+      throw new AppError('STYLIST_NOT_FOUND', 'Stylist not found', 404);
     }
 
     // Get breaks
@@ -127,9 +127,9 @@ export class StylistScheduleService {
 
     if (!stylist) {
       throw new AppError(
+        'STYLIST_NOT_FOUND',
         'Stylist not found or not assigned to this branch',
-        404,
-        'STYLIST_NOT_FOUND'
+        404
       );
     }
 
@@ -148,7 +148,7 @@ export class StylistScheduleService {
 
     for (const brk of existingBreaks) {
       if (this.timesOverlap(input.startTime, input.endTime, brk.startTime, brk.endTime)) {
-        throw new AppError('Break overlaps with existing break', 400, 'BREAK_OVERLAP');
+        throw new AppError('BREAK_OVERLAP', 'Break overlaps with existing break', 400);
       }
     }
 
@@ -176,7 +176,7 @@ export class StylistScheduleService {
     });
 
     if (!brk) {
-      throw new AppError('Break not found', 404, 'BREAK_NOT_FOUND');
+      throw new AppError('BREAK_NOT_FOUND', 'Break not found', 404);
     }
 
     return this.prisma.stylistBreak.delete({
@@ -208,9 +208,9 @@ export class StylistScheduleService {
 
     if (!stylist) {
       throw new AppError(
+        'STYLIST_NOT_FOUND',
         'Stylist not found or not assigned to this branch',
-        404,
-        'STYLIST_NOT_FOUND'
+        404
       );
     }
 
@@ -229,9 +229,9 @@ export class StylistScheduleService {
       for (const apt of conflictingAppointments) {
         if (this.timesOverlap(input.startTime, input.endTime, apt.scheduledTime, apt.endTime)) {
           throw new AppError(
+            'BLOCK_CONFLICT',
             'Cannot block slot - conflicts with existing appointment',
-            400,
-            'BLOCK_CONFLICT'
+            400
           );
         }
       }
@@ -249,9 +249,9 @@ export class StylistScheduleService {
 
       if (dayAppointments > 0) {
         throw new AppError(
+          'BLOCK_CONFLICT',
           'Cannot block full day - existing appointments found',
-          400,
-          'BLOCK_CONFLICT'
+          400
         );
       }
     }
@@ -280,7 +280,7 @@ export class StylistScheduleService {
     });
 
     if (!slot) {
-      throw new AppError('Blocked slot not found', 404, 'SLOT_NOT_FOUND');
+      throw new AppError('SLOT_NOT_FOUND', 'Blocked slot not found', 404);
     }
 
     return this.prisma.stylistBlockedSlot.delete({

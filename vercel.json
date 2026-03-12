@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "pnpm turbo run build --filter=@salon-ops/web",
+  "buildCommand": "pnpm install --frozen-lockfile && pnpm turbo run build --filter=@salon-ops/web",
   "outputDirectory": "apps/web/.next",
   "monorepoManager": "pnpm",
   "installCommand": "pnpm install --frozen-lockfile",
   "env": {
     "NEXT_PUBLIC_API_URL": "@api-url"
   },
-  "envPrefix": "NEXT_PUBLIC_"
+  "envPrefix": "NEXT_PUBLIC_",
+  "framework": "nextjs"
 }

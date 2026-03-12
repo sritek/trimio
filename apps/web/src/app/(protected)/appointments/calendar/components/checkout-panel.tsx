@@ -312,7 +312,7 @@ function PaymentConfirmDialog({
 
           {!isFullyPaid && (
             <p className="text-sm text-destructive">
-              Payment amount (₹{totalPayment.toFixed(2)}) doesn't match total (₹
+              Payment amount (₹{totalPayment.toFixed(2)}) doesn&apos;t match total (₹
               {grandTotal.toFixed(2)})
             </p>
           )}
@@ -419,6 +419,15 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
     );
   }, [branchId, appointment, appointmentId, payments, quickBill, onComplete, closePanel]);
 
+  // Get stylist names map (must be before early returns per rules-of-hooks)
+  const stylistMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (appointment?.stylist) {
+      map[appointment.stylistId || ''] = appointment.stylist.name;
+    }
+    return map;
+  }, [appointment]);
+
   // Loading state
   if (!branchId) {
     return (
@@ -468,15 +477,6 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
   }
 
   const canComplete = isFullyPaid && (appointment.services || []).length > 0;
-
-  // Get stylist names map
-  const stylistMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (appointment.stylist) {
-      map[appointment.stylistId || ''] = appointment.stylist.name;
-    }
-    return map;
-  }, [appointment]);
 
   return (
     <div className="flex flex-col h-full">

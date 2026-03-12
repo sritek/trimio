@@ -377,7 +377,7 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
               <AlertDescription className="text-amber-800 dark:text-amber-200">
                 <span className="font-medium">Services without appointment</span>
                 <p className="text-sm mt-1 text-amber-700 dark:text-amber-300">
-                  This invoice isn't linked to an appointment.
+                  This invoice isn&apos;t linked to an appointment.
                 </p>
                 <Button
                   type="button"
@@ -566,7 +566,7 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
               if (!isFullyPaid && totalPaid > 0) {
                 return (
                   <p className="text-sm text-destructive">
-                    Payment amount ({formatCurrency(totalPaid)}) doesn't match amount due (
+                    Payment amount ({formatCurrency(totalPaid)}) doesn&apos;t match amount due (
                     {formatCurrency(invoice.amountDue)})
                   </p>
                 );

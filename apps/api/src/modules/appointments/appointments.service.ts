@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma, AppointmentStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { AppError } from '../../lib/errors';
 import type {
   CreateAppointmentInput,
@@ -184,7 +185,7 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new AppError('Appointment not found', 404, 'APT_040');
+      throw new AppError('APT_040', 'Appointment not found', 404);
     }
 
     return appointment;
@@ -284,7 +285,7 @@ export class AppointmentsService {
     });
 
     if (services.length !== input.services.length) {
-      throw new AppError('One or more services are not available', 400, 'APT_010');
+      throw new AppError('APT_010', 'One or more services are not available', 400);
     }
 
     // 2. Calculate total duration
@@ -316,7 +317,7 @@ export class AppointmentsService {
       });
 
       if (customer?.bookingStatus === 'blocked') {
-        throw new AppError('Customer is blocked from online booking', 403, 'APT_011');
+        throw new AppError('APT_011', 'Customer is blocked from online booking', 403);
       }
     }
 
@@ -368,19 +369,19 @@ export class AppointmentsService {
         serviceId: service.id,
         serviceName: service.name,
         serviceSku: service.sku,
-        unitPrice,
+        unitPrice: new Decimal(unitPrice),
         quantity: 1,
-        discountAmount: 0,
-        taxRate,
-        taxAmount: serviceTax,
-        totalAmount,
+        discountAmount: new Decimal(0),
+        taxRate: new Decimal(taxRate),
+        taxAmount: new Decimal(serviceTax),
+        totalAmount: new Decimal(totalAmount),
         durationMinutes: service.durationMinutes,
         activeTimeMinutes: service.activeTimeMinutes,
         processingTimeMinutes: service.processingTimeMinutes,
         stylistId: input.stylistId,
         status: 'pending',
-        commissionRate: Number(service.commissionValue),
-        commissionAmount: (unitPrice * Number(service.commissionValue)) / 100,
+        commissionRate: new Decimal(service.commissionValue),
+        commissionAmount: new Decimal((unitPrice * Number(service.commissionValue)) / 100),
       };
     });
 
@@ -608,7 +609,7 @@ export class AppointmentsService {
 
     // Can only update certain fields and only in certain statuses
     if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
-      throw new AppError('Cannot update appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot update appointment in current status', 400);
     }
 
     return this.prisma.appointment.update({
@@ -633,7 +634,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('checked_in')) {
-      throw new AppError('Cannot check in appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot check in appointment in current status', 400);
     }
 
     return this.updateStatus(tenantId, appointmentId, 'checked_in', userId);
@@ -646,7 +647,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('in_progress')) {
-      throw new AppError('Cannot start appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot start appointment in current status', 400);
     }
 
     // Set startedAt timestamp when starting
@@ -689,7 +690,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('completed')) {
-      throw new AppError('Cannot complete appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot complete appointment in current status', 400);
     }
 
     // Clear station assignment when completing
@@ -734,7 +735,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('cancelled')) {
-      throw new AppError('Cannot cancel appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot cancel appointment in current status', 400);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -797,7 +798,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('no_show')) {
-      throw new AppError('Cannot mark as no-show in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot mark as no-show in current status', 400);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -881,11 +882,11 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!STATUS_TRANSITIONS[appointment.status]?.includes('rescheduled')) {
-      throw new AppError('Cannot reschedule appointment in current status', 400, 'APT_021');
+      throw new AppError('APT_021', 'Cannot reschedule appointment in current status', 400);
     }
 
     if (appointment.rescheduleCount >= MAX_RESCHEDULES) {
-      throw new AppError(`Maximum reschedule limit (${MAX_RESCHEDULES}) reached`, 400, 'APT_020');
+      throw new AppError('APT_020', `Maximum reschedule limit (${MAX_RESCHEDULES}) reached`, 400);
     }
 
     const newEndTime = this.calculateEndTime(input.newTime, appointment.totalDuration);
@@ -1031,7 +1032,7 @@ export class AppointmentsService {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
 
     if (!appointment.hasConflict) {
-      throw new AppError('Appointment does not have a conflict to resolve', 400, 'APT_050');
+      throw new AppError('APT_050', 'Appointment does not have a conflict to resolve', 400);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -1127,9 +1128,9 @@ export class AppointmentsService {
     const allowedTransitions = STATUS_TRANSITIONS[appointment.status] || [];
     if (!allowedTransitions.includes(newStatus)) {
       throw new AppError(
+        'APT_030',
         `Cannot transition from ${appointment.status} to ${newStatus}`,
-        400,
-        'APT_030'
+        400
       );
     }
 
@@ -1213,12 +1214,12 @@ export class AppointmentsService {
 
     // Check if appointment already has a stylist
     if (appointment.stylistId) {
-      throw new AppError('Appointment already has a stylist assigned', 400, 'APT_ALREADY_ASSIGNED');
+      throw new AppError('APT_ALREADY_ASSIGNED', 'Appointment already has a stylist assigned', 400);
     }
 
     // Check if appointment is in a valid status for assignment
     if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
-      throw new AppError('Cannot assign stylist to appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot assign stylist to appointment in current status', 400);
     }
 
     // Check stylist availability
@@ -1233,14 +1234,9 @@ export class AppointmentsService {
     );
 
     if (conflicts.length > 0) {
-      throw new AppError(
-        'Stylist is not available for this time slot',
-        409,
-        'STYLIST_NOT_AVAILABLE',
-        {
+      throw new AppError('STYLIST_NOT_AVAILABLE', 'Stylist is not available for this time slot', 409, {
           conflicts,
-        }
-      );
+        });
     }
 
     // Update appointment with stylist
@@ -1300,7 +1296,7 @@ export class AppointmentsService {
 
     // Check if appointment is in a valid status for station assignment
     if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
-      throw new AppError('Cannot assign station to appointment in current status', 400, 'APT_030');
+      throw new AppError('APT_030', 'Cannot assign station to appointment in current status', 400);
     }
 
     // Verify station exists and belongs to the same branch
@@ -1314,12 +1310,12 @@ export class AppointmentsService {
     });
 
     if (!station) {
-      throw new AppError('Station not found', 404, 'STATION_NOT_FOUND');
+      throw new AppError('STATION_NOT_FOUND', 'Station not found', 404);
     }
 
     // Check if station is out of service
     if (station.status === 'out_of_service') {
-      throw new AppError('Station is out of service', 400, 'STATION_OUT_OF_SERVICE');
+      throw new AppError('STATION_OUT_OF_SERVICE', 'Station is out of service', 400);
     }
 
     // Check if station is already occupied by another active appointment
@@ -1333,7 +1329,7 @@ export class AppointmentsService {
     });
 
     if (existingAppointment) {
-      throw new AppError('Station is already occupied', 409, 'STATION_ALREADY_OCCUPIED', {
+      throw new AppError('STATION_ALREADY_OCCUPIED', 'Station is already occupied', 409, {
         existingAppointmentId: existingAppointment.id,
       });
     }
@@ -1452,7 +1448,7 @@ export class AppointmentsService {
       'in_progress',
     ];
     if (!allowedStatuses.includes(appointment.status)) {
-      throw new AppError('Can only update services before appointment completes', 400, 'APT_030');
+      throw new AppError('APT_030', 'Can only update services before appointment completes', 400);
     }
 
     // Validate all services exist and are active
@@ -1472,7 +1468,7 @@ export class AppointmentsService {
     });
 
     if (services.length !== serviceIds.length) {
-      throw new AppError('One or more services are not available', 400, 'APT_010');
+      throw new AppError('APT_010', 'One or more services are not available', 400);
     }
 
     // Build service map for easy lookup
@@ -1513,19 +1509,19 @@ export class AppointmentsService {
         serviceId: service.id,
         serviceName: service.name,
         serviceSku: service.sku,
-        unitPrice,
+        unitPrice: new Decimal(unitPrice),
         quantity,
-        discountAmount: 0,
-        taxRate,
-        taxAmount: serviceTax,
-        totalAmount,
+        discountAmount: new Decimal(0),
+        taxRate: new Decimal(taxRate),
+        taxAmount: new Decimal(serviceTax),
+        totalAmount: new Decimal(totalAmount),
         durationMinutes: service.durationMinutes,
         activeTimeMinutes: service.activeTimeMinutes,
         processingTimeMinutes: service.processingTimeMinutes,
         stylistId: inputService.stylistId || appointment.stylistId,
         status: 'pending' as const,
-        commissionRate: Number(service.commissionValue),
-        commissionAmount: (unitPrice * quantity * Number(service.commissionValue)) / 100,
+        commissionRate: new Decimal(service.commissionValue),
+        commissionAmount: new Decimal((unitPrice * quantity * Number(service.commissionValue)) / 100),
       };
     });
 
@@ -1617,7 +1613,7 @@ export class AppointmentsService {
 
     // Only allow adding services to in-progress appointments
     if (appointment.status !== 'in_progress') {
-      throw new AppError('Can only add services to in-progress appointments', 400, 'APT_030');
+      throw new AppError('APT_030', 'Can only add services to in-progress appointments', 400);
     }
 
     // Get service details
@@ -1631,7 +1627,7 @@ export class AppointmentsService {
     });
 
     if (!service) {
-      throw new AppError('Service not found', 404, 'SERVICE_NOT_FOUND');
+      throw new AppError('SERVICE_NOT_FOUND', 'Service not found', 404);
     }
 
     const quantity = input.quantity || 1;
@@ -1784,11 +1780,7 @@ export class AppointmentsService {
 
     // Check if appointment is in a valid status
     if (['completed', 'cancelled', 'no_show', 'rescheduled'].includes(appointment.status)) {
-      throw new AppError(
-        'Cannot update stylists for appointment in current status',
-        400,
-        'APT_030'
-      );
+      throw new AppError('APT_030', 'Cannot update stylists for appointment in current status', 400);
     }
 
     const updates: any = { updatedAt: new Date() };
@@ -1806,7 +1798,7 @@ export class AppointmentsService {
       });
 
       if (!stylist) {
-        throw new AppError('Stylist not found', 404, 'STYLIST_NOT_FOUND');
+        throw new AppError('STYLIST_NOT_FOUND', 'Stylist not found', 404);
       }
 
       updates.stylistId = input.primaryStylistId;

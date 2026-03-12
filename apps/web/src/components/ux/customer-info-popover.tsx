@@ -9,14 +9,13 @@
 
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { Phone, Mail, Star, Wallet, Calendar, AlertTriangle, Tag } from 'lucide-react';
+import { Phone, Mail, Star, Wallet, Calendar, AlertTriangle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCustomer } from '@/hooks/queries/use-customers';
 import { useAuthStore } from '@/stores/auth-store';
 import { maskPhoneNumber, shouldMaskPhoneForRole } from '@/lib/phone-masking';
-import { cn } from '@/lib/utils';
 
 interface CustomerInfoPopoverProps {
   customerId: string;

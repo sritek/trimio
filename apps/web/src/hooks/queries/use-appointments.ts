@@ -172,7 +172,7 @@ export function useCreateAppointment() {
       return { toastId, optimisticId, previousCalendarData, calendarParams };
     },
 
-    onSuccess: (response, newAppointment, context) => {
+    onSuccess: (response, _newAppointment, context) => {
       // Update toast to success
       toast.success('Appointment created successfully!', { id: context?.toastId });
 

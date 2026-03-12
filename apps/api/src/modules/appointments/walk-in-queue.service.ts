@@ -120,11 +120,11 @@ export class WalkInQueueService {
     });
 
     if (!entry) {
-      throw new AppError('Queue entry not found', 404, 'QUEUE_NOT_FOUND');
+      throw new AppError('QUEUE_NOT_FOUND', 'Queue entry not found', 404);
     }
 
     if (entry.status !== 'waiting') {
-      throw new AppError('Customer is not in waiting status', 400, 'INVALID_QUEUE_STATUS');
+      throw new AppError('INVALID_QUEUE_STATUS', 'Customer is not in waiting status', 400);
     }
 
     const updated = await this.prisma.walkInQueue.update({
@@ -150,14 +150,14 @@ export class WalkInQueueService {
     });
 
     if (!entry) {
-      throw new AppError('Queue entry not found', 404, 'QUEUE_NOT_FOUND');
+      throw new AppError('QUEUE_NOT_FOUND', 'Queue entry not found', 404);
     }
 
     if (!['waiting', 'called'].includes(entry.status)) {
       throw new AppError(
+        'INVALID_QUEUE_STATUS',
         'Customer cannot be served in current status',
-        400,
-        'INVALID_QUEUE_STATUS'
+        400
       );
     }
 
@@ -210,7 +210,7 @@ export class WalkInQueueService {
     });
 
     if (!entry) {
-      throw new AppError('Queue entry not found', 404, 'QUEUE_NOT_FOUND');
+      throw new AppError('QUEUE_NOT_FOUND', 'Queue entry not found', 404);
     }
 
     return this.prisma.walkInQueue.update({
@@ -228,7 +228,7 @@ export class WalkInQueueService {
     });
 
     if (!entry) {
-      throw new AppError('Queue entry not found', 404, 'QUEUE_NOT_FOUND');
+      throw new AppError('QUEUE_NOT_FOUND', 'Queue entry not found', 404);
     }
 
     const updated = await this.prisma.walkInQueue.update({
@@ -282,7 +282,7 @@ export class WalkInQueueService {
     serviceIds: string[]
   ): Promise<number> {
     // Get waiting customers ahead
-    const today = startOfDay(new Date());
+    const today = getTodayUTC();
 
     const waitingAhead = await this.prisma.walkInQueue.count({
       where: {

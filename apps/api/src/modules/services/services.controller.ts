@@ -14,6 +14,7 @@ import {
   deleteResponse,
   buildPaginationMeta,
 } from '../../lib/response';
+import { NotFoundError } from '../../lib/errors';
 import { servicesService } from './services.service';
 
 import type {
@@ -46,7 +47,7 @@ export class ServicesController {
     const service = await servicesService.getServiceById(tenantId, request.params.id);
 
     if (!service) {
-      return reply.code(404).send(errorResponse('NOT_FOUND', 'Service not found'));
+      throw new NotFoundError('NOT_FOUND', 'Service not found');
     }
 
     return reply.send(successResponse(service));

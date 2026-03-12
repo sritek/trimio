@@ -11,6 +11,7 @@
  */
 
 import { Queue, QueueEvents } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import Redis from 'ioredis';
 
 import { env } from '@/config/env';
@@ -46,7 +47,7 @@ if (isRedisEnabled && env.REDIS_URL) {
 
   // Create queues
   staffQueue = new Queue(QUEUE_NAMES.STAFF, {
-    connection,
+    connection: connection as unknown as ConnectionOptions,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -64,7 +65,7 @@ if (isRedisEnabled && env.REDIS_URL) {
   });
 
   // Queue events for monitoring
-  staffQueueEvents = new QueueEvents(QUEUE_NAMES.STAFF, { connection });
+  staffQueueEvents = new QueueEvents(QUEUE_NAMES.STAFF, { connection: connection as unknown as ConnectionOptions });
 
   staffQueueEvents.on('completed', ({ jobId }) => {
     logger.info({ jobId, queue: QUEUE_NAMES.STAFF }, 'Job completed');

@@ -7,6 +7,7 @@ export { useMediaQuery, useIsMobile, useIsTablet, useIsDesktop } from './use-med
 export { useConfirm } from './use-confirm';
 export { usePagination } from './use-pagination';
 export { usePermissions, PERMISSIONS } from './use-permissions';
+export { useErrorHandler } from './use-error-handler';
 
 export { useQuickActions, useActionContext } from './use-quick-actions';
 

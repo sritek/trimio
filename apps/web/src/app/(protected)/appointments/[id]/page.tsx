@@ -121,7 +121,7 @@ export default function AppointmentDetailPage() {
 
   const handleComplete = async () => {
     try {
-      await completeAppointment.mutateAsync(id);
+      await completeAppointment.mutateAsync({ appointmentId: id });
       toast.success('Appointment completed');
       refetch();
     } catch (error) {

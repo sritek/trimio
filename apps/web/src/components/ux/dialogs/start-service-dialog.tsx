@@ -367,7 +367,7 @@ export function StartServiceDialog({
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-medium text-red-900">
-                  Station "{pendingStationData.stationName}" has an incomplete appointment
+                  Station &ldquo;{pendingStationData.stationName}&rdquo; has an incomplete appointment
                 </p>
                 <div className="text-sm text-red-700 space-y-1">
                   <p>

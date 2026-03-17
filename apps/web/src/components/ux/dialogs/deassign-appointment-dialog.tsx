@@ -5,7 +5,7 @@
  * Confirms deassignment of appointment from station
  */
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

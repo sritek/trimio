@@ -30,6 +30,8 @@ import {
   listPayrollQuerySchema,
   updateGeoConfigSchema,
   attendanceLockStatusQuerySchema,
+  createBreakSchema,
+  listBreaksQuerySchema,
 } from './staff.schema';
 import * as controller from './staff.controller';
 
@@ -280,4 +282,22 @@ export async function staffRoutes(fastify: FastifyInstance) {
     { schema: { tags: ['Performance'] } },
     controller.getStaffPerformance
   );
+
+  // ============================================
+  // Stylist Breaks Routes
+  // ============================================
+
+  app.get(
+    '/:userId/breaks',
+    { schema: { tags: ['Breaks'], querystring: listBreaksQuerySchema } },
+    controller.listBreaks
+  );
+
+  app.post(
+    '/:userId/breaks',
+    { schema: { tags: ['Breaks'], body: createBreakSchema } },
+    controller.createBreak
+  );
+
+  app.delete('/:userId/breaks/:breakId', { schema: { tags: ['Breaks'] } }, controller.deleteBreak);
 }

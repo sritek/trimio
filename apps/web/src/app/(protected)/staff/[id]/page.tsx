@@ -35,9 +35,14 @@ import {
   useStaffDetail,
   useCommissionSummary,
   useAttendanceSummary,
+  useStylistBreaks,
+  useCreateStylistBreak,
+  useDeleteStylistBreak,
 } from '@/hooks/queries/use-staff';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { StylistBreaksEditor, type StylistBreak } from '@/components/common';
+import { toast } from 'sonner';
 
 export default function StaffDetailPage() {
   const params = useParams();
@@ -55,6 +60,57 @@ export default function StaffDetailPage() {
 
   const { data: commissionSummary } = useCommissionSummary(staffId, startDate, endDate);
   const { data: attendanceSummary } = useAttendanceSummary(staffId, startDate, endDate);
+
+  // Get staff's primary branch ID for creating breaks
+  const staffPrimaryBranchId = staff?.user?.branchAssignments?.find(
+    (b: { isPrimary: boolean }) => b.isPrimary
+  )?.branchId;
+
+  // Breaks data for stylists (not branch-specific for listing)
+  const { data: breaksData } = useStylistBreaks(staffId);
+  const createBreak = useCreateStylistBreak();
+  const deleteBreak = useDeleteStylistBreak();
+
+  // Convert API breaks to editor format
+  const breaks: StylistBreak[] = (breaksData || []).map((b) => ({
+    id: b.id,
+    name: b.name,
+    dayOfWeek: b.dayOfWeek,
+    startTime: b.startTime,
+    endTime: b.endTime,
+  }));
+
+  const handleAddBreak = async (breakData: Omit<StylistBreak, 'id'>) => {
+    if (!staffPrimaryBranchId) {
+      toast.error('Staff member has no branch assigned');
+      return;
+    }
+
+    try {
+      await createBreak.mutateAsync({
+        userId: staffId,
+        branchId: staffPrimaryBranchId,
+        name: breakData.name,
+        dayOfWeek: breakData.dayOfWeek,
+        startTime: breakData.startTime,
+        endTime: breakData.endTime,
+      });
+      toast.success('Break added successfully');
+    } catch {
+      toast.error('Failed to add break');
+      throw new Error('Failed to add break');
+    }
+  };
+
+  const handleRemoveBreak = async (breakId: string) => {
+    try {
+      await deleteBreak.mutateAsync({ userId: staffId, breakId });
+      toast.success('Break removed successfully');
+    } catch {
+      toast.error('Failed to remove break');
+      throw new Error('Failed to remove break');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -86,8 +142,11 @@ export default function StaffDetailPage() {
     );
   }
 
-  const user = staff.user;
-  const primaryBranch = user?.branchAssignments?.find((b) => b.isPrimary)?.branch;
+  const staffUser = staff.user;
+  const primaryBranchAssignment = staffUser?.branchAssignments?.find(
+    (b: { isPrimary: boolean }) => b.isPrimary
+  );
+  const primaryBranch = primaryBranchAssignment?.branch;
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -106,7 +165,7 @@ export default function StaffDetailPage() {
     <PermissionGuard permission={PERMISSIONS.USERS_READ} fallback={<AccessDenied />}>
       <PageContainer>
         <PageHeader
-          title={user?.name || 'Staff Member'}
+          title={staffUser?.name || 'Staff Member'}
           description={staff.designation || staff.employeeCode || 'Staff Profile'}
           actions={
             <div className="flex gap-2">
@@ -183,6 +242,9 @@ export default function StaffDetailPage() {
             <TabsList>
               <TabsTrigger value="profile">{t('tabs.profile')}</TabsTrigger>
               <TabsTrigger value="employment">{t('tabs.employment')}</TabsTrigger>
+              {staffUser?.role === 'stylist' && (
+                <TabsTrigger value="schedule">Schedule</TabsTrigger>
+              )}
               <TabsTrigger value="salary">{t('tabs.salary')}</TabsTrigger>
               <TabsTrigger value="documents">{t('tabs.documents')}</TabsTrigger>
             </TabsList>
@@ -199,7 +261,7 @@ export default function StaffDetailPage() {
                       <User className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm text-muted-foreground">{t('fields.name')}</p>
-                        <p className="font-medium">{user?.name || '-'}</p>
+                        <p className="font-medium">{staffUser?.name || '-'}</p>
                       </div>
                     </div>
 
@@ -207,7 +269,7 @@ export default function StaffDetailPage() {
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm text-muted-foreground">{t('fields.phone')}</p>
-                        <p className="font-medium">{user?.phone || '-'}</p>
+                        <p className="font-medium">{staffUser?.phone || '-'}</p>
                       </div>
                     </div>
 
@@ -215,20 +277,20 @@ export default function StaffDetailPage() {
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <p className="text-sm text-muted-foreground">{t('fields.email')}</p>
-                        <p className="font-medium">{user?.email || '-'}</p>
+                        <p className="font-medium">{staffUser?.email || '-'}</p>
                       </div>
                     </div>
 
                     <div>
                       <p className="text-sm text-muted-foreground">{t('fields.role')}</p>
-                      <Badge variant={getRoleBadgeVariant(user?.role || '')} className="mt-1">
-                        {t(`roles.${user?.role}` as any)}
+                      <Badge variant={getRoleBadgeVariant(staffUser?.role || '')} className="mt-1">
+                        {t(`roles.${staffUser?.role}` as any)}
                       </Badge>
                     </div>
 
                     <div>
                       <p className="text-sm text-muted-foreground">{t('fields.gender')}</p>
-                      <p className="font-medium capitalize">{user?.gender || '-'}</p>
+                      <p className="font-medium capitalize">{staffUser?.gender || '-'}</p>
                     </div>
 
                     <div>
@@ -348,6 +410,28 @@ export default function StaffDetailPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Schedule Tab - Only for stylists */}
+            {staffUser?.role === 'stylist' && (
+              <TabsContent value="schedule" className="space-y-4">
+                <StylistBreaksEditor
+                  breaks={breaks}
+                  onAdd={handleAddBreak}
+                  onRemove={handleRemoveBreak}
+                  isAdding={createBreak.isPending}
+                  isRemoving={deleteBreak.isPending}
+                />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Working Hours</CardTitle>
+                    <CardDescription>
+                      Working hours are inherited from the branch settings. Contact your manager to
+                      update branch working hours.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </TabsContent>
+            )}
 
             <TabsContent value="salary" className="space-y-4">
               <Card>

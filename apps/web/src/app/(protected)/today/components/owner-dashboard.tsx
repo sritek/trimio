@@ -30,6 +30,7 @@ import { useOpenPanel } from '@/components/ux/slide-over';
 import { DeassignAppointmentDialog } from '@/components/ux/dialogs/deassign-appointment-dialog';
 import { FloorViewTab } from './floor-view-tab';
 import { useUIStore } from '@/stores/ui-store';
+import { isInventoryEnabled } from '@/config/features';
 
 interface OwnerDashboardProps {
   branchId: string;
@@ -141,273 +142,284 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
 // Extracted overview content to keep the component clean
 function OwnerOverviewContent({ data }: { data: ReturnType<typeof useOwnerDashboard>['data'] }) {
   return (
-    <div className="space-y-6">
-      {/* Revenue Metrics */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today&apos;s Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+    <div className="grid gap-4 lg:grid-cols-3">
+      {/* Left Column - Revenue & Appointments */}
+      <div className="lg:col-span-2 space-y-4">
+        {/* Revenue Row - Compact cards */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Today</span>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </div>
             <div className="text-2xl font-bold">{formatCurrency(data?.revenue.today || 0)}</div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>vs yesterday:</span>
+            <div className="flex items-center gap-1 mt-1">
               <span
                 className={cn(
-                  'flex items-center',
+                  'flex items-center text-xs',
                   (data?.revenue.percentChangeVsYesterday || 0) >= 0
                     ? 'text-green-600'
                     : 'text-red-600'
                 )}
               >
                 {(data?.revenue.percentChangeVsYesterday || 0) >= 0 ? (
-                  <TrendingUp className="h-3 w-3 mr-1" />
+                  <TrendingUp className="h-3 w-3 mr-0.5" />
                 ) : (
-                  <TrendingDown className="h-3 w-3 mr-1" />
+                  <TrendingDown className="h-3 w-3 mr-0.5" />
                 )}
                 {formatPercent(data?.revenue.percentChangeVsYesterday || 0)}
               </span>
+              <span className="text-xs text-muted-foreground">vs yesterday</span>
             </div>
-          </CardContent>
-        </Card>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Yesterday</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Yesterday</span>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </div>
             <div className="text-2xl font-bold">{formatCurrency(data?.revenue.yesterday || 0)}</div>
-            <p className="text-xs text-muted-foreground">Previous day revenue</p>
-          </CardContent>
-        </Card>
+            <p className="text-xs text-muted-foreground mt-1">Previous day</p>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Week Same Day</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Last Week</span>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </div>
             <div className="text-2xl font-bold">
               {formatCurrency(data?.revenue.lastWeekSameDay || 0)}
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>vs today:</span>
+            <div className="flex items-center gap-1 mt-1">
               <span
                 className={cn(
-                  'flex items-center',
+                  'flex items-center text-xs',
                   (data?.revenue.percentChangeVsLastWeek || 0) >= 0
                     ? 'text-green-600'
                     : 'text-red-600'
                 )}
               >
                 {(data?.revenue.percentChangeVsLastWeek || 0) >= 0 ? (
-                  <TrendingUp className="h-3 w-3 mr-1" />
+                  <TrendingUp className="h-3 w-3 mr-0.5" />
                 ) : (
-                  <TrendingDown className="h-3 w-3 mr-1" />
+                  <TrendingDown className="h-3 w-3 mr-0.5" />
                 )}
                 {formatPercent(data?.revenue.percentChangeVsLastWeek || 0)}
               </span>
+              <span className="text-xs text-muted-foreground">same day</span>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </Card>
+        </div>
 
-      {/* Appointment Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Today&apos;s Appointments
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{data?.appointments.total || 0}</div>
+        {/* Appointments - Horizontal compact layout */}
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Today&apos;s Appointments</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <div className="text-center p-2 rounded-lg bg-muted/50">
+              <div className="text-xl font-bold">{data?.appointments.total || 0}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-2 rounded-lg bg-blue-50">
+              <div className="text-xl font-bold text-blue-600">
                 {data?.appointments.upcoming || 0}
               </div>
-              <div className="text-xs text-muted-foreground">Upcoming</div>
+              <div className="text-xs text-blue-600/70">Upcoming</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-2 rounded-lg bg-purple-50">
+              <div className="text-xl font-bold text-purple-600">
                 {data?.appointments.inProgress || 0}
               </div>
-              <div className="text-xs text-muted-foreground">In Progress</div>
+              <div className="text-xs text-purple-600/70">In Progress</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
+            <div className="text-center p-2 rounded-lg bg-green-50">
+              <div className="text-xl font-bold text-green-600">
                 {data?.appointments.completed || 0}
               </div>
-              <div className="text-xs text-muted-foreground">Completed</div>
+              <div className="text-xs text-green-600/70">Completed</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">
+            <div className="text-center p-2 rounded-lg bg-red-50">
+              <div className="text-xl font-bold text-red-600">
                 {data?.appointments.cancelled || 0}
               </div>
-              <div className="text-xs text-muted-foreground">Cancelled</div>
+              <div className="text-xs text-red-600/70">Cancelled</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">
+            <div className="text-center p-2 rounded-lg bg-orange-50">
+              <div className="text-xl font-bold text-orange-600">
                 {data?.appointments.noShows || 0}
               </div>
-              <div className="text-xs text-muted-foreground">No Shows</div>
+              <div className="text-xs text-orange-600/70">No Shows</div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Inventory Alerts */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Inventory Alerts
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+        {/* Inventory Alerts - only show if inventory module is enabled */}
+        {isInventoryEnabled && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Package className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">Inventory Alerts</span>
+            </div>
+            <div className="space-y-2">
               {(data?.inventory.lowStockCount || 0) > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                  <div>
-                    <div className="font-medium text-yellow-800">Low Stock</div>
-                    <div className="text-sm text-yellow-600">
+                <div className="flex items-center gap-3 p-2 bg-yellow-50 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-yellow-800">Low Stock: </span>
+                    <span className="text-sm text-yellow-600">
                       {data?.inventory.lowStockCount} items below reorder level
-                    </div>
+                    </span>
                   </div>
                 </div>
               )}
               {(data?.inventory.expiringCount || 0) > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                  <div>
-                    <div className="font-medium text-red-800">Expiring Soon</div>
-                    <div className="text-sm text-red-600">
-                      {data?.inventory.expiringCount} batches expiring within 30 days
-                    </div>
+                <div className="flex items-center gap-3 p-2 bg-red-50 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-red-800">Expiring: </span>
+                    <span className="text-sm text-red-600">
+                      {data?.inventory.expiringCount} batches within 30 days
+                    </span>
                   </div>
                 </div>
               )}
               {(data?.inventory.lowStockCount || 0) === 0 &&
                 (data?.inventory.expiringCount || 0) === 0 && (
-                  <div className="text-center py-4 text-muted-foreground">No inventory alerts</div>
+                  <div className="text-center py-2 text-sm text-muted-foreground">
+                    No inventory alerts
+                  </div>
                 )}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Staff Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Staff Today
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {data?.staff.presentToday || 0}
-                </div>
-                <div className="text-xs text-muted-foreground">Present</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">{data?.staff.onLeave || 0}</div>
-                <div className="text-xs text-muted-foreground">On Leave</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">{data?.staff.totalActive || 0}</div>
-                <div className="text-xs text-muted-foreground">Total Active</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </Card>
+        )}
       </div>
 
-      {/* Quick Links */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Quick Links
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Right Column - Staff & Quick Links */}
+      <div className="space-y-4">
+        {/* Staff Summary - Vertical layout */}
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Staff Today</span>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-green-50">
+              <span className="text-sm text-green-700">Present</span>
+              <span className="text-lg font-bold text-green-600">
+                {data?.staff.presentToday || 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-orange-50">
+              <span className="text-sm text-orange-700">On Leave</span>
+              <span className="text-lg font-bold text-orange-600">{data?.staff.onLeave || 0}</span>
+            </div>
+            <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+              <span className="text-sm text-muted-foreground">Total Active</span>
+              <span className="text-lg font-bold">{data?.staff.totalActive || 0}</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Quick Links - Grid layout */}
+        <Card className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Quick Links</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
             <Link
-              href="/reports"
-              className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
+              href="/appointments"
+              className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors"
             >
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <span>Reports</span>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Appointments</span>
             </Link>
             <Link
               href="/billing"
-              className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
+              className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors"
             >
-              <DollarSign className="h-5 w-5 text-muted-foreground" />
-              <span>Billing</span>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Billing</span>
             </Link>
             <Link
-              href="/inventory"
-              className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
+              href="/customers"
+              className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors"
             >
-              <Package className="h-5 w-5 text-muted-foreground" />
-              <span>Inventory</span>
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Customers</span>
             </Link>
             <Link
               href="/staff"
-              className="flex items-center gap-2 p-3 rounded-lg border hover:bg-muted transition-colors"
+              className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors"
             >
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <span>Staff</span>
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Staff</span>
             </Link>
+            {isInventoryEnabled && (
+              <Link
+                href="/inventory"
+                className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted transition-colors col-span-2"
+              >
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Inventory</span>
+              </Link>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
 
 function OwnerDashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-32 mb-2" />
+    <div className="grid gap-4 lg:grid-cols-3">
+      {/* Left Column */}
+      <div className="lg:col-span-2 space-y-4">
+        {/* Revenue Row */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-4">
+              <Skeleton className="h-4 w-16 mb-2" />
+              <Skeleton className="h-8 w-24 mb-1" />
               <Skeleton className="h-3 w-20" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-40" />
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            </Card>
+          ))}
+        </div>
+        {/* Appointments */}
+        <Card className="p-4">
+          <Skeleton className="h-4 w-40 mb-4" />
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="text-center">
-                <Skeleton className="h-8 w-12 mx-auto mb-1" />
-                <Skeleton className="h-3 w-16 mx-auto" />
+              <div key={i} className="text-center p-2">
+                <Skeleton className="h-6 w-8 mx-auto mb-1" />
+                <Skeleton className="h-3 w-12 mx-auto" />
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
+      {/* Right Column */}
+      <div className="space-y-4">
+        <Card className="p-4">
+          <Skeleton className="h-4 w-24 mb-4" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <Skeleton className="h-4 w-24 mb-3" />
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

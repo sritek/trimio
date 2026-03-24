@@ -14,6 +14,8 @@ import type {
   CreateSuperOwnerBody,
   ListTenantsQuery,
   UpdateTenantBody,
+  UpdateBranchBody,
+  UpdateSuperOwnerBody,
 } from './internal.schema';
 
 export class InternalService {
@@ -54,6 +56,7 @@ export class InternalService {
 
   /**
    * Create a branch for a tenant
+   * Also auto-assigns all super_owners to the new branch
    */
   async createBranch(data: CreateBranchBody) {
     // Verify tenant exists
@@ -79,20 +82,48 @@ export class InternalService {
       counter++;
     }
 
-    const branch = await prisma.branch.create({
-      data: {
-        tenantId: data.tenantId,
-        name: data.name,
-        slug,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        phone: data.phone,
-        email: data.email,
-        gstin: data.gstin,
-        isActive: true,
-      },
+    // Create branch and auto-assign all super_owners in a transaction
+    const branch = await prisma.$transaction(async (tx) => {
+      // Create the branch
+      const newBranch = await tx.branch.create({
+        data: {
+          tenantId: data.tenantId,
+          name: data.name,
+          slug,
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          pincode: data.pincode,
+          phone: data.phone,
+          email: data.email,
+          gstin: data.gstin,
+          isActive: true,
+        },
+      });
+
+      // Find all super_owners for this tenant
+      const superOwners = await tx.user.findMany({
+        where: {
+          tenantId: data.tenantId,
+          role: 'super_owner',
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      // Auto-assign all super_owners to the new branch
+      if (superOwners.length > 0) {
+        await tx.userBranch.createMany({
+          data: superOwners.map((user) => ({
+            userId: user.id,
+            branchId: newBranch.id,
+            isPrimary: false, // Not primary since they already have a primary branch
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return newBranch;
     });
 
     return branch;
@@ -100,6 +131,7 @@ export class InternalService {
 
   /**
    * Create a super owner user for a tenant
+   * Super owners are assigned to ALL existing branches (DB is source of truth)
    */
   async createSuperOwner(data: CreateSuperOwnerBody) {
     // Verify tenant exists
@@ -111,13 +143,17 @@ export class InternalService {
       throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
     }
 
-    // Verify branch exists and belongs to tenant
-    const branch = await prisma.branch.findFirst({
-      where: { id: data.branchId, tenantId: data.tenantId },
+    // Get ALL branches for this tenant
+    const branches = await prisma.branch.findMany({
+      where: { tenantId: data.tenantId, deletedAt: null },
+      select: { id: true },
     });
 
-    if (!branch) {
-      throw new NotFoundError('BRANCH_NOT_FOUND', 'Branch not found');
+    if (branches.length === 0) {
+      throw new NotFoundError(
+        'BRANCH_NOT_FOUND',
+        'No branches found for this tenant. Create a branch first.'
+      );
     }
 
     // Check if email or phone already exists for this tenant
@@ -137,6 +173,12 @@ export class InternalService {
 
     const passwordHash = await bcrypt.hash(data.password, 10);
 
+    // Assign super_owner to ALL branches (first one is primary)
+    const branchAssignments = branches.map((branch, index) => ({
+      branchId: branch.id,
+      isPrimary: index === 0,
+    }));
+
     const user = await prisma.user.create({
       data: {
         tenantId: data.tenantId,
@@ -147,10 +189,7 @@ export class InternalService {
         role: 'super_owner',
         isActive: true,
         branchAssignments: {
-          create: {
-            branchId: data.branchId,
-            isPrimary: true,
-          },
+          create: branchAssignments,
         },
       },
       include: {
@@ -284,6 +323,98 @@ export class InternalService {
     });
 
     return updatedTenant;
+  }
+
+  /**
+   * Update branch
+   */
+  async updateBranch(branchId: string, data: UpdateBranchBody) {
+    const branch = await prisma.branch.findUnique({
+      where: { id: branchId },
+    });
+
+    if (!branch) {
+      throw new NotFoundError('BRANCH_NOT_FOUND', 'Branch not found');
+    }
+
+    const updatedBranch = await prisma.branch.update({
+      where: { id: branchId },
+      data: {
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        gstin: data.gstin,
+        isActive: data.isActive,
+      },
+    });
+
+    return updatedBranch;
+  }
+
+  /**
+   * Update super owner
+   */
+  async updateSuperOwner(userId: string, data: UpdateSuperOwnerBody) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundError('USER_NOT_FOUND', 'User not found');
+    }
+
+    // Check if email is being changed and already exists for this tenant
+    if (data.email && data.email !== user.email) {
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          email: data.email,
+          id: { not: userId },
+        },
+      });
+
+      if (existingUser) {
+        throw new ConflictError('DUPLICATE_ENTRY', 'A user with this email already exists');
+      }
+    }
+
+    // Check if phone is being changed and already exists for this tenant
+    if (data.phone && data.phone !== user.phone) {
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          phone: data.phone,
+          id: { not: userId },
+        },
+      });
+
+      if (existingUser) {
+        throw new ConflictError('DUPLICATE_ENTRY', 'A user with this phone already exists');
+      }
+    }
+
+    // Hash password if provided
+    let passwordHash: string | undefined;
+    if (data.password) {
+      passwordHash = await bcrypt.hash(data.password, 10);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        ...(passwordHash && { passwordHash }),
+        isActive: data.isActive,
+      },
+    });
+
+    return updatedUser;
   }
 
   /**

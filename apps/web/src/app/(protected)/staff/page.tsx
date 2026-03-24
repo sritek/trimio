@@ -1,9 +1,3 @@
-/**
- * Staff List Page
- *
- * Displays all staff members with filtering and search capabilities.
- */
-
 'use client';
 
 import { useState, useCallback } from 'react';
@@ -11,30 +5,36 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { PageHeader, PageContent, PageContainer, SearchInput } from '@/components/common';
+import { PERMISSIONS } from '@salon-ops/shared';
+
 import { useStaffList } from '@/hooks/queries/use-staff';
+import { usePermissions } from '@/hooks/use-permissions';
+
+import {
+  AccessDenied,
+  FilterButton,
+  PageContainer,
+  PageContent,
+  PageHeader,
+  PermissionGuard,
+  SearchInput,
+} from '@/components/common';
+import { Button } from '@/components/ui/button';
 
 import { StaffTable } from './components/staff-table';
-
-const ROLES = ['branch_manager', 'receptionist', 'stylist', 'accountant'] as const;
-const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contract', 'intern'] as const;
+import { StaffFilterSheet, type StaffFiltersState } from './components/staff-filter-sheet';
 
 export default function StaffPage() {
   const t = useTranslations('staff');
-  const tCommon = useTranslations('common');
+  const { hasPermission } = usePermissions();
 
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [filters, setFilters] = useState<StaffFiltersState>({
+    role: 'all',
+    employmentType: 'all',
+    isActive: 'all',
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
 
@@ -42,16 +42,28 @@ export default function StaffPage() {
     page,
     limit,
     search: search || undefined,
-    role: roleFilter !== 'all' ? roleFilter : undefined,
-    isActive: statusFilter === 'all' ? undefined : statusFilter === 'active',
-    employmentType: typeFilter !== 'all' ? typeFilter : undefined,
+    role: filters.role !== 'all' ? filters.role : undefined,
+    isActive: filters.isActive === 'all' ? undefined : filters.isActive === 'active',
+    employmentType: filters.employmentType !== 'all' ? filters.employmentType : undefined,
   });
 
-  const staff = data?.data ?? [];
-  const meta = data?.meta;
+  const canWrite = hasPermission(PERMISSIONS.STAFF_WRITE);
 
   const hasFilters =
-    !!search || roleFilter !== 'all' || statusFilter !== 'all' || typeFilter !== 'all';
+    !!search ||
+    filters.role !== 'all' ||
+    filters.employmentType !== 'all' ||
+    filters.isActive !== 'all';
+
+  const activeFilterCount =
+    (filters.role !== 'all' ? 1 : 0) +
+    (filters.employmentType !== 'all' ? 1 : 0) +
+    (filters.isActive !== 'all' ? 1 : 0);
+
+  const handleFiltersChange = useCallback((newFilters: StaffFiltersState) => {
+    setFilters(newFilters);
+    setPage(1);
+  }, []);
 
   const handlePageSizeChange = useCallback((newLimit: number) => {
     setLimit(newLimit);
@@ -59,82 +71,57 @@ export default function StaffPage() {
   }, []);
 
   return (
-    <PageContainer>
-      <PageHeader
-        title={t('title')}
-        description={t('description')}
-        actions={
-          <Button asChild>
-            <Link href="/staff/new">
-              <Plus className="mr-2 h-4 w-4" />
-              {t('addStaff')}
-            </Link>
-          </Button>
-        }
-      />
-
-      <PageContent>
-        {/* Filters */}
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center flex-shrink-0">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder={t('searchPlaceholder')}
-            className="flex-1"
-          />
-
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder={t('filters.allRoles')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('filters.allRoles')}</SelectItem>
-              {ROLES.map((role) => (
-                <SelectItem key={role} value={role}>
-                  {t(`roles.${role}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder={t('filters.allTypes')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('filters.allTypes')}</SelectItem>
-              {EMPLOYMENT_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {t(`employmentTypes.${type}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder={t('filters.allStatus')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('filters.allStatus')}</SelectItem>
-              <SelectItem value="active">{tCommon('status.active')}</SelectItem>
-              <SelectItem value="inactive">{tCommon('status.inactive')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Table */}
-        <StaffTable
-          data={staff}
-          meta={meta}
-          isLoading={isLoading}
-          error={error}
-          page={page}
-          onPageChange={setPage}
-          onPageSizeChange={handlePageSizeChange}
-          hasFilters={hasFilters}
+    <PermissionGuard permission={PERMISSIONS.STAFF_READ} fallback={<AccessDenied />}>
+      <PageContainer>
+        <PageHeader
+          title={t('title')}
+          description={t('description')}
+          actions={
+            canWrite && (
+              <Button asChild>
+                <Link href="/staff/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t('addStaff')}
+                </Link>
+              </Button>
+            )
+          }
         />
-      </PageContent>
-    </PageContainer>
+
+        <PageContent>
+          {/* Search and Filter */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder={t('searchPlaceholder')}
+              className="flex-1 max-w-sm"
+            />
+
+            <FilterButton onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
+          </div>
+
+          {/* Table */}
+          <StaffTable
+            data={data?.data ?? []}
+            meta={data?.meta}
+            isLoading={isLoading}
+            error={error}
+            page={page}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+            hasFilters={hasFilters}
+          />
+        </PageContent>
+
+        {/* Filter Sheet */}
+        <StaffFilterSheet
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+        />
+      </PageContainer>
+    </PermissionGuard>
   );
 }

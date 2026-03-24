@@ -74,9 +74,7 @@ export default function EditStaffPage() {
           }
         />
         <PageContent>
-          <div className="max-w-3xl">
-            <StaffForm staff={staff} branchId={branchId || ''} />
-          </div>
+          <StaffForm staff={staff} branchId={branchId || ''} />
         </PageContent>
       </PageContainer>
     </PermissionGuard>

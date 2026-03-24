@@ -2,14 +2,14 @@
 
 /**
  * Branch Edit Panel
- * SlideOver panel for editing branch details
+ * SlideOver panel for editing branch details including working hours
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Form,
   FormControl,
@@ -30,6 +31,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  WorkingHoursEditor,
+  DEFAULT_WORKING_HOURS,
+  type WeeklyWorkingHours,
+} from '@/components/common';
 import { useUpdateBranch, type Branch } from '@/hooks/queries/use-branches';
 
 const branchFormSchema = z.object({
@@ -51,8 +57,69 @@ interface BranchEditPanelProps {
   onClose: () => void;
 }
 
+// Convert API working hours format to editor format
+function toEditorFormat(
+  apiHours:
+    | Record<string, { isOpen: boolean; open?: string | null; close?: string | null }>
+    | undefined
+): WeeklyWorkingHours {
+  if (!apiHours) return DEFAULT_WORKING_HOURS;
+
+  const result = { ...DEFAULT_WORKING_HOURS };
+  const days = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ] as const;
+
+  for (const day of days) {
+    const dayData = apiHours[day];
+    if (dayData) {
+      result[day] = {
+        isOpen: dayData.isOpen ?? true,
+        openTime: dayData.open || '09:00',
+        closeTime: dayData.close || '21:00',
+      };
+    }
+  }
+
+  return result;
+}
+
+// Convert editor format to API format
+function toApiFormat(
+  editorHours: WeeklyWorkingHours
+): Record<string, { isOpen: boolean; open: string | null; close: string | null }> {
+  const result: Record<string, { isOpen: boolean; open: string | null; close: string | null }> = {};
+  const days = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ] as const;
+
+  for (const day of days) {
+    const dayData = editorHours[day];
+    result[day] = {
+      isOpen: dayData.isOpen,
+      open: dayData.isOpen ? dayData.openTime : null,
+      close: dayData.isOpen ? dayData.closeTime : null,
+    };
+  }
+
+  return result;
+}
+
 export function BranchEditPanel({ branch, open, onClose }: BranchEditPanelProps) {
   const updateBranch = useUpdateBranch();
+  const [workingHours, setWorkingHours] = useState<WeeklyWorkingHours>(DEFAULT_WORKING_HOURS);
 
   const form = useForm<BranchFormValues>({
     resolver: zodResolver(branchFormSchema),
@@ -81,6 +148,7 @@ export function BranchEditPanel({ branch, open, onClose }: BranchEditPanelProps)
         email: branch.email || '',
         gstin: branch.gstin || '',
       });
+      setWorkingHours(toEditorFormat(branch.workingHours));
     }
   }, [branch, form]);
 
@@ -99,6 +167,7 @@ export function BranchEditPanel({ branch, open, onClose }: BranchEditPanelProps)
           phone: data.phone || null,
           email: data.email || null,
           gstin: data.gstin || null,
+          workingHours: toApiFormat(workingHours),
         },
       });
       toast.success('Branch updated successfully');
@@ -110,144 +179,173 @@ export function BranchEditPanel({ branch, open, onClose }: BranchEditPanelProps)
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent className="sm:max-w-lg overflow-y-auto">
+      <SheetContent className="p-4 sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Edit Branch</SheetTitle>
-          <SheetDescription>Update branch information</SheetDescription>
+          <SheetDescription>Update branch information and working hours</SheetDescription>
         </SheetHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-6">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Branch Name *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter branch name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <Tabs defaultValue="details" className="mt-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="hours" className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Working Hours
+            </TabsTrigger>
+          </TabsList>
 
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Enter address" {...field} value={field.value || ''} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <TabsContent value="details" className="space-y-4 mt-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Branch Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter branch name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City</FormLabel>
-                    <FormControl>
-                      <Input placeholder="City" {...field} value={field.value || ''} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter address"
+                          {...field}
+                          value={field.value || ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>State</FormLabel>
-                    <FormControl>
-                      <Input placeholder="State" {...field} value={field.value || ''} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input placeholder="City" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-            <FormField
-              control={form.control}
-              name="pincode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Pincode</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Pincode" {...field} value={field.value || ''} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State</FormLabel>
+                        <FormControl>
+                          <Input placeholder="State" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Phone number" {...field} value={field.value || ''} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="pincode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Pincode</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Pincode" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="Email address"
-                      {...field}
-                      value={field.value || ''}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Phone number" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="gstin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>GSTIN</FormLabel>
-                  <FormControl>
-                    <Input placeholder="GST Number" {...field} value={field.value || ''} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="Email address"
+                          {...field}
+                          value={field.value || ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={updateBranch.isPending}>
-                {updateBranch.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Changes
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Form>
+                <FormField
+                  control={form.control}
+                  name="gstin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>GSTIN</FormLabel>
+                      <FormControl>
+                        <Input placeholder="GST Number" {...field} value={field.value || ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value="hours" className="mt-4">
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Set the operating hours for each day of the week. These hours are used for
+                    appointment scheduling and availability.
+                  </p>
+                  <WorkingHoursEditor value={workingHours} onChange={setWorkingHours} compact />
+                </div>
+              </TabsContent>
+
+              <div className="flex gap-2 pt-6">
+                <Button type="submit" disabled={updateBranch.isPending}>
+                  {updateBranch.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );

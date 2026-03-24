@@ -71,6 +71,10 @@
       "deleteTitle": "Confirm Delete",
       "deleteDescription": "Are you sure you want to delete this item? This action cannot be undone."
     },
+    "confirmDelete": {
+      "title": "Confirm Delete",
+      "description": "Are you sure you want to delete this item? This action cannot be undone."
+    },
     "time": {
       "today": "Today",
       "tomorrow": "Tomorrow",
@@ -204,10 +208,12 @@
       },
       "dateOfBirth": {
         "label": "Date of Birth",
+        "placeholder": "Select date",
         "description": "For birthday greetings"
       },
       "anniversary": {
         "label": "Anniversary Date",
+        "placeholder": "Select date",
         "description": "For anniversary greetings"
       },
       "address": {
@@ -238,12 +244,14 @@
       "actions": "Actions"
     },
     "filters": {
+      "title": "Filters",
+      "tag": "Tag",
+      "bookingStatus": "Booking Status",
       "allTags": "All Tags",
       "allStatus": "All Status",
       "normal": "Normal",
-      "vip": "VIP",
-      "blocked": "Blocked",
-      "restricted": "Restricted"
+      "prepaidOnly": "Prepaid Only",
+      "blocked": "Blocked"
     },
     "overview": {
       "basicInfo": "Basic Information",
@@ -340,6 +348,9 @@
       "status": "Status"
     },
     "filters": {
+      "title": "Filters",
+      "category": "Category",
+      "status": "Status",
       "allCategories": "All Categories",
       "allStatus": "All Status",
       "active": "Active",
@@ -935,6 +946,7 @@
       "thisMonth": "this month"
     },
     "filters": {
+      "title": "Filters",
       "allRoles": "All Roles",
       "allStatus": "All Status",
       "allBranches": "All Branches",

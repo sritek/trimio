@@ -283,7 +283,6 @@ class InvoiceCalculator {
           igstAmount,
           totalTax: taxAmount,
           netAmount: taxableAmount + taxAmount,
-          hsnSacCode: service.hsnSacCode || undefined,
           stylistId: item.stylistId,
           stylistName,
           assistantId: item.assistantId,

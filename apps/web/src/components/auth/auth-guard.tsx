@@ -19,51 +19,43 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [isReady, setIsReady] = useState(() => {
-    // Initialize with hydration state if available (for client-side navigation)
-    if (typeof window !== 'undefined') {
-      return useAuthStore.persist.hasHydrated();
-    }
-    return false;
-  });
+  // Always start with false to match server render, then update after mount
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Wait for hydration to complete
+  // Wait for hydration to complete (only runs on client)
   useEffect(() => {
-    // If already ready, nothing to do
-    if (isReady) return;
-
-    // Check if hydrated now
+    // Check if already hydrated
     if (useAuthStore.persist.hasHydrated()) {
-      setIsReady(true);
+      setIsHydrated(true);
       return;
     }
 
     // Subscribe to finish hydration event
     const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
-      setIsReady(true);
+      setIsHydrated(true);
     });
 
     // Fallback timeout in case hydration event doesn't fire
     const timeoutId = setTimeout(() => {
-      setIsReady(true);
+      setIsHydrated(true);
     }, 500);
 
     return () => {
       unsubscribe();
       clearTimeout(timeoutId);
     };
-  }, [isReady]);
+  }, []);
 
-  // Redirect to login if not authenticated (after ready)
+  // Redirect to login if not authenticated (after hydration)
   useEffect(() => {
-    if (isReady && !isAuthenticated) {
+    if (isHydrated && !isAuthenticated) {
       const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
       router.replace(loginUrl);
     }
-  }, [isReady, isAuthenticated, pathname, router]);
+  }, [isHydrated, isAuthenticated, pathname, router]);
 
-  // Show loading while not ready
-  if (!isReady) {
+  // Show loading while not hydrated (matches server render)
+  if (!isHydrated) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <LoadingSpinner size="lg" text="Loading..." />
@@ -71,7 +63,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  // Don't render children if not authenticated (will redirect)
+  // Show redirecting message if not authenticated (will redirect)
   if (!isAuthenticated) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">

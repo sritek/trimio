@@ -67,7 +67,7 @@ export function PageHeader({
           {/* Title and description */}
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-            {description && <p className="text-muted-foreground">{description}</p>}
+            {description && <div className="text-muted-foreground">{description}</div>}
           </div>
         </div>
 

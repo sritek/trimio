@@ -529,3 +529,55 @@ export async function getStaffPerformance(
   );
   return reply.send(successResponse(summary));
 }
+
+// ============================================
+// Stylist Breaks Controllers
+// ============================================
+
+export async function listBreaks(
+  request: FastifyRequest<{
+    Params: { userId: string };
+    Querystring: { branchId?: string };
+  }>,
+  reply: FastifyReply
+) {
+  const { tenantId } = request.user!;
+  const breaks = await staffService.listBreaks(
+    tenantId,
+    request.params.userId,
+    request.query.branchId
+  );
+  return reply.send(successResponse(breaks));
+}
+
+export async function createBreak(
+  request: FastifyRequest<{
+    Params: { userId: string };
+    Body: {
+      branchId: string;
+      name: string;
+      dayOfWeek: number | null;
+      startTime: string;
+      endTime: string;
+    };
+  }>,
+  reply: FastifyReply
+) {
+  const { tenantId, sub: createdBy } = request.user!;
+  const result = await staffService.createBreak(
+    tenantId,
+    request.params.userId,
+    request.body,
+    createdBy
+  );
+  return reply.status(201).send(successResponse(result));
+}
+
+export async function deleteBreak(
+  request: FastifyRequest<{ Params: { userId: string; breakId: string } }>,
+  reply: FastifyReply
+) {
+  const { tenantId } = request.user!;
+  await staffService.deleteBreak(tenantId, request.params.userId, request.params.breakId);
+  return reply.send(successResponse({ message: 'Break deleted successfully' }));
+}

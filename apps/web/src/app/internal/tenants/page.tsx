@@ -13,42 +13,17 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { useAdminStore } from '@/stores/admin-store';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  email: string;
-  phone: string | null;
-  logoUrl: string | null;
-  subscriptionPlan: string;
-  subscriptionStatus: string;
-  trialEndsAt: string | null;
-  createdAt: string;
-  _count: {
-    branches: number;
-    users: number;
-  };
-}
-
-interface TenantsResponse {
-  success: boolean;
-  data: Tenant[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
+import { PlanBadge } from '../components';
+import { useInternalApi } from '../hooks';
+import type { Tenant } from '../types';
 
 export default function TenantsPage() {
   const router = useRouter();
   const { accessToken, logout } = useAdminStore();
+  const api = useInternalApi();
+
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -63,32 +38,17 @@ export default function TenantsPage() {
 
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search) params.set('search', search);
-
-      const response = await fetch(`${API_URL}/internal/tenants?${params}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          logout();
-          router.push('/internal/login');
-          return;
-        }
-        throw new Error('Failed to fetch tenants');
-      }
-
-      const data: TenantsResponse = await response.json();
-      setTenants(data.data);
+      const response = await api.listTenants(search);
+      setTenants(response.data);
     } catch (error) {
+      if (error instanceof Error && error.message === 'Session expired') {
+        return;
+      }
       toast.error(error instanceof Error ? error.message : 'Failed to fetch tenants');
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, search, logout, router]);
+  }, [accessToken, search, api]);
 
   useEffect(() => {
     if (isHydrated && accessToken) {
@@ -101,21 +61,6 @@ export default function TenantsPage() {
     router.push('/internal/login');
   };
 
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'trial':
-        return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'basic':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'professional':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'enterprise':
-        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -126,7 +71,7 @@ export default function TenantsPage() {
               <Building2 className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Trimio Admin</h1>
+              <h1 className="text-xl font-bold text-slate-900">trimio Admin</h1>
               <p className="text-sm text-slate-500">Tenant Management Portal</p>
             </div>
           </div>
@@ -230,9 +175,7 @@ export default function TenantsPage() {
                         <p className="text-sm text-slate-500">{tenant.email}</p>
                       </div>
                     </div>
-                    <Badge className={getPlanBadgeColor(tenant.subscriptionPlan)}>
-                      {tenant.subscriptionPlan}
-                    </Badge>
+                    <PlanBadge plan={tenant.subscriptionPlan} />
                   </div>
                 </CardHeader>
                 <CardContent>

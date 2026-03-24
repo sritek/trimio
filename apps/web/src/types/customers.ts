@@ -47,7 +47,7 @@ export interface CustomerPreferences {
   [key: string]: unknown;
 }
 
-export type BookingStatus = 'normal' | 'vip' | 'blocked' | 'restricted';
+export type BookingStatus = 'normal' | 'prepaid_only' | 'blocked';
 
 export interface CreateCustomerInput {
   phone: string;

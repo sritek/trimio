@@ -22,11 +22,9 @@ export default function NewStaffPage() {
   return (
     <PermissionGuard permission={PERMISSIONS.USERS_WRITE} fallback={<AccessDenied />}>
       <PageContainer>
-        <PageHeader title={t('addTitle')} description={t('addDescription')} />
+        <PageHeader title={t('addTitle')} description={t('addDescription')} backHref="/staff" />
         <PageContent>
-          <div className="max-w-3xl">
-            <StaffForm branchId={branchId || ''} />
-          </div>
+          <StaffForm branchId={branchId || ''} />
         </PageContent>
       </PageContainer>
     </PermissionGuard>

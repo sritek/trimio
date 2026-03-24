@@ -23,12 +23,16 @@ export const adminLoginResponseSchema = z.object({
   }),
 });
 
+// Indian phone number regex: 10 digits starting with 6-9
+const indianPhoneRegex = /^[6-9]\d{9}$/;
+const pincodeRegex = /^\d{6}$/;
+
 // Create tenant
 export const createTenantBodySchema = z.object({
-  name: z.string().min(2).max(255),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255),
   legalName: z.string().max(255).optional(),
-  email: z.string().email(),
-  phone: z.string().min(10).max(20).optional(),
+  email: z.string().email('Invalid email format'),
+  phone: z.string().regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9').optional(),
   logoUrl: z.string().url().optional(),
   subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).default('trial'),
   trialDays: z.number().int().min(0).max(90).default(14),
@@ -39,26 +43,31 @@ export type CreateTenantBody = z.infer<typeof createTenantBodySchema>;
 // Create branch
 export const createBranchBodySchema = z.object({
   tenantId: z.string().uuid(),
-  name: z.string().min(2).max(255),
-  address: z.string().max(500).optional(),
-  city: z.string().max(100).optional(),
-  state: z.string().max(100).optional(),
-  pincode: z.string().max(10).optional(),
-  phone: z.string().max(20).optional(),
-  email: z.string().email().optional(),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255),
+  address: z.string().min(1, 'Address is required').max(500),
+  city: z.string().min(1, 'City is required').max(100),
+  state: z.string().min(1, 'State is required').max(100),
+  pincode: z.string().regex(pincodeRegex, 'Pincode must be 6 digits'),
+  phone: z
+    .string()
+    .regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9')
+    .optional()
+    .or(z.literal('')),
+  email: z.string().email('Invalid email format').optional().or(z.literal('')),
   gstin: z.string().max(20).optional(),
 });
 
 export type CreateBranchBody = z.infer<typeof createBranchBodySchema>;
 
 // Create super owner
+// Note: branchId is optional - super_owners are auto-assigned to ALL branches
 export const createSuperOwnerBodySchema = z.object({
   tenantId: z.string().uuid(),
-  branchId: z.string().uuid(),
-  name: z.string().min(2).max(255),
-  email: z.string().email(),
-  phone: z.string().min(10).max(20),
-  password: z.string().min(8).max(100),
+  branchId: z.string().uuid().optional(), // Optional - ignored for super_owner
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255),
+  email: z.string().email('Invalid email format'),
+  phone: z.string().regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9'),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(100),
 });
 
 export type CreateSuperOwnerBody = z.infer<typeof createSuperOwnerBodySchema>;
@@ -74,16 +83,56 @@ export type ListTenantsQuery = z.infer<typeof listTenantsQuerySchema>;
 
 // Update tenant
 export const updateTenantBodySchema = z.object({
-  name: z.string().min(2).max(255).optional(),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255).optional(),
   legalName: z.string().max(255).optional().nullable(),
-  email: z.string().email().optional(),
-  phone: z.string().min(10).max(20).optional().nullable(),
+  email: z.string().email('Invalid email format').optional(),
+  phone: z
+    .string()
+    .regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9')
+    .optional()
+    .nullable(),
   logoUrl: z.string().url().optional().nullable(),
   subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).optional(),
   subscriptionStatus: z.enum(['active', 'inactive', 'suspended', 'cancelled']).optional(),
 });
 
 export type UpdateTenantBody = z.infer<typeof updateTenantBodySchema>;
+
+// Update branch
+export const updateBranchBodySchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255).optional(),
+  address: z.string().max(500).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  pincode: z
+    .string()
+    .regex(pincodeRegex, 'Pincode must be 6 digits')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  phone: z
+    .string()
+    .regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  email: z.string().email('Invalid email format').optional().nullable().or(z.literal('')),
+  gstin: z.string().max(20).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export type UpdateBranchBody = z.infer<typeof updateBranchBodySchema>;
+
+// Update super owner
+export const updateSuperOwnerBodySchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(255).optional(),
+  email: z.string().email('Invalid email format').optional(),
+  phone: z.string().regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9').optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(100).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type UpdateSuperOwnerBody = z.infer<typeof updateSuperOwnerBodySchema>;
 
 // Response schemas
 export const tenantResponseSchema = z.object({

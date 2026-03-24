@@ -17,7 +17,6 @@ export const stationCardSchema = z.object({
   stationType: z.object({
     id: z.string().uuid(),
     name: z.string(),
-    icon: z.string().nullable(),
     color: z.string(),
   }),
   displayOrder: z.number(),

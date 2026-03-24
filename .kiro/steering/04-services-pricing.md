@@ -23,23 +23,23 @@ This module handles service catalog management including categories, services, p
 CREATE TABLE service_categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  
+
   name VARCHAR(100) NOT NULL,
   slug VARCHAR(100) NOT NULL,
   description VARCHAR(500),
   icon VARCHAR(50),  -- Icon identifier
   color VARCHAR(7) DEFAULT '#6B7280',  -- Hex color
-  
+
   parent_id UUID REFERENCES service_categories(id),  -- For sub-categories
   level INTEGER DEFAULT 1,  -- 1 = category, 2 = sub-category
-  
+
   display_order INTEGER DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   created_by UUID REFERENCES users(id),
-  
+
   UNIQUE(tenant_id, slug),
   CONSTRAINT valid_level CHECK (level IN (1, 2))
 );
@@ -56,54 +56,54 @@ CREATE POLICY tenant_isolation ON service_categories
 CREATE TABLE services (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  
+
   -- Identity
   sku VARCHAR(50) NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  
+
   -- Categorization
   category_id UUID NOT NULL REFERENCES service_categories(id),
-  
+
   -- Pricing (base price at tenant level)
   base_price DECIMAL(10, 2) NOT NULL,
-  
+
   -- Tax
   tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 18.00,  -- GST rate
   hsn_sac_code VARCHAR(20),  -- SAC code for services
   is_tax_inclusive BOOLEAN DEFAULT false,
-  
+
   -- Duration
   duration_minutes INTEGER NOT NULL,
   active_time_minutes INTEGER NOT NULL,  -- Time stylist is actively working
   processing_time_minutes INTEGER DEFAULT 0,  -- Drying/settling time
-  
+
   -- Gender applicability
   gender_applicable VARCHAR(20) DEFAULT 'all',  -- male, female, all
-  
+
   -- Skill requirement
   skill_level_required VARCHAR(20) DEFAULT 'any',  -- junior, senior, expert, any
-  
+
   -- Commission
   commission_type VARCHAR(20) DEFAULT 'percentage',  -- percentage, flat
   commission_value DECIMAL(10, 2) DEFAULT 0,
   assistant_commission_value DECIMAL(10, 2) DEFAULT 0,
-  
+
   -- Display
   display_order INTEGER DEFAULT 0,
   is_popular BOOLEAN DEFAULT false,
   is_featured BOOLEAN DEFAULT false,
   image_url VARCHAR(500),
-  
+
   -- Status
   is_active BOOLEAN DEFAULT true,
   is_online_bookable BOOLEAN DEFAULT true,
-  
+
   -- Metadata
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   created_by UUID REFERENCES users(id),
-  
+
   UNIQUE(tenant_id, sku),
   CONSTRAINT valid_gender CHECK (gender_applicable IN ('male', 'female', 'all')),
   CONSTRAINT valid_skill CHECK (skill_level_required IN ('junior', 'senior', 'expert', 'any')),
@@ -125,20 +125,19 @@ CREATE TABLE service_variants (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-  
-  name VARCHAR(100) NOT NULL,  -- e.g., "Short Hair", "Medium Hair"
-  variant_group VARCHAR(50) NOT NULL,  -- e.g., "hair_length", "complexity"
-  
+
+  name VARCHAR(100) NOT NULL,  -- e.g., "Short Hair", "Medium Hair", "Long Hair"
+
   -- Price adjustment
   price_adjustment_type VARCHAR(20) DEFAULT 'absolute',  -- absolute, percentage
   price_adjustment DECIMAL(10, 2) NOT NULL,  -- +500 or +20%
-  
+
   -- Duration adjustment
   duration_adjustment INTEGER DEFAULT 0,  -- Additional minutes
-  
+
   display_order INTEGER DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -156,21 +155,21 @@ CREATE TABLE branch_service_prices (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   branch_id UUID NOT NULL REFERENCES branches(id),
   service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-  
+
   -- Override price (null means use base price)
   price DECIMAL(10, 2),
-  
+
   -- Override commission (null means use service default)
   commission_type VARCHAR(20),
   commission_value DECIMAL(10, 2),
-  
+
   -- Override availability
   is_available BOOLEAN DEFAULT true,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_by UUID REFERENCES users(id),
-  
+
   UNIQUE(branch_id, service_id)
 );
 
@@ -186,22 +185,22 @@ CREATE POLICY tenant_isolation ON branch_service_prices
 CREATE TABLE service_add_ons (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  
+
   name VARCHAR(100) NOT NULL,
   description VARCHAR(255),
-  
+
   price DECIMAL(10, 2) NOT NULL,
   tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 18.00,
-  
+
   duration_minutes INTEGER DEFAULT 0,
-  
+
   -- Which services can have this add-on
   applicable_to VARCHAR(20) DEFAULT 'all',  -- all, category, specific
   applicable_category_id UUID REFERENCES service_categories(id),
-  
+
   is_active BOOLEAN DEFAULT true,
   display_order INTEGER DEFAULT 0,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -217,12 +216,12 @@ CREATE TABLE service_add_on_mappings (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
   add_on_id UUID NOT NULL REFERENCES service_add_ons(id) ON DELETE CASCADE,
-  
+
   -- Override price for this specific service
   override_price DECIMAL(10, 2),
-  
+
   is_default BOOLEAN DEFAULT false,  -- Pre-selected by default
-  
+
   UNIQUE(service_id, add_on_id)
 );
 
@@ -234,12 +233,12 @@ CREATE TABLE service_consumables (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id),
-  
+
   quantity_used DECIMAL(10, 3) NOT NULL,  -- Amount consumed per service
   unit VARCHAR(20) NOT NULL,  -- ml, g, units
-  
+
   is_optional BOOLEAN DEFAULT false,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -255,40 +254,40 @@ CREATE POLICY tenant_isolation ON service_consumables
 CREATE TABLE combo_services (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  
+
   sku VARCHAR(50) NOT NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  
+
   -- Pricing
   combo_price DECIMAL(10, 2) NOT NULL,  -- Discounted bundle price
   original_price DECIMAL(10, 2) NOT NULL,  -- Sum of individual prices
   discount_percentage DECIMAL(5, 2) GENERATED ALWAYS AS (
     ROUND((1 - combo_price / NULLIF(original_price, 0)) * 100, 2)
   ) STORED,
-  
+
   tax_rate DECIMAL(5, 2) NOT NULL DEFAULT 18.00,
-  
+
   -- Duration
   total_duration_minutes INTEGER NOT NULL,
-  
+
   -- Validity
   valid_from DATE,
   valid_until DATE,
-  
+
   -- Display
   image_url VARCHAR(500),
   is_featured BOOLEAN DEFAULT false,
   display_order INTEGER DEFAULT 0,
-  
+
   -- Status
   is_active BOOLEAN DEFAULT true,
   is_online_bookable BOOLEAN DEFAULT true,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   created_by UUID REFERENCES users(id),
-  
+
   UNIQUE(tenant_id, sku)
 );
 
@@ -306,12 +305,12 @@ CREATE TABLE combo_service_items (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   combo_id UUID NOT NULL REFERENCES combo_services(id) ON DELETE CASCADE,
   service_id UUID NOT NULL REFERENCES services(id),
-  
+
   quantity INTEGER DEFAULT 1,
-  
+
   -- For display purposes
   display_order INTEGER DEFAULT 0,
-  
+
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -329,10 +328,10 @@ CREATE TABLE service_price_history (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   service_id UUID NOT NULL REFERENCES services(id),
   branch_id UUID REFERENCES branches(id),  -- NULL for base price changes
-  
+
   old_price DECIMAL(10, 2),
   new_price DECIMAL(10, 2) NOT NULL,
-  
+
   change_reason VARCHAR(255),
   changed_by UUID REFERENCES users(id),
   changed_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -356,30 +355,30 @@ CREATE POLICY tenant_isolation ON service_price_history
 export enum GenderApplicable {
   MALE = 'male',
   FEMALE = 'female',
-  ALL = 'all'
+  ALL = 'all',
 }
 
 export enum SkillLevel {
   JUNIOR = 'junior',
   SENIOR = 'senior',
   EXPERT = 'expert',
-  ANY = 'any'
+  ANY = 'any',
 }
 
 export enum CommissionType {
   PERCENTAGE = 'percentage',
-  FLAT = 'flat'
+  FLAT = 'flat',
 }
 
 export enum PriceAdjustmentType {
   ABSOLUTE = 'absolute',
-  PERCENTAGE = 'percentage'
+  PERCENTAGE = 'percentage',
 }
 
 export enum AddOnApplicability {
   ALL = 'all',
   CATEGORY = 'category',
-  SPECIFIC = 'specific'
+  SPECIFIC = 'specific',
 }
 
 // =====================================================
@@ -400,7 +399,7 @@ export interface ServiceCategory {
   createdAt: Date;
   updatedAt: Date;
   createdBy?: string;
-  
+
   // Relations
   subCategories?: ServiceCategory[];
   services?: Service[];
@@ -414,42 +413,42 @@ export interface Service {
   name: string;
   description?: string;
   categoryId: string;
-  
+
   // Pricing
   basePrice: number;
   taxRate: number;
   hsnSacCode?: string;
   isTaxInclusive: boolean;
-  
+
   // Duration
   durationMinutes: number;
   activeTimeMinutes: number;
   processingTimeMinutes: number;
-  
+
   // Applicability
   genderApplicable: GenderApplicable;
   skillLevelRequired: SkillLevel;
-  
+
   // Commission
   commissionType: CommissionType;
   commissionValue: number;
   assistantCommissionValue: number;
-  
+
   // Display
   displayOrder: number;
   isPopular: boolean;
   isFeatured: boolean;
   imageUrl?: string;
-  
+
   // Status
   isActive: boolean;
   isOnlineBookable: boolean;
-  
+
   // Metadata
   createdAt: Date;
   updatedAt: Date;
   createdBy?: string;
-  
+
   // Relations (populated)
   category?: ServiceCategory;
   variants?: ServiceVariant[];
@@ -462,7 +461,6 @@ export interface ServiceVariant {
   tenantId: string;
   serviceId: string;
   name: string;
-  variantGroup: string;
   priceAdjustmentType: PriceAdjustmentType;
   priceAdjustment: number;
   durationAdjustment: number;
@@ -509,7 +507,7 @@ export interface ServiceConsumable {
   unit: string;
   isOptional: boolean;
   createdAt: Date;
-  
+
   // Populated
   product?: Product;
 }
@@ -535,7 +533,7 @@ export interface ComboService {
   createdAt: Date;
   updatedAt: Date;
   createdBy?: string;
-  
+
   // Relations
   items?: ComboServiceItem[];
 }
@@ -548,14 +546,14 @@ export interface ComboServiceItem {
   quantity: number;
   displayOrder: number;
   createdAt: Date;
-  
+
   // Populated
   service?: Service;
 }
 
 // Computed types for API responses
 export interface ServiceWithPrice extends Service {
-  effectivePrice: number;  // After branch override
+  effectivePrice: number; // After branch override
   effectiveCommission: {
     type: CommissionType;
     value: number;
@@ -674,37 +672,36 @@ interface CreateServiceRequest {
   name: string;
   description?: string;
   categoryId: string;
-  
+
   basePrice: number;
   taxRate?: number;
   hsnSacCode?: string;
   isTaxInclusive?: boolean;
-  
+
   durationMinutes: number;
   activeTimeMinutes: number;
   processingTimeMinutes?: number;
-  
+
   genderApplicable?: GenderApplicable;
   skillLevelRequired?: SkillLevel;
-  
+
   commissionType?: CommissionType;
   commissionValue?: number;
   assistantCommissionValue?: number;
-  
+
   isPopular?: boolean;
   isFeatured?: boolean;
   imageUrl?: string;
   isOnlineBookable?: boolean;
-  
+
   // Initial variants
   variants?: {
     name: string;
-    variantGroup: string;
     priceAdjustmentType: PriceAdjustmentType;
     priceAdjustment: number;
     durationAdjustment?: number;
   }[];
-  
+
   // Consumables
   consumables?: {
     productId: string;
@@ -750,7 +747,7 @@ interface GetCatalogResponse {
 interface UpdateBranchPricesRequest {
   prices: {
     serviceId: string;
-    price?: number;  // null to use base price
+    price?: number; // null to use base price
     commissionType?: CommissionType;
     commissionValue?: number;
     isAvailable?: boolean;
@@ -781,7 +778,7 @@ interface CreateComboRequest {
   imageUrl?: string;
   isFeatured?: boolean;
   isOnlineBookable?: boolean;
-  
+
   items: {
     serviceId: string;
     quantity?: number;
@@ -863,15 +860,15 @@ class PriceResolutionEngine {
     source: 'base' | 'branch';
   }> {
     const service = await this.getService(serviceId);
-    
+
     // Check for branch override
     const branchPrice = await this.db.branchServicePrices.findFirst({
       where: { branchId, serviceId },
     });
-    
+
     let basePrice = branchPrice?.price ?? service.basePrice;
     let source: 'base' | 'branch' = branchPrice?.price ? 'branch' : 'base';
-    
+
     // Apply variant adjustment
     if (variantId) {
       const variant = await this.getVariant(variantId);
@@ -881,12 +878,12 @@ class PriceResolutionEngine {
         basePrice += basePrice * (variant.priceAdjustment / 100);
       }
     }
-    
+
     // Calculate tax
     const taxRate = service.taxRate;
     let price: number;
     let taxAmount: number;
-    
+
     if (service.isTaxInclusive) {
       // Price includes tax, extract it
       price = basePrice / (1 + taxRate / 100);
@@ -896,7 +893,7 @@ class PriceResolutionEngine {
       price = basePrice;
       taxAmount = price * (taxRate / 100);
     }
-    
+
     return {
       price: Math.round(price * 100) / 100,
       priceWithTax: Math.round((price + taxAmount) * 100) / 100,
@@ -905,7 +902,7 @@ class PriceResolutionEngine {
       source,
     };
   }
-  
+
   /**
    * Get effective commission for a service at a branch
    */
@@ -919,11 +916,11 @@ class PriceResolutionEngine {
     source: 'base' | 'branch';
   }> {
     const service = await this.getService(serviceId);
-    
+
     const branchPrice = await this.db.branchServicePrices.findFirst({
       where: { branchId, serviceId },
     });
-    
+
     if (branchPrice?.commissionType && branchPrice?.commissionValue !== null) {
       return {
         type: branchPrice.commissionType,
@@ -932,7 +929,7 @@ class PriceResolutionEngine {
         source: 'branch',
       };
     }
-    
+
     return {
       type: service.commissionType,
       value: service.commissionValue,
@@ -940,7 +937,7 @@ class PriceResolutionEngine {
       source: 'base',
     };
   }
-  
+
   /**
    * Calculate commission amount for a service
    */
@@ -974,19 +971,19 @@ class ServiceCatalogBuilder {
   ): Promise<ServiceCatalog> {
     // Get all categories
     const categories = await this.getCategories(options.categoryId);
-    
+
     // Get all services with branch prices
     const services = await this.getServicesWithPrices(branchId, options);
-    
+
     // Get combos
     const combos = await this.getCombos(branchId, options);
-    
+
     // Get add-ons
     const addOns = await this.getAddOns();
-    
+
     // Build hierarchical structure
     const categoryTree = this.buildCategoryTree(categories, services);
-    
+
     return {
       categories: categoryTree,
       services,
@@ -994,7 +991,7 @@ class ServiceCatalogBuilder {
       addOns,
     };
   }
-  
+
   /**
    * Get services with effective prices for a branch
    */
@@ -1003,17 +1000,17 @@ class ServiceCatalogBuilder {
     options: { includeInactive?: boolean; gender?: GenderApplicable }
   ): Promise<ServiceWithPrice[]> {
     const whereClause: any = {};
-    
+
     if (!options.includeInactive) {
       whereClause.isActive = true;
     }
-    
+
     if (options.gender && options.gender !== GenderApplicable.ALL) {
       whereClause.genderApplicable = {
         in: [options.gender, GenderApplicable.ALL],
       };
     }
-    
+
     const services = await this.db.services.findMany({
       where: whereClause,
       include: {
@@ -1022,26 +1019,26 @@ class ServiceCatalogBuilder {
         addOns: true,
       },
     });
-    
+
     // Get branch price overrides
     const branchPrices = await this.db.branchServicePrices.findMany({
       where: { branchId },
     });
-    
-    const priceMap = new Map(branchPrices.map(p => [p.serviceId, p]));
-    
+
+    const priceMap = new Map(branchPrices.map((p) => [p.serviceId, p]));
+
     return services
-      .map(service => {
+      .map((service) => {
         const branchPrice = priceMap.get(service.id);
-        
+
         // Check if service is available at this branch
         if (branchPrice?.isAvailable === false) {
           return null;
         }
-        
+
         const effectivePrice = branchPrice?.price ?? service.basePrice;
         const taxAmount = effectivePrice * (service.taxRate / 100);
-        
+
         return {
           ...service,
           effectivePrice,
@@ -1054,7 +1051,7 @@ class ServiceCatalogBuilder {
       })
       .filter(Boolean) as ServiceWithPrice[];
   }
-  
+
   /**
    * Build category tree with nested services
    */
@@ -1063,24 +1060,24 @@ class ServiceCatalogBuilder {
     services: ServiceWithPrice[]
   ): CategoryWithServices[] {
     const servicesByCategory = new Map<string, ServiceWithPrice[]>();
-    
+
     for (const service of services) {
       const existing = servicesByCategory.get(service.categoryId) || [];
       existing.push(service);
       servicesByCategory.set(service.categoryId, existing);
     }
-    
+
     // Get root categories (level 1)
-    const rootCategories = categories.filter(c => c.level === 1);
-    
-    return rootCategories.map(category => {
+    const rootCategories = categories.filter((c) => c.level === 1);
+
+    return rootCategories.map((category) => {
       const subCategories = categories
-        .filter(c => c.parentId === category.id)
-        .map(sub => ({
+        .filter((c) => c.parentId === category.id)
+        .map((sub) => ({
           ...sub,
           services: servicesByCategory.get(sub.id) || [],
         }));
-      
+
       return {
         ...category,
         subCategories,
@@ -1101,24 +1098,24 @@ class ComboServiceManager {
   async createCombo(request: CreateComboRequest): Promise<ComboService> {
     // Validate all services exist
     const services = await this.db.services.findMany({
-      where: { id: { in: request.items.map(i => i.serviceId) } },
+      where: { id: { in: request.items.map((i) => i.serviceId) } },
     });
-    
+
     if (services.length !== request.items.length) {
       throw new BadRequestError('INVALID_SERVICE', 'One or more services not found');
     }
-    
+
     // Calculate original price and total duration
     let originalPrice = 0;
     let totalDuration = 0;
-    
+
     for (const item of request.items) {
-      const service = services.find(s => s.id === item.serviceId)!;
+      const service = services.find((s) => s.id === item.serviceId)!;
       const quantity = item.quantity || 1;
       originalPrice += service.basePrice * quantity;
       totalDuration += service.durationMinutes * quantity;
     }
-    
+
     // Validate combo price is less than original
     if (request.comboPrice >= originalPrice) {
       throw new BadRequestError(
@@ -1126,9 +1123,9 @@ class ComboServiceManager {
         'Combo price must be less than sum of individual prices'
       );
     }
-    
+
     // Create combo in transaction
-    const combo = await this.db.transaction(async tx => {
+    const combo = await this.db.transaction(async (tx) => {
       const combo = await tx.comboServices.create({
         tenantId: this.tenantId,
         sku: request.sku,
@@ -1144,7 +1141,7 @@ class ComboServiceManager {
         isFeatured: request.isFeatured ?? false,
         isOnlineBookable: request.isOnlineBookable ?? true,
       });
-      
+
       // Create combo items
       for (let i = 0; i < request.items.length; i++) {
         const item = request.items[i];
@@ -1156,30 +1153,30 @@ class ComboServiceManager {
           displayOrder: i,
         });
       }
-      
+
       return combo;
     });
-    
+
     return this.getComboWithItems(combo.id);
   }
-  
+
   /**
    * Check if combo is valid (within validity period)
    */
   isComboValid(combo: ComboService): boolean {
     const today = new Date().toISOString().split('T')[0];
-    
+
     if (combo.validFrom && combo.validFrom > today) {
       return false;
     }
-    
+
     if (combo.validUntil && combo.validUntil < today) {
       return false;
     }
-    
+
     return combo.isActive;
   }
-  
+
   /**
    * Expand combo into individual services for billing
    */
@@ -1191,26 +1188,23 @@ class ComboServiceManager {
     comboDiscount: number;
   }> {
     const combo = await this.getComboWithItems(comboId);
-    
+
     if (!this.isComboValid(combo)) {
       throw new BadRequestError('COMBO_NOT_VALID', 'Combo is not currently valid');
     }
-    
+
     const services: ServiceWithPrice[] = [];
-    
+
     for (const item of combo.items!) {
-      const serviceWithPrice = await this.priceEngine.getServiceWithPrice(
-        item.serviceId,
-        branchId
-      );
-      
+      const serviceWithPrice = await this.priceEngine.getServiceWithPrice(item.serviceId, branchId);
+
       for (let i = 0; i < item.quantity; i++) {
         services.push(serviceWithPrice);
       }
     }
-    
+
     const comboDiscount = combo.originalPrice - combo.comboPrice;
-    
+
     return { services, comboDiscount };
   }
 }
@@ -1232,14 +1226,14 @@ class PriceChangeTracker {
   ): Promise<void> {
     const service = await this.getService(serviceId);
     let oldPrice: number;
-    
+
     if (branchId) {
       // Branch-level price change
       const branchPrice = await this.db.branchServicePrices.findFirst({
         where: { branchId, serviceId },
       });
       oldPrice = branchPrice?.price ?? service.basePrice;
-      
+
       await this.db.branchServicePrices.upsert({
         where: { branchId_serviceId: { branchId, serviceId } },
         create: {
@@ -1258,13 +1252,13 @@ class PriceChangeTracker {
     } else {
       // Base price change
       oldPrice = service.basePrice;
-      
+
       await this.db.services.update(serviceId, {
         basePrice: newPrice,
         updatedAt: new Date(),
       });
     }
-    
+
     // Create price history record
     await this.db.servicePriceHistory.create({
       tenantId: this.tenantId,
@@ -1275,7 +1269,7 @@ class PriceChangeTracker {
       changeReason: reason,
       changedBy: userId,
     });
-    
+
     // Create audit log
     await this.auditService.log({
       action: 'PRICE_CHANGE',
@@ -1288,14 +1282,11 @@ class PriceChangeTracker {
       userId,
     });
   }
-  
+
   /**
    * Get price history for a service
    */
-  async getPriceHistory(
-    serviceId: string,
-    branchId?: string
-  ): Promise<ServicePriceHistory[]> {
+  async getPriceHistory(serviceId: string, branchId?: string): Promise<ServicePriceHistory[]> {
     return this.db.servicePriceHistory.findMany({
       where: {
         serviceId,
@@ -1324,7 +1315,10 @@ export const createCategorySchema = z.object({
   name: z.string().min(2).max(100),
   description: z.string().max(500).optional(),
   icon: z.string().max(50).optional(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#6B7280'),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .default('#6B7280'),
   parentId: z.string().uuid().optional(),
   displayOrder: z.number().int().min(0).default(0),
 });
@@ -1332,57 +1326,69 @@ export const createCategorySchema = z.object({
 // =====================================================
 // SERVICE
 // =====================================================
-export const createServiceSchema = z.object({
-  sku: z.string().min(2).max(50).regex(/^[A-Z0-9-]+$/),
-  name: z.string().min(2).max(255),
-  description: z.string().max(2000).optional(),
-  categoryId: z.string().uuid(),
-  
-  basePrice: z.number().min(0).max(1000000),
-  taxRate: z.number().min(0).max(100).default(18),
-  hsnSacCode: z.string().max(20).optional(),
-  isTaxInclusive: z.boolean().default(false),
-  
-  durationMinutes: z.number().int().min(5).max(480),
-  activeTimeMinutes: z.number().int().min(5).max(480),
-  processingTimeMinutes: z.number().int().min(0).max(240).default(0),
-  
-  genderApplicable: z.enum(['male', 'female', 'all']).default('all'),
-  skillLevelRequired: z.enum(['junior', 'senior', 'expert', 'any']).default('any'),
-  
-  commissionType: z.enum(['percentage', 'flat']).default('percentage'),
-  commissionValue: z.number().min(0).max(100).default(0),
-  assistantCommissionValue: z.number().min(0).max(100).default(0),
-  
-  isPopular: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
-  imageUrl: z.string().url().optional(),
-  isOnlineBookable: z.boolean().default(true),
-  
-  variants: z.array(z.object({
-    name: z.string().min(2).max(100),
-    variantGroup: z.string().min(2).max(50),
-    priceAdjustmentType: z.enum(['absolute', 'percentage']),
-    priceAdjustment: z.number(),
-    durationAdjustment: z.number().int().default(0),
-  })).optional(),
-  
-  consumables: z.array(z.object({
-    productId: z.string().uuid(),
-    quantityUsed: z.number().min(0),
-    unit: z.string().max(20),
-    isOptional: z.boolean().default(false),
-  })).optional(),
-}).refine(data => data.activeTimeMinutes <= data.durationMinutes, {
-  message: 'Active time cannot exceed total duration',
-});
+export const createServiceSchema = z
+  .object({
+    sku: z
+      .string()
+      .min(2)
+      .max(50)
+      .regex(/^[A-Z0-9-]+$/),
+    name: z.string().min(2).max(255),
+    description: z.string().max(2000).optional(),
+    categoryId: z.string().uuid(),
+
+    basePrice: z.number().min(0).max(1000000),
+    taxRate: z.number().min(0).max(100).default(18),
+    hsnSacCode: z.string().max(20).optional(),
+    isTaxInclusive: z.boolean().default(false),
+
+    durationMinutes: z.number().int().min(5).max(480),
+    activeTimeMinutes: z.number().int().min(5).max(480),
+    processingTimeMinutes: z.number().int().min(0).max(240).default(0),
+
+    genderApplicable: z.enum(['male', 'female', 'all']).default('all'),
+    skillLevelRequired: z.enum(['junior', 'senior', 'expert', 'any']).default('any'),
+
+    commissionType: z.enum(['percentage', 'flat']).default('percentage'),
+    commissionValue: z.number().min(0).max(100).default(0),
+    assistantCommissionValue: z.number().min(0).max(100).default(0),
+
+    isPopular: z.boolean().default(false),
+    isFeatured: z.boolean().default(false),
+    imageUrl: z.string().url().optional(),
+    isOnlineBookable: z.boolean().default(true),
+
+    variants: z
+      .array(
+        z.object({
+          name: z.string().min(2).max(100),
+          priceAdjustmentType: z.enum(['absolute', 'percentage']),
+          priceAdjustment: z.number(),
+          durationAdjustment: z.number().int().default(0),
+        })
+      )
+      .optional(),
+
+    consumables: z
+      .array(
+        z.object({
+          productId: z.string().uuid(),
+          quantityUsed: z.number().min(0),
+          unit: z.string().max(20),
+          isOptional: z.boolean().default(false),
+        })
+      )
+      .optional(),
+  })
+  .refine((data) => data.activeTimeMinutes <= data.durationMinutes, {
+    message: 'Active time cannot exceed total duration',
+  });
 
 // =====================================================
 // SERVICE VARIANT
 // =====================================================
 export const createVariantSchema = z.object({
   name: z.string().min(2).max(100),
-  variantGroup: z.string().min(2).max(50),
   priceAdjustmentType: z.enum(['absolute', 'percentage']),
   priceAdjustment: z.number(),
   durationAdjustment: z.number().int().default(0),
@@ -1403,21 +1409,35 @@ export const updateBranchPriceSchema = z.object({
 // COMBO SERVICE
 // =====================================================
 export const createComboSchema = z.object({
-  sku: z.string().min(2).max(50).regex(/^[A-Z0-9-]+$/),
+  sku: z
+    .string()
+    .min(2)
+    .max(50)
+    .regex(/^[A-Z0-9-]+$/),
   name: z.string().min(2).max(255),
   description: z.string().max(2000).optional(),
   comboPrice: z.number().min(0).max(1000000),
   taxRate: z.number().min(0).max(100).default(18),
-  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  validFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  validUntil: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   imageUrl: z.string().url().optional(),
   isFeatured: z.boolean().default(false),
   isOnlineBookable: z.boolean().default(true),
-  
-  items: z.array(z.object({
-    serviceId: z.string().uuid(),
-    quantity: z.number().int().min(1).default(1),
-  })).min(2),  // Combo must have at least 2 services
+
+  items: z
+    .array(
+      z.object({
+        serviceId: z.string().uuid(),
+        quantity: z.number().int().min(1).default(1),
+      })
+    )
+    .min(2), // Combo must have at least 2 services
 });
 
 // =====================================================
@@ -1466,11 +1486,11 @@ const SERVICE_EVENTS = {
   SERVICE_UPDATED: 'service.updated',
   SERVICE_DELETED: 'service.deleted',
   SERVICE_PRICE_CHANGED: 'service.price_changed',
-  
+
   CATEGORY_CREATED: 'category.created',
   CATEGORY_UPDATED: 'category.updated',
   CATEGORY_DELETED: 'category.deleted',
-  
+
   COMBO_CREATED: 'combo.created',
   COMBO_UPDATED: 'combo.updated',
   COMBO_EXPIRED: 'combo.expired',
@@ -1511,7 +1531,7 @@ export const SERVICE_ERRORS = {
     message: 'Cannot delete service with existing appointments',
     httpStatus: 400,
   },
-  
+
   // Category errors
   CATEGORY_NOT_FOUND: {
     code: 'SVC_010',
@@ -1528,7 +1548,7 @@ export const SERVICE_ERRORS = {
     message: 'Cannot delete category with sub-categories',
     httpStatus: 400,
   },
-  
+
   // Combo errors
   COMBO_NOT_FOUND: {
     code: 'SVC_020',
@@ -1550,14 +1570,14 @@ export const SERVICE_ERRORS = {
     message: 'Combo must have at least 2 services',
     httpStatus: 400,
   },
-  
+
   // Variant errors
   VARIANT_NOT_FOUND: {
     code: 'SVC_030',
     message: 'Service variant not found',
     httpStatus: 404,
   },
-  
+
   // Add-on errors
   ADDON_NOT_FOUND: {
     code: 'SVC_040',
@@ -1569,7 +1589,7 @@ export const SERVICE_ERRORS = {
     message: 'Add-on is not applicable to this service',
     httpStatus: 400,
   },
-  
+
   // Price errors
   INVALID_PRICE: {
     code: 'SVC_050',
@@ -1600,7 +1620,7 @@ describe('PriceResolutionEngine', () => {
     it('should calculate tax correctly for tax-inclusive prices');
     it('should calculate tax correctly for tax-exclusive prices');
   });
-  
+
   describe('getEffectiveCommission', () => {
     it('should return base commission when no branch override');
     it('should return branch commission when override exists');
@@ -1626,14 +1646,14 @@ describe('ComboServiceManager', () => {
     it('should reject if combo price >= original price');
     it('should reject if less than 2 services');
   });
-  
+
   describe('isComboValid', () => {
     it('should return true for active combo within validity');
     it('should return false for inactive combo');
     it('should return false before valid_from date');
     it('should return false after valid_until date');
   });
-  
+
   describe('expandCombo', () => {
     it('should return individual services with prices');
     it('should calculate combo discount');

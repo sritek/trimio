@@ -62,13 +62,11 @@ function getStatusBadgeVariant(
   status: BookingStatus
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
-    case 'vip':
-      return 'default';
     case 'normal':
       return 'secondary';
     case 'blocked':
       return 'destructive';
-    case 'restricted':
+    case 'prepaid_only':
       return 'outline';
     default:
       return 'secondary';
@@ -184,6 +182,7 @@ export default function CustomerDetailPage() {
           <PageHeader
             title={`Edit ${customer.name}`}
             description="Update customer information"
+            backHref={`/customers/${customerId}`}
             actions={
               <Button variant="outline" onClick={() => router.push(`/customers/${customerId}`)}>
                 <X className="mr-2 h-4 w-4" />
@@ -214,25 +213,20 @@ export default function CustomerDetailPage() {
               </Badge>
               {customer.allergies && customer.allergies.length > 0 && (
                 <Badge variant="destructive" className="gap-1">
-                  <AlertTriangle className="h-3 w-3" />
+                  <AlertTriangle className="size-3" />
                   Allergies
                 </Badge>
               )}
             </div>
           }
+          backHref="/customers"
           actions={
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push('/customers')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
+            canWrite && (
+              <Button onClick={() => router.push(`/customers/${customerId}?edit=true`)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
               </Button>
-              {canWrite && (
-                <Button onClick={() => router.push(`/customers/${customerId}?edit=true`)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </Button>
-              )}
-            </div>
+            )
           }
         />
 

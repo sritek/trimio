@@ -148,7 +148,6 @@ export class FloorViewService {
         stationType: {
           id: station.stationType.id,
           name: station.stationType.name,
-          icon: station.stationType.icon,
           color: station.stationType.color,
         },
         displayOrder: station.displayOrder,

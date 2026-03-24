@@ -32,19 +32,20 @@ Started: March 18, 2026
 
 ### Phase 1: Authentication & Onboarding
 
-- [ ] Login page loads
-- [ ] Error handling for invalid credentials
-- [ ] Successful login flow
-- [ ] JWT token storage
-- [ ] Session persistence on refresh
-- [ ] Logout flow
+- [x] Login page loads (rebranded to trimio)
+- [x] Error handling for invalid credentials
+- [x] Successful login flow
+- [x] JWT token storage
+- [x] Session persistence on refresh (fixed hydration mismatch)
+- [x] Logout flow (with confirmation dialog)
 
 ### Phase 2: Dashboard & Navigation
 
-- [ ] Dashboard loads after login
-- [ ] Sidebar navigation works
-- [ ] Branch selector works
+- [x] Dashboard loads after login
+- [x] Sidebar navigation works (redesigned with new layout)
+- [x] Branch selector works (moved to sidebar)
 - [ ] Role-based menu visibility
+- [x] Mobile navigation updated (consistent with sidebar)
 
 ### Phase 3: Service Setup
 

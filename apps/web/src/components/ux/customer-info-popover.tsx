@@ -68,7 +68,7 @@ export function CustomerInfoPopover({
                     </div>
                   )}
                 </div>
-                {customer.bookingStatus === 'vip' && (
+                {customer.tags.includes('VIP') && (
                   <Badge variant="secondary" className="shrink-0">
                     <Star className="h-3 w-3 mr-1" />
                     VIP
@@ -77,6 +77,11 @@ export function CustomerInfoPopover({
                 {customer.bookingStatus === 'blocked' && (
                   <Badge variant="destructive" className="shrink-0">
                     Blocked
+                  </Badge>
+                )}
+                {customer.bookingStatus === 'prepaid_only' && (
+                  <Badge variant="outline" className="shrink-0">
+                    Prepaid Only
                   </Badge>
                 )}
               </div>

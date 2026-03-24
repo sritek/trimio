@@ -26,10 +26,7 @@ export class CombosService {
   /**
    * Get all combos for a tenant
    */
-  async getCombos(
-    tenantId: string,
-    includeInactive = false
-  ): Promise<ComboWithItems[]> {
+  async getCombos(tenantId: string, includeInactive = false): Promise<ComboWithItems[]> {
     const where: Record<string, unknown> = { tenantId };
 
     if (!includeInactive) {
@@ -61,10 +58,7 @@ export class CombosService {
   /**
    * Get a single combo by ID
    */
-  async getComboById(
-    tenantId: string,
-    comboId: string
-  ): Promise<ComboWithItems | null> {
+  async getComboById(tenantId: string, comboId: string): Promise<ComboWithItems | null> {
     return prisma.comboService.findFirst({
       where: { id: comboId, tenantId },
       include: {
@@ -149,10 +143,8 @@ export class CombosService {
         validFrom: data.validFrom ? new Date(data.validFrom) : null,
         validUntil: data.validUntil ? new Date(data.validUntil) : null,
         imageUrl: data.imageUrl,
-        isFeatured: data.isFeatured,
         displayOrder,
         isActive: data.isActive,
-        isOnlineBookable: data.isOnlineBookable,
         createdBy,
         items: {
           create: data.items.map((item, index) => ({

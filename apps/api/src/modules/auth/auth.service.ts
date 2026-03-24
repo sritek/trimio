@@ -55,7 +55,7 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    // Get branch IDs
+    // Get branch IDs from explicit assignments (DB is source of truth)
     const branchIds = user.branchAssignments.map((ba) => ba.branchId);
 
     // Get permissions for user's role
@@ -76,6 +76,7 @@ export class AuthService {
         id: user.tenant.id,
         name: user.tenant.name,
         slug: user.tenant.slug,
+        logoUrl: user.tenant.logoUrl,
       },
     };
   }

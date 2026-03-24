@@ -29,7 +29,6 @@ export const createCategoryBodySchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens')
     .optional(),
   description: z.string().max(500).optional(),
-  icon: z.string().max(50).optional(),
   color: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Color must be a valid hex color')
@@ -62,14 +61,13 @@ export const categoryQuerySchema = z.object({
 
 export const createServiceBodySchema = z.object({
   categoryId: z.string().uuid(),
-  sku: z.string().min(1).max(50),
+  sku: z.string().min(1).max(50).optional(), // Auto-generated if not provided
   name: z.string().min(2).max(255),
   description: z.string().optional(),
 
   // Pricing
   basePrice: z.number().positive(),
   taxRate: z.number().min(0).max(100).default(18),
-  hsnSacCode: z.string().max(20).optional(),
   isTaxInclusive: z.boolean().default(false),
 
   // Duration
@@ -79,22 +77,17 @@ export const createServiceBodySchema = z.object({
 
   // Applicability
   genderApplicable: z.enum(['all', 'male', 'female']).default('all'),
-  skillLevelRequired: z.enum(['any', 'junior', 'senior', 'expert']).default('any'),
 
   // Commission
   commissionType: z.enum(['percentage', 'fixed']).default('percentage'),
   commissionValue: z.number().min(0).default(0),
-  assistantCommissionValue: z.number().min(0).default(0),
 
   // Display
   displayOrder: z.number().int().min(0).optional(),
-  isPopular: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
   imageUrl: z.string().url().max(500).optional().nullable(),
 
   // Status
   isActive: z.boolean().default(true),
-  isOnlineBookable: z.boolean().default(true),
 });
 
 export const updateServiceBodySchema = createServiceBodySchema.partial();
@@ -105,9 +98,6 @@ export const serviceQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   search: z.string().optional(),
   isActive: z.coerce.boolean().optional(),
-  isPopular: z.coerce.boolean().optional(),
-  isFeatured: z.coerce.boolean().optional(),
-  isOnlineBookable: z.coerce.boolean().optional(),
   genderApplicable: z.enum(['all', 'male', 'female']).optional(),
   sortBy: z.enum(['name', 'basePrice', 'displayOrder', 'createdAt']).default('displayOrder'),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
@@ -124,7 +114,6 @@ export const catalogQuerySchema = z.object({
 
 export const createVariantBodySchema = z.object({
   name: z.string().min(1).max(100),
-  variantGroup: z.string().min(1).max(50),
   priceAdjustmentType: z.enum(['absolute', 'percentage']).default('absolute'),
   priceAdjustment: z.number(),
   durationAdjustment: z.number().int().default(0),
@@ -198,10 +187,8 @@ export const createComboBodySchema = z.object({
   validFrom: z.string().datetime().optional().nullable(),
   validUntil: z.string().datetime().optional().nullable(),
   imageUrl: z.string().url().max(500).optional().nullable(),
-  isFeatured: z.boolean().default(false),
   displayOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().default(true),
-  isOnlineBookable: z.boolean().default(true),
   items: z
     .array(
       z.object({

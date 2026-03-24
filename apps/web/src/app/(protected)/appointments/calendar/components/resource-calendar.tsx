@@ -59,7 +59,7 @@ const SLOT_HEIGHTS: Record<number, number> = {
 // Header heights and column widths
 const STYLIST_HEADER_HEIGHT = 72;
 const TIME_COLUMN_WIDTH = 64;
-const STYLIST_COLUMN_WIDTH = 300; // Fixed width for each stylist column
+const MIN_STYLIST_COLUMN_WIDTH = 180; // Minimum width for readability
 
 export function ResourceCalendar({
   data,
@@ -76,6 +76,7 @@ export function ResourceCalendar({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [draggedAppointment, setDraggedAppointment] = useState<CalendarAppointment | null>(null);
   const [scrollState, setScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
+  const [containerWidth, setContainerWidth] = useState(0);
 
   const {
     selectedDate,
@@ -96,6 +97,7 @@ export function ResourceCalendar({
     if (!container) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = container;
+    setContainerWidth(clientWidth);
     setScrollState({
       canScrollLeft: scrollLeft > 5,
       canScrollRight: scrollLeft < scrollWidth - clientWidth - 5,
@@ -111,20 +113,18 @@ export function ResourceCalendar({
     container.addEventListener('scroll', updateScrollState);
     window.addEventListener('resize', updateScrollState);
 
+    // Initial container width measurement
+    const resizeObserver = new ResizeObserver(() => {
+      updateScrollState();
+    });
+    resizeObserver.observe(container);
+
     return () => {
       container.removeEventListener('scroll', updateScrollState);
       window.removeEventListener('resize', updateScrollState);
+      resizeObserver.disconnect();
     };
   }, [updateScrollState, data?.stylists]);
-
-  // Scroll by one column width
-  const scrollByColumn = useCallback((direction: 'left' | 'right') => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const scrollAmount = direction === 'right' ? STYLIST_COLUMN_WIDTH : -STYLIST_COLUMN_WIDTH;
-    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-  }, []);
 
   // Generate time slots based on working hours and interval
   const timeSlots = useMemo(() => {
@@ -177,6 +177,24 @@ export function ResourceCalendar({
     return data.stylists.filter((s) => filters.stylistIds.includes(s.id));
   }, [data?.stylists, filters.stylistIds]);
 
+  // Calculate optimal column width based on container width and number of stylists
+  const stylistColumnWidth = useMemo(() => {
+    const numStylists = filteredStylists.length;
+    if (numStylists === 0 || containerWidth === 0) return MIN_STYLIST_COLUMN_WIDTH;
+
+    const availableWidth = containerWidth - TIME_COLUMN_WIDTH;
+    const calculatedWidth = Math.floor(availableWidth / numStylists);
+
+    // Use minimum width if calculated is too small, otherwise expand to fill
+    return Math.max(MIN_STYLIST_COLUMN_WIDTH, calculatedWidth);
+  }, [containerWidth, filteredStylists.length]);
+
+  // Check if horizontal scrolling is needed
+  const needsHorizontalScroll = useMemo(() => {
+    const totalGridWidth = TIME_COLUMN_WIDTH + filteredStylists.length * stylistColumnWidth;
+    return totalGridWidth > containerWidth;
+  }, [filteredStylists.length, stylistColumnWidth, containerWidth]);
+
   // Filter appointments based on active filters
   const filteredAppointments = useMemo(() => {
     if (!data?.appointments) return [];
@@ -196,6 +214,18 @@ export function ResourceCalendar({
 
     return filtered;
   }, [data?.appointments, filters]);
+
+  // Scroll by one column width
+  const scrollByColumn = useCallback(
+    (direction: 'left' | 'right') => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+
+      const scrollAmount = direction === 'right' ? stylistColumnWidth : -stylistColumnWidth;
+      container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    },
+    [stylistColumnWidth]
+  );
 
   // Check for slot conflicts
   const checkSlotConflict = useCallback(
@@ -467,11 +497,11 @@ export function ResourceCalendar({
           )}
 
           <div ref={scrollContainerRef} className="absolute inset-0 overflow-auto">
-            {/* CSS Grid Layout with fixed column widths */}
+            {/* CSS Grid Layout with dynamic column widths */}
             <div
-              className="grid min-w-max"
+              className={cn('grid', needsHorizontalScroll && 'min-w-max')}
               style={{
-                gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(${numStylists}, ${STYLIST_COLUMN_WIDTH}px)`,
+                gridTemplateColumns: `${TIME_COLUMN_WIDTH}px repeat(${numStylists}, ${stylistColumnWidth}px)`,
                 gridTemplateRows: `${STYLIST_HEADER_HEIGHT}px repeat(${timeSlots.length}, ${slotHeight}px)`,
               }}
             >

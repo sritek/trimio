@@ -71,6 +71,10 @@
       "deleteTitle": "हटाने की पुष्टि करें",
       "deleteDescription": "क्या आप वाकई इस आइटम को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।"
     },
+    "confirmDelete": {
+      "title": "हटाने की पुष्टि करें",
+      "description": "क्या आप वाकई इस आइटम को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।"
+    },
     "time": {
       "today": "आज",
       "tomorrow": "कल",
@@ -204,10 +208,12 @@
       },
       "dateOfBirth": {
         "label": "जन्म तिथि",
+        "placeholder": "तिथि चुनें",
         "description": "जन्मदिन की शुभकामनाओं के लिए"
       },
       "anniversary": {
         "label": "सालगिरह तिथि",
+        "placeholder": "तिथि चुनें",
         "description": "सालगिरह की शुभकामनाओं के लिए"
       },
       "address": {
@@ -238,12 +244,14 @@
       "actions": "कार्रवाई"
     },
     "filters": {
+      "title": "फ़िल्टर",
+      "tag": "टैग",
+      "bookingStatus": "बुकिंग स्थिति",
       "allTags": "सभी टैग",
       "allStatus": "सभी स्थिति",
       "normal": "सामान्य",
-      "vip": "VIP",
-      "blocked": "अवरुद्ध",
-      "restricted": "प्रतिबंधित"
+      "prepaidOnly": "केवल प्रीपेड",
+      "blocked": "अवरुद्ध"
     },
     "overview": {
       "basicInfo": "मूल जानकारी",
@@ -340,6 +348,9 @@
       "status": "स्थिति"
     },
     "filters": {
+      "title": "फ़िल्टर",
+      "category": "श्रेणी",
+      "status": "स्थिति",
       "allCategories": "सभी श्रेणियां",
       "allStatus": "सभी स्थिति",
       "active": "सक्रिय",
@@ -932,6 +943,7 @@
       "thisMonth": "इस महीने"
     },
     "filters": {
+      "title": "फ़िल्टर",
       "allRoles": "सभी भूमिकाएं",
       "allStatus": "सभी स्थिति",
       "allBranches": "सभी शाखाएं",

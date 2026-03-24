@@ -10,7 +10,6 @@ export interface StationType {
   id: string;
   tenantId: string;
   name: string;
-  icon: string | null;
   color: string;
   displayOrder: number;
   isDefault: boolean;
@@ -23,7 +22,6 @@ export interface StationType {
 
 export interface CreateStationTypeInput {
   name: string;
-  icon?: string;
   color?: string;
   displayOrder?: number;
 }
@@ -88,7 +86,6 @@ export interface StationCard {
   stationType: {
     id: string;
     name: string;
-    icon: string | null;
     color: string;
   };
   displayOrder: number;

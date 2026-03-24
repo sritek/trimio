@@ -1,11 +1,6 @@
-/**
- * Login Page
- * Based on: .cursor/rules/14-frontend-implementation.mdc lines 1361-1487
- */
-
 'use client';
 
-import Link from 'next/link';
+import { Loader2, Scissors } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -14,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -78,9 +74,14 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">Sign in to Salon Ops</CardTitle>
+        <div className="flex justify-center mb-2">
+          <div className="flex items-center gap-2">
+            <Scissors className="size-6" />
+            <span className="text-2xl font-bold">trimio</span>
+          </div>
+        </div>
         <CardDescription className="text-center">
-          Enter your email and password to access your account
+          Sign in to your account to continue
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -90,37 +91,42 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder="name@salon.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? 'Signing in...' : 'Sign in'}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : (
+              'Sign in'
+            )}
           </Button>
         </form>
 
-        <div className="mt-4 text-center text-sm">
-          <Link href="/forgot-password" className="text-primary hover:underline">
-            Forgot password?
-          </Link>
-        </div>
-
-        <div className="mt-4 text-center text-sm text-muted-foreground">
-          Demo credentials: owner@glamourstudio.com / demo123
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          Need help?{' '}
+          <a href="mailto:support@trimio.in" className="text-primary hover:underline">
+            Contact support
+          </a>
         </div>
       </CardContent>
     </Card>

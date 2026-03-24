@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
@@ -243,7 +244,7 @@ export function UserPanel({ user, open, onClose }: UserPanelProps) {
                   <FormItem>
                     <FormLabel>Password *</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Enter password" {...field} />
+                      <PasswordInput placeholder="Enter password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -670,23 +670,20 @@ async function seedServices(tenantId: string, branches: { id: string }[]) {
     {
       name: 'Hair Services',
       slug: 'hair-services',
-      icon: 'scissors',
       color: '#8B5CF6',
       displayOrder: 0,
     },
-    { name: 'Skin Care', slug: 'skin-care', icon: 'sparkles', color: '#EC4899', displayOrder: 1 },
+    { name: 'Skin Care', slug: 'skin-care', color: '#EC4899', displayOrder: 1 },
     {
       name: 'Nail Services',
       slug: 'nail-services',
-      icon: 'hand',
       color: '#F59E0B',
       displayOrder: 2,
     },
-    { name: 'Makeup', slug: 'makeup', icon: 'palette', color: '#EF4444', displayOrder: 3 },
+    { name: 'Makeup', slug: 'makeup', color: '#EF4444', displayOrder: 3 },
     {
       name: 'Spa & Wellness',
       slug: 'spa-wellness',
-      icon: 'leaf',
       color: '#22C55E',
       displayOrder: 4,
     },
@@ -950,7 +947,6 @@ async function seedServices(tenantId: string, branches: { id: string }[]) {
       commissionValue: new Prisma.Decimal(s.commission),
       displayOrder: idx,
       isActive: true,
-      isOnlineBookable: true,
     })),
   });
 
@@ -2492,35 +2488,30 @@ async function seedStations(tenantId: string, branches: { id: string }[]) {
   const stationTypesData = [
     {
       name: 'Styling Chair',
-      icon: 'armchair',
       color: '#8B5CF6',
       displayOrder: 0,
       isDefault: true,
     },
     {
       name: 'Wash Basin',
-      icon: 'droplets',
       color: '#3B82F6',
       displayOrder: 1,
       isDefault: true,
     },
     {
       name: 'Nail Station',
-      icon: 'hand',
       color: '#EC4899',
       displayOrder: 2,
       isDefault: true,
     },
     {
       name: 'Facial Bed',
-      icon: 'bed-single',
       color: '#22C55E',
       displayOrder: 3,
       isDefault: true,
     },
     {
       name: 'Massage Table',
-      icon: 'heart-pulse',
       color: '#F59E0B',
       displayOrder: 4,
       isDefault: true,

@@ -62,7 +62,6 @@ export class StationTypesService {
       data: {
         tenantId,
         name: data.name,
-        icon: data.icon,
         color: data.color ?? '#6B7280',
         displayOrder,
         isDefault: false,
@@ -105,7 +104,6 @@ export class StationTypesService {
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
-        ...(data.icon !== undefined && { icon: data.icon }),
         ...(data.color !== undefined && { color: data.color }),
         ...(data.displayOrder !== undefined && { displayOrder: data.displayOrder }),
       },

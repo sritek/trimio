@@ -23,7 +23,6 @@ export const stationSchema = z.object({
   stationType: z.object({
     id: z.string(),
     name: z.string(),
-    icon: z.string().nullable(),
     color: z.string(),
   }),
   displayOrder: z.number(),

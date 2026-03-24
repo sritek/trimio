@@ -93,10 +93,7 @@ export class CategoriesService {
   /**
    * Get a single category by ID
    */
-  async getCategoryById(
-    tenantId: string,
-    categoryId: string
-  ): Promise<ServiceCategory | null> {
+  async getCategoryById(tenantId: string, categoryId: string): Promise<ServiceCategory | null> {
     return prisma.serviceCategory.findFirst({
       where: {
         id: categoryId,
@@ -167,7 +164,6 @@ export class CategoriesService {
         name: data.name,
         slug,
         description: data.description,
-        icon: data.icon,
         color: data.color,
         parentId: data.parentId,
         level,
@@ -277,10 +273,7 @@ export class CategoriesService {
   /**
    * Reorder categories
    */
-  async reorderCategories(
-    tenantId: string,
-    data: ReorderCategoriesBody
-  ): Promise<void> {
+  async reorderCategories(tenantId: string, data: ReorderCategoriesBody): Promise<void> {
     // Verify all categories belong to tenant
     const categoryIds = data.categories.map((c) => c.id);
     const categories = await prisma.serviceCategory.findMany({

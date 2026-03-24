@@ -26,7 +26,18 @@ export const updateBranchBodySchema = z.object({
   phone: z.string().max(20).optional().nullable(),
   email: z.string().email().optional().nullable(),
   gstin: z.string().max(20).optional().nullable(),
-  workingHours: z.record(dayWorkingHoursSchema).optional().nullable(),
+  workingHours: z
+    .object({
+      monday: dayWorkingHoursSchema.optional(),
+      tuesday: dayWorkingHoursSchema.optional(),
+      wednesday: dayWorkingHoursSchema.optional(),
+      thursday: dayWorkingHoursSchema.optional(),
+      friday: dayWorkingHoursSchema.optional(),
+      saturday: dayWorkingHoursSchema.optional(),
+      sunday: dayWorkingHoursSchema.optional(),
+    })
+    .optional()
+    .nullable(),
 });
 
 export type BranchQuery = z.infer<typeof branchQuerySchema>;

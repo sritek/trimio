@@ -13,6 +13,22 @@ import type {
   UpdateServiceBody,
 } from './services.schema';
 
+/**
+ * Generate a unique SKU for a service
+ * Format: {CATEGORY_PREFIX}-{UNIQUE_SUFFIX}
+ * Example: HAIR-A7X3K, SKIN-B2M9P
+ */
+function generateSku(categorySlug: string): string {
+  // Get category prefix (first 4 chars uppercase, or full slug if shorter)
+  const prefix = categorySlug.replace(/-/g, '').slice(0, 4).toUpperCase();
+
+  // Generate unique suffix using timestamp + random (base36 for short alphanumeric)
+  const timestamp = Date.now().toString(36).slice(-3).toUpperCase();
+  const random = Math.random().toString(36).slice(2, 5).toUpperCase();
+
+  return `${prefix}-${timestamp}${random}`;
+}
+
 export class ServicesService {
   /**
    * Get all services with filtering and pagination
@@ -33,18 +49,6 @@ export class ServicesService {
 
     if (query.isActive !== undefined) {
       where.isActive = query.isActive;
-    }
-
-    if (query.isPopular !== undefined) {
-      where.isPopular = query.isPopular;
-    }
-
-    if (query.isFeatured !== undefined) {
-      where.isFeatured = query.isFeatured;
-    }
-
-    if (query.isOnlineBookable !== undefined) {
-      where.isOnlineBookable = query.isOnlineBookable;
     }
 
     if (query.genderApplicable) {
@@ -120,15 +124,6 @@ export class ServicesService {
     data: CreateServiceBody,
     createdBy?: string
   ): Promise<Service> {
-    // Check for duplicate SKU
-    const existingSku = await prisma.service.findUnique({
-      where: { tenantId_sku: { tenantId, sku: data.sku } },
-    });
-
-    if (existingSku) {
-      throw new Error('Service with this SKU already exists');
-    }
-
     // Verify category exists
     const category = await prisma.serviceCategory.findFirst({
       where: { id: data.categoryId, tenantId, deletedAt: null },
@@ -136,6 +131,36 @@ export class ServicesService {
 
     if (!category) {
       throw new Error('Category not found');
+    }
+
+    // Generate SKU if not provided
+    let sku = data.sku;
+    if (!sku) {
+      // Generate unique SKU with retry logic
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while (attempts < maxAttempts) {
+        sku = generateSku(category.slug);
+        const existing = await prisma.service.findUnique({
+          where: { tenantId_sku: { tenantId, sku } },
+        });
+        if (!existing) break;
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique SKU. Please try again.');
+      }
+    } else {
+      // Check for duplicate SKU if provided manually
+      const existingSku = await prisma.service.findUnique({
+        where: { tenantId_sku: { tenantId, sku } },
+      });
+
+      if (existingSku) {
+        throw new Error('Service with this SKU already exists');
+      }
     }
 
     // Get next display order if not provided
@@ -152,27 +177,21 @@ export class ServicesService {
       data: {
         tenantId,
         categoryId: data.categoryId,
-        sku: data.sku,
+        sku,
         name: data.name,
         description: data.description,
         basePrice: data.basePrice,
         taxRate: data.taxRate,
-        hsnSacCode: data.hsnSacCode,
         isTaxInclusive: data.isTaxInclusive,
         durationMinutes: data.durationMinutes,
         activeTimeMinutes: data.activeTimeMinutes,
         processingTimeMinutes: data.processingTimeMinutes,
         genderApplicable: data.genderApplicable,
-        skillLevelRequired: data.skillLevelRequired,
         commissionType: data.commissionType,
         commissionValue: data.commissionValue,
-        assistantCommissionValue: data.assistantCommissionValue,
         displayOrder,
-        isPopular: data.isPopular,
-        isFeatured: data.isFeatured,
         imageUrl: data.imageUrl,
         isActive: data.isActive,
-        isOnlineBookable: data.isOnlineBookable,
         createdBy,
       },
       include: {
@@ -320,22 +339,16 @@ export class ServicesService {
         description: original.description,
         basePrice: original.basePrice,
         taxRate: original.taxRate,
-        hsnSacCode: original.hsnSacCode,
         isTaxInclusive: original.isTaxInclusive,
         durationMinutes: original.durationMinutes,
         activeTimeMinutes: original.activeTimeMinutes,
         processingTimeMinutes: original.processingTimeMinutes,
         genderApplicable: original.genderApplicable,
-        skillLevelRequired: original.skillLevelRequired,
         commissionType: original.commissionType,
         commissionValue: original.commissionValue,
-        assistantCommissionValue: original.assistantCommissionValue,
         displayOrder: original.displayOrder + 1,
-        isPopular: false,
-        isFeatured: false,
         imageUrl: original.imageUrl,
         isActive: false, // Start as inactive
-        isOnlineBookable: original.isOnlineBookable,
         createdBy,
       },
     });
@@ -347,7 +360,6 @@ export class ServicesService {
           tenantId,
           serviceId: duplicate.id,
           name: v.name,
-          variantGroup: v.variantGroup,
           priceAdjustmentType: v.priceAdjustmentType,
           priceAdjustment: v.priceAdjustment,
           durationAdjustment: v.durationAdjustment,

@@ -11,7 +11,6 @@ import { z } from 'zod';
 
 export const createStationTypeBodySchema = z.object({
   name: z.string().min(1).max(100),
-  icon: z.string().max(50).optional(),
   color: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Color must be a valid hex color')

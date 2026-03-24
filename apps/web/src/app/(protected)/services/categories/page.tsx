@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Folder, FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 import {
   useCategories,
@@ -31,11 +34,28 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
-import type { ServiceCategory, CreateCategoryInput } from '@/types/services';
+import type { ServiceCategory } from '@/types/services';
+
+const categorySchema = z.object({
+  name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
+  description: z.string().optional(),
+  color: z.string().default('#6B7280'),
+  isActive: z.boolean().default(true),
+});
+
+type CategoryFormData = z.infer<typeof categorySchema>;
 
 export default function CategoriesPage() {
   const t = useTranslations('common');
@@ -50,6 +70,37 @@ export default function CategoriesPage() {
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
+
+  const form = useForm<CategoryFormData>({
+    resolver: zodResolver(categorySchema),
+    defaultValues: {
+      name: '',
+      description: '',
+      color: '#6B7280',
+      isActive: true,
+    },
+  });
+
+  // Reset form when dialog opens/closes or editing category changes
+  useEffect(() => {
+    if (isDialogOpen) {
+      if (editingCategory) {
+        form.reset({
+          name: editingCategory.name,
+          description: editingCategory.description || '',
+          color: editingCategory.color || '#6B7280',
+          isActive: editingCategory.isActive,
+        });
+      } else {
+        form.reset({
+          name: '',
+          description: '',
+          color: '#6B7280',
+          isActive: true,
+        });
+      }
+    }
+  }, [isDialogOpen, editingCategory, form]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -72,18 +123,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    const data: CreateCategoryInput = {
-      name: formData.get('name') as string,
-      description: (formData.get('description') as string) || undefined,
-      color: (formData.get('color') as string) || '#6B7280',
-      icon: (formData.get('icon') as string) || undefined,
-      isActive: formData.get('isActive') === 'on',
-    };
-
+  const onSubmit = async (data: CategoryFormData) => {
     try {
       if (editingCategory) {
         await updateCategory.mutateAsync({ id: editingCategory.id, data });
@@ -181,15 +221,6 @@ export default function CategoriesPage() {
                         separator: true,
                       },
                     ]}
-                    trigger={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="opacity-0 group-hover:opacity-100"
-                      >
-                        <span className="sr-only">Open menu</span>
-                      </Button>
-                    }
                   />
                 </div>
 
@@ -222,85 +253,91 @@ export default function CategoriesPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  defaultValue={editingCategory?.name || ''}
-                  placeholder="e.g., Hair Services"
-                  required
-                />
-              </div>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., Hair Services" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={editingCategory?.description || ''}
-                  placeholder="Brief description..."
-                  className="resize-none"
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Brief description..."
+                        className="resize-none"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="color">Color</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="color"
-                      name="color"
-                      type="color"
-                      defaultValue={editingCategory?.color || '#6B7280'}
-                      className="h-10 w-20 p-1"
-                    />
-                    <Input
-                      type="text"
-                      defaultValue={editingCategory?.color || '#6B7280'}
-                      placeholder="#6B7280"
-                      className="flex-1"
-                      readOnly
-                    />
-                  </div>
-                </div>
+              <FormField
+                control={form.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Color</FormLabel>
+                    <FormControl>
+                      <div className="flex gap-2">
+                        <Input
+                          type="color"
+                          value={field.value}
+                          onChange={field.onChange}
+                          className="h-10 w-20 p-1"
+                        />
+                        <Input
+                          type="text"
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="#6B7280"
+                          className="flex-1"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <div className="grid gap-2">
-                  <Label htmlFor="icon">Icon</Label>
-                  <Input
-                    id="icon"
-                    name="icon"
-                    defaultValue={editingCategory?.icon || ''}
-                    placeholder="e.g., scissors"
-                  />
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <FormLabel className="font-normal">Active</FormLabel>
+                  </FormItem>
+                )}
+              />
 
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  name="isActive"
-                  defaultChecked={editingCategory?.isActive ?? true}
-                  className="h-4 w-4 rounded border-gray-300"
-                />
-                <Label htmlFor="isActive" className="font-normal">
-                  Active
-                </Label>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 

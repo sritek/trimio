@@ -19,6 +19,8 @@ import {
   createSuperOwnerBodySchema,
   listTenantsQuerySchema,
   updateTenantBodySchema,
+  updateBranchBodySchema,
+  updateSuperOwnerBodySchema,
 } from './internal.schema';
 
 export default async function internalRoutes(fastify: FastifyInstance) {
@@ -163,6 +165,24 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       }
     );
 
+    // PATCH /internal/branches/:id - Update branch
+    protectedApp.patch(
+      '/branches/:id',
+      {
+        schema: {
+          description: 'Update a branch',
+          tags: ['Internal Admin'],
+          security: [{ bearerAuth: [] }],
+          body: updateBranchBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const branch = await internalService.updateBranch(id, request.body);
+        return reply.send(successResponse(branch));
+      }
+    );
+
     // POST /internal/users - Create super owner
     protectedApp.post(
       '/users',
@@ -177,6 +197,24 @@ export default async function internalRoutes(fastify: FastifyInstance) {
       async (request, reply) => {
         const user = await internalService.createSuperOwner(request.body);
         return reply.status(201).send(successResponse(user));
+      }
+    );
+
+    // PATCH /internal/users/:id - Update super owner
+    protectedApp.patch(
+      '/users/:id',
+      {
+        schema: {
+          description: 'Update a super owner user',
+          tags: ['Internal Admin'],
+          security: [{ bearerAuth: [] }],
+          body: updateSuperOwnerBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const user = await internalService.updateSuperOwner(id, request.body);
+        return reply.send(successResponse(user));
       }
     );
 

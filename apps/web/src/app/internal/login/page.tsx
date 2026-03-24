@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { useAdminStore } from '@/stores/admin-store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -75,7 +76,7 @@ export default function InternalLoginPage() {
               <Shield className="h-8 w-8 text-amber-600" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-slate-900">Trimio Admin</CardTitle>
+          <CardTitle className="text-2xl font-bold text-slate-900">trimio Admin</CardTitle>
           <CardDescription className="text-slate-500">
             Internal Tenant Management Portal
           </CardDescription>
@@ -101,9 +102,8 @@ export default function InternalLoginPage() {
               <Label htmlFor="password" className="text-slate-700">
                 Password
               </Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

@@ -104,7 +104,7 @@ async getStations(tenantId, branchId, dateStr, now) {
   // 1. Get all active stations for this branch
   const stations = await prisma.station.findMany({
     where: { tenantId, branchId, deletedAt: null },
-    include: { stationType: { select: { id, name, icon, color } } }
+    include: { stationType: { select: { id, name, color } } }
   });
 
   // 2. Get today's appointments assigned to stations
@@ -269,7 +269,7 @@ Response:
       {
         "id": "station-1",
         "name": "Chair 1",
-        "stationType": { "id", "name", "icon", "color" },
+        "stationType": { "id", "name", "color" },
         "displayOrder": 1,
         "status": "occupied",  // Runtime status
         "appointment": {

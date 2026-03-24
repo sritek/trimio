@@ -12,7 +12,6 @@ export interface ServiceCategory {
   name: string;
   slug: string;
   description?: string;
-  icon?: string;
   color: string;
   parentId?: string;
   level: number;
@@ -32,7 +31,6 @@ export interface CreateCategoryInput {
   name: string;
   slug?: string;
   description?: string;
-  icon?: string;
   color?: string;
   parentId?: string | null;
   displayOrder?: number;
@@ -61,22 +59,16 @@ export interface Service {
   description?: string;
   basePrice: number;
   taxRate: number;
-  hsnSacCode?: string;
   isTaxInclusive: boolean;
   durationMinutes: number;
   activeTimeMinutes: number;
   processingTimeMinutes: number;
   genderApplicable: 'all' | 'male' | 'female';
-  skillLevelRequired: 'any' | 'junior' | 'senior' | 'expert';
   commissionType: 'percentage' | 'fixed';
   commissionValue: number;
-  assistantCommissionValue: number;
   displayOrder: number;
-  isPopular: boolean;
-  isFeatured: boolean;
   imageUrl?: string;
   isActive: boolean;
-  isOnlineBookable: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -90,27 +82,21 @@ export interface Service {
 
 export interface CreateServiceInput {
   categoryId: string;
-  sku: string;
+  sku?: string; // Auto-generated if not provided
   name: string;
   description?: string;
   basePrice: number;
   taxRate?: number;
-  hsnSacCode?: string;
   isTaxInclusive?: boolean;
   durationMinutes: number;
   activeTimeMinutes: number;
   processingTimeMinutes?: number;
   genderApplicable?: 'all' | 'male' | 'female';
-  skillLevelRequired?: 'any' | 'junior' | 'senior' | 'expert';
   commissionType?: 'percentage' | 'fixed';
   commissionValue?: number;
-  assistantCommissionValue?: number;
   displayOrder?: number;
-  isPopular?: boolean;
-  isFeatured?: boolean;
   imageUrl?: string;
   isActive?: boolean;
-  isOnlineBookable?: boolean;
 }
 
 export type UpdateServiceInput = Partial<CreateServiceInput>;
@@ -121,9 +107,6 @@ export interface ServiceFilters {
   categoryId?: string;
   search?: string;
   isActive?: boolean;
-  isPopular?: boolean;
-  isFeatured?: boolean;
-  isOnlineBookable?: boolean;
   genderApplicable?: 'all' | 'male' | 'female';
   sortBy?: 'name' | 'basePrice' | 'displayOrder' | 'createdAt';
   sortOrder?: 'asc' | 'desc';
@@ -138,7 +121,6 @@ export interface ServiceVariant {
   tenantId: string;
   serviceId: string;
   name: string;
-  variantGroup: string;
   priceAdjustmentType: 'absolute' | 'percentage';
   priceAdjustment: number;
   durationAdjustment: number;
@@ -149,7 +131,6 @@ export interface ServiceVariant {
 
 export interface CreateVariantInput {
   name: string;
-  variantGroup: string;
   priceAdjustmentType?: 'absolute' | 'percentage';
   priceAdjustment: number;
   durationAdjustment?: number;
@@ -269,10 +250,8 @@ export interface ComboService {
   validFrom?: string;
   validUntil?: string;
   imageUrl?: string;
-  isFeatured: boolean;
   displayOrder: number;
   isActive: boolean;
-  isOnlineBookable: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -305,10 +284,8 @@ export interface CreateComboInput {
   validFrom?: string | null;
   validUntil?: string | null;
   imageUrl?: string | null;
-  isFeatured?: boolean;
   displayOrder?: number;
   isActive?: boolean;
-  isOnlineBookable?: boolean;
   items: Array<{
     serviceId: string;
     quantity?: number;

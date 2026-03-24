@@ -34,7 +34,6 @@ import type { StationType } from '@/types/stations';
 
 const stationTypeFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
-  icon: z.string().max(50).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format'),
   displayOrder: z.coerce.number().int().min(0).default(0),
 });
@@ -56,7 +55,6 @@ export function StationTypeFormPanel({ stationType, open, onClose }: StationType
     resolver: zodResolver(stationTypeFormSchema),
     defaultValues: {
       name: '',
-      icon: '',
       color: '#6B7280',
       displayOrder: 0,
     },
@@ -66,14 +64,12 @@ export function StationTypeFormPanel({ stationType, open, onClose }: StationType
     if (stationType) {
       form.reset({
         name: stationType.name,
-        icon: stationType.icon || '',
         color: stationType.color,
         displayOrder: stationType.displayOrder,
       });
     } else {
       form.reset({
         name: '',
-        icon: '',
         color: '#6B7280',
         displayOrder: 0,
       });
@@ -87,7 +83,6 @@ export function StationTypeFormPanel({ stationType, open, onClose }: StationType
           id: stationType.id,
           data: {
             name: data.name,
-            icon: data.icon || undefined,
             color: data.color,
             displayOrder: data.displayOrder,
           },
@@ -96,7 +91,6 @@ export function StationTypeFormPanel({ stationType, open, onClose }: StationType
       } else {
         await createMutation.mutateAsync({
           name: data.name,
-          icon: data.icon || undefined,
           color: data.color,
           displayOrder: data.displayOrder,
         });
@@ -130,20 +124,6 @@ export function StationTypeFormPanel({ stationType, open, onClose }: StationType
                   <FormLabel>Name *</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Styling Chair" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="icon"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Icon</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., chair" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

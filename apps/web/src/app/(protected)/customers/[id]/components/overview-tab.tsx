@@ -111,58 +111,67 @@ export function OverviewTab({
         </Card>
       </div>
 
-      {/* Tags Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">Tags</CardTitle>
-            <CardDescription>Customer tags and segments</CardDescription>
-          </div>
-          {canWrite && availableTags.length > 0 && (
-            <Button variant="outline" size="sm" onClick={onAddTag}>
-              Add Tag
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {customer.tags.map((tag) => (
-              <Badge key={tag} variant={getTagVariant(tag)} className="gap-1">
-                {tag}
-                {canWrite && !SYSTEM_TAGS.includes(tag) && (
-                  <button onClick={() => onRemoveTag(tag)} className="ml-1 hover:text-destructive">
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </Badge>
-            ))}
-            {customer.tags.length === 0 && (
-              <span className="text-sm text-muted-foreground">No tags assigned</span>
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Tags Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Tags</CardTitle>
+              <CardDescription>Customer tags and segments</CardDescription>
+            </div>
+            {canWrite && availableTags.length > 0 && (
+              <Button variant="outline" size="sm" onClick={onAddTag}>
+                Add Tag
+              </Button>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Allergies Card */}
-      {customer.allergies && customer.allergies.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2 text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-5 w-5" />
-              Allergies & Sensitivities
-            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {customer.allergies.map((allergy) => (
-                <Badge key={allergy} variant="outline" className="border-amber-500 text-amber-700">
-                  {allergy}
+              {customer.tags.map((tag) => (
+                <Badge key={tag} variant={getTagVariant(tag)} className="gap-1">
+                  {tag}
+                  {canWrite && !SYSTEM_TAGS.includes(tag) && (
+                    <button
+                      onClick={() => onRemoveTag(tag)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </Badge>
               ))}
+              {customer.tags.length === 0 && (
+                <span className="text-sm text-muted-foreground">No tags assigned</span>
+              )}
             </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Allergies Card */}
+        {customer.allergies && customer.allergies.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Allergies & Sensitivities
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {customer.allergies.map((allergy) => (
+                  <Badge
+                    key={allergy}
+                    variant="outline"
+                    className="border-amber-500 bg-destructive text-white"
+                  >
+                    {allergy}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Quick Stats */}
       {stats && (

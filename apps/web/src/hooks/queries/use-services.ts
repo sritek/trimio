@@ -37,21 +37,11 @@ export function useServices(filters: ServiceFilters = {}) {
         categoryId: filters.categoryId,
         search: filters.search,
         isActive: filters.isActive,
-        isPopular: filters.isPopular,
-        isFeatured: filters.isFeatured,
-        isOnlineBookable: filters.isOnlineBookable,
         genderApplicable: filters.genderApplicable,
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
       }),
   });
-}
-
-/**
- * @deprecated Use useServices instead - it now returns paginated results
- */
-export function useServicesPaginated(filters: ServiceFilters = {}) {
-  return useServices(filters);
 }
 
 /**

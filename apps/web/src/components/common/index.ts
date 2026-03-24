@@ -30,9 +30,14 @@ export { ActionMenu } from './action-menu';
 export { SearchInput } from './search-input';
 export { FilterBar } from './filter-bar';
 export { FilterButton } from './filter-button';
+export { FilterSheet } from './filter-sheet';
 export { DatePicker } from './date-picker';
 export { TimePicker } from './time-picker';
 export { TimeSlotPicker } from './time-slot-picker';
+export { WorkingHoursEditor, DEFAULT_WORKING_HOURS } from './working-hours-editor';
+export type { DayWorkingHours, WeeklyWorkingHours } from './working-hours-editor';
+export { StylistBreaksEditor } from './stylist-breaks-editor';
+export type { StylistBreak } from './stylist-breaks-editor';
 
 // Combobox components
 export { CustomerCombobox } from './customer-combobox';

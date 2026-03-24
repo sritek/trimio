@@ -168,7 +168,6 @@ export const dashboardService = {
           select: {
             id: true,
             name: true,
-            icon: true,
             color: true,
           },
         },

@@ -20,11 +20,9 @@ export default function NewCustomerPage() {
   return (
     <PermissionGuard permission={PERMISSIONS.CUSTOMERS_WRITE} fallback={<AccessDenied />}>
       <PageContainer>
-        <PageHeader title={t('addTitle')} description={t('addDescription')} />
+        <PageHeader title={t('addTitle')} description={t('addDescription')} backHref="/customers" />
         <PageContent>
-          <div className="max-w-2xl">
-            <CustomerForm />
-          </div>
+          <CustomerForm />
         </PageContent>
       </PageContainer>
     </PermissionGuard>

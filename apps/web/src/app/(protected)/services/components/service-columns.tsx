@@ -109,12 +109,9 @@ function ServiceDuration({ minutes }: { minutes: number }) {
 function ServiceStatusBadges({ service }: { service: Service }) {
   const t = useTranslations('common');
   return (
-    <div className="flex gap-1">
-      <Badge variant={service.isActive ? 'default' : 'secondary'}>
-        {service.isActive ? t('status.active') : t('status.inactive')}
-      </Badge>
-      {service.isPopular && <Badge variant="outline">{t('status.popular')}</Badge>}
-    </div>
+    <Badge variant={service.isActive ? 'default' : 'secondary'}>
+      {service.isActive ? t('status.active') : t('status.inactive')}
+    </Badge>
   );
 }
 

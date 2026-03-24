@@ -97,7 +97,7 @@ export const createStaffSchema = z.object({
 
   // Salary
   salaryType: z.enum(['monthly', 'daily', 'hourly']),
-  baseSalary: z.number().min(0),
+  baseSalary: z.number().positive('Base salary must be greater than 0'),
 
   // Commission
   commissionEnabled: z.boolean().default(true),
@@ -373,6 +373,24 @@ export const attendanceLockStatusQuerySchema = z.object({
   branchId: z.string().uuid().optional(),
 });
 
+// ============================================
+// Stylist Breaks Schemas
+// ============================================
+
+export const createBreakSchema = z.object({
+  branchId: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  dayOfWeek: z.number().int().min(0).max(6).nullable(), // null = all days
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+export const updateBreakSchema = createBreakSchema.partial().omit({ branchId: true });
+
+export const listBreaksQuerySchema = z.object({
+  branchId: z.string().uuid().optional(),
+});
+
 // Type exports
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;
@@ -397,3 +415,6 @@ export type ProcessPayrollInput = z.infer<typeof processPayrollSchema>;
 export type ListPayrollQuery = z.infer<typeof listPayrollQuerySchema>;
 export type UpdateGeoConfigInput = z.infer<typeof updateGeoConfigSchema>;
 export type AttendanceLockStatusQuery = z.infer<typeof attendanceLockStatusQuerySchema>;
+export type CreateBreakInput = z.infer<typeof createBreakSchema>;
+export type UpdateBreakInput = z.infer<typeof updateBreakSchema>;
+export type ListBreaksQuery = z.infer<typeof listBreaksQuerySchema>;

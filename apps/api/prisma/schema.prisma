@@ -450,7 +450,6 @@ model ServiceCategory {
   name         String    @db.VarChar(100)
   slug         String    @db.VarChar(100)
   description  String?   @db.VarChar(500)
-  icon         String?   @db.VarChar(50)
   color        String    @default("#6B7280") @db.VarChar(7)
   parentId     String?   @map("parent_id")
   level        Int       @default(1)
@@ -485,7 +484,6 @@ model Service {
   // Pricing
   basePrice      Decimal @map("base_price") @db.Decimal(10, 2)
   taxRate        Decimal @default(18) @map("tax_rate") @db.Decimal(5, 2)
-  hsnSacCode     String? @map("hsn_sac_code") @db.VarChar(20)
   isTaxInclusive Boolean @default(false) @map("is_tax_inclusive")
 
   // Duration
@@ -494,23 +492,18 @@ model Service {
   processingTimeMinutes Int @default(0) @map("processing_time_minutes")
 
   // Applicability
-  genderApplicable   String @default("all") @map("gender_applicable") @db.VarChar(20)
-  skillLevelRequired String @default("any") @map("skill_level_required") @db.VarChar(20)
+  genderApplicable String @default("all") @map("gender_applicable") @db.VarChar(20)
 
   // Commission
-  commissionType           String  @default("percentage") @map("commission_type") @db.VarChar(20)
-  commissionValue          Decimal @default(0) @map("commission_value") @db.Decimal(10, 2)
-  assistantCommissionValue Decimal @default(0) @map("assistant_commission_value") @db.Decimal(10, 2)
+  commissionType  String  @default("percentage") @map("commission_type") @db.VarChar(20)
+  commissionValue Decimal @default(0) @map("commission_value") @db.Decimal(10, 2)
 
   // Display
   displayOrder Int     @default(0) @map("display_order")
-  isPopular    Boolean @default(false) @map("is_popular")
-  isFeatured   Boolean @default(false) @map("is_featured")
   imageUrl     String? @map("image_url") @db.VarChar(500)
 
   // Status
-  isActive         Boolean @default(true) @map("is_active")
-  isOnlineBookable Boolean @default(true) @map("is_online_bookable")
+  isActive Boolean @default(true) @map("is_active")
 
   // Metadata
   createdAt DateTime  @default(now()) @map("created_at")
@@ -546,7 +539,6 @@ model ServiceVariant {
   tenantId            String   @map("tenant_id")
   serviceId           String   @map("service_id")
   name                String   @db.VarChar(100)
-  variantGroup        String   @map("variant_group") @db.VarChar(50)
   priceAdjustmentType String   @default("absolute") @map("price_adjustment_type") @db.VarChar(20)
   priceAdjustment     Decimal  @map("price_adjustment") @db.Decimal(10, 2)
   durationAdjustment  Int      @default(0) @map("duration_adjustment")
@@ -635,10 +627,8 @@ model ComboService {
   validFrom            DateTime? @map("valid_from") @db.Date
   validUntil           DateTime? @map("valid_until") @db.Date
   imageUrl             String?   @map("image_url") @db.VarChar(500)
-  isFeatured           Boolean   @default(false) @map("is_featured")
   displayOrder         Int       @default(0) @map("display_order")
   isActive             Boolean   @default(true) @map("is_active")
-  isOnlineBookable     Boolean   @default(true) @map("is_online_bookable")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   createdBy            String?   @map("created_by")
@@ -2663,7 +2653,6 @@ model StationType {
   id           String   @id @default(uuid())
   tenantId     String   @map("tenant_id")
   name         String   @db.VarChar(100)
-  icon         String?  @db.VarChar(50)
   color        String   @default("#6B7280") @db.VarChar(7)
   displayOrder Int      @default(0) @map("display_order")
   isDefault    Boolean  @default(false) @map("is_default")

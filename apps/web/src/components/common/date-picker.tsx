@@ -16,6 +16,7 @@ interface DatePickerProps {
   format?: string;
   className?: string;
   align?: 'start' | 'center' | 'end';
+  captionLayout?: 'dropdown' | 'label' | 'dropdown-months' | 'dropdown-years' | undefined;
 }
 
 export function DatePicker({
@@ -26,6 +27,7 @@ export function DatePicker({
   format = 'PPP',
   className,
   align = 'start',
+  captionLayout,
 }: DatePickerProps) {
   return (
     <Popover>
@@ -44,7 +46,13 @@ export function DatePicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align={align}>
-        <Calendar mode="single" selected={value} onSelect={onChange} initialFocus />
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={onChange}
+          autoFocus
+          captionLayout={captionLayout}
+        />
       </PopoverContent>
     </Popover>
   );

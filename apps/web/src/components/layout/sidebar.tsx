@@ -1,20 +1,17 @@
 /**
  * Sidebar - Collapsible navigation sidebar
  *
- * Features:
- * - Expand/collapse toggle
- * - Icons only with tooltips when collapsed
- * - Smooth transition animation
- * - State persisted in localStorage
- * - Permission-based navigation filtering
- * - Feature flag-based module filtering
- * - Resets page-specific state on navigation (e.g., appointments filters)
+ * Layout:
+ * - Top: Brand (trimio × Tenant Logo)
+ * - Below brand: Branch Selector
+ * - Middle: Main navigation
+ * - Bottom: Settings, Language, User Profile
  */
 
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   Calendar,
@@ -25,7 +22,6 @@ import {
   BarChart3,
   Megaphone,
   Settings,
-  HelpCircle,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -40,29 +36,46 @@ import {
   Gauge,
   ClipboardList,
   FileText,
+  LogOut,
+  Building2,
+  Check,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { LanguageSwitcherCompact } from '@/components/common/language-switcher';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/common';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useBranchContext } from '@/hooks/use-branch-context';
+import { useBranches } from '@/hooks/queries/use-branches';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api/client';
 import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAppointmentsUIStore } from '@/stores/appointments-ui-store';
 import { type FeatureFlags, isFeatureEnabled } from '@/config/features';
+import { useLocale } from 'next-intl';
+import { locales, localeNames, type Locale } from '@/i18n/config';
+import Image from 'next/image';
 
 interface NavItem {
   titleKey: string;
   href: string;
   icon: React.ElementType;
-  /** Permission required to view this nav item (undefined = always visible) */
   permission?: string;
-  /** Feature flag required to view this nav item (undefined = always visible) */
   featureFlag?: Partial<FeatureFlags>;
-  /** Sub-navigation items */
   children?: NavItem[];
 }
 
@@ -243,15 +256,9 @@ const mainNavItems: NavItem[] = [
   },
 ];
 
-const bottomNavItems: NavItem[] = [
-  {
-    titleKey: 'settings',
-    href: '/settings',
-    icon: Settings,
-    // No permission required - all users can access settings (tabs are role-filtered)
-  },
-  { titleKey: 'help', href: '/help', icon: HelpCircle },
-];
+// ============================================
+// Nav Link Component
+// ============================================
 
 function NavLink({
   item,
@@ -267,23 +274,16 @@ function NavLink({
   isChildItem?: boolean;
 }) {
   const pathname = usePathname();
-
-  // For child items, check exact match or if pathname starts with item.href and has more path segments
-  // For parent items without children, check if pathname starts with item.href
   const isActive = isChildItem
     ? pathname === item.href || (pathname.startsWith(item.href + '/') && item.href !== '/')
     : pathname === item.href || pathname.startsWith(item.href + '/');
 
   const title = t(item.titleKey);
 
-  const handleClick = () => {
-    onNavigate?.(item.href);
-  };
-
   const link = (
     <Link
       href={item.href}
-      onClick={handleClick}
+      onClick={() => onNavigate?.(item.href)}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
         isActive
@@ -301,15 +301,17 @@ function NavLink({
     return (
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right" className="flex items-center gap-4">
-          {title}
-        </TooltipContent>
+        <TooltipContent side="right">{title}</TooltipContent>
       </Tooltip>
     );
   }
 
   return link;
 }
+
+// ============================================
+// Nav Group Component (expandable)
+// ============================================
 
 function NavGroup({
   item,
@@ -325,40 +327,21 @@ function NavGroup({
   hasPermission: (permission: string) => boolean;
 }) {
   const pathname = usePathname();
-
-  // Check if any child is active (for highlighting and auto-expand)
   const isChildActive =
     item.children?.some(
       (child) => pathname === child.href || pathname.startsWith(child.href + '/')
     ) ?? false;
-
-  // Check if the parent path itself is active (exact match or starts with parent href)
   const isParentPathActive = pathname.startsWith(item.href + '/') || pathname === item.href;
-
-  // Parent is considered active if any child is active or the parent path matches
   const isActive = isChildActive || isParentPathActive;
 
-  // Auto-expand if any child is active on initial render or URL change
   const [isOpen, setIsOpen] = useState(isActive);
   const [hasUserToggled, setHasUserToggled] = useState(false);
   const title = t(item.titleKey);
 
-  // Update isOpen when pathname changes (for direct URL navigation)
-  // Only auto-expand if user hasn't manually toggled
   useEffect(() => {
-    if (isActive && !isOpen && !hasUserToggled) {
-      setIsOpen(true);
-    }
-    // Reset user toggle state when navigating to a different section
-    if (!isActive) {
-      setHasUserToggled(false);
-    }
+    if (isActive && !isOpen && !hasUserToggled) setIsOpen(true);
+    if (!isActive) setHasUserToggled(false);
   }, [isActive, isOpen, hasUserToggled]);
-
-  const handleToggle = () => {
-    setHasUserToggled(true);
-    setIsOpen(!isOpen);
-  };
 
   const visibleChildren =
     item.children?.filter((child) => !child.permission || hasPermission(child.permission)) || [];
@@ -381,22 +364,19 @@ function NavGroup({
         </TooltipTrigger>
         <TooltipContent side="right" className="flex flex-col gap-1 p-2">
           <span className="font-medium">{title}</span>
-          {visibleChildren.map((child) => {
-            const childActive = pathname === child.href || pathname.startsWith(child.href + '/');
-            return (
-              <Link
-                key={child.href}
-                href={child.href}
-                className={cn(
-                  'text-sm hover:text-foreground',
-                  childActive ? 'text-foreground font-medium' : 'text-muted-foreground'
-                )}
-                onClick={() => onNavigate?.(child.href)}
-              >
-                {t(child.titleKey)}
-              </Link>
-            );
-          })}
+          {visibleChildren.map((child) => (
+            <Link
+              key={child.href}
+              href={child.href}
+              className={cn(
+                'text-sm hover:text-foreground',
+                pathname === child.href ? 'text-foreground font-medium' : 'text-muted-foreground'
+              )}
+              onClick={() => onNavigate?.(child.href)}
+            >
+              {t(child.titleKey)}
+            </Link>
+          ))}
         </TooltipContent>
       </Tooltip>
     );
@@ -405,7 +385,10 @@ function NavGroup({
   return (
     <div>
       <button
-        onClick={handleToggle}
+        onClick={() => {
+          setHasUserToggled(true);
+          setIsOpen(!isOpen);
+        }}
         className={cn(
           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
           isActive
@@ -430,6 +413,323 @@ function NavGroup({
   );
 }
 
+// ============================================
+// Branch Selector (inline in sidebar)
+// ============================================
+
+function SidebarBranchSelector({ isCollapsed }: { isCollapsed: boolean }) {
+  const { branchId, branchIds, setSelectedBranch, canSwitchBranches } = useBranchContext();
+  const { data: branches, isLoading } = useBranches(branchIds);
+
+  const selectedBranch = branches?.find((b) => b.id === branchId);
+
+  if (!canSwitchBranches) {
+    // Single branch - just show the name
+    if (isCollapsed) {
+      return (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <div className="flex items-center justify-center p-2">
+              <Building2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right">{selectedBranch?.name || 'Branch'}</TooltipContent>
+        </Tooltip>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+        <Building2 className="h-4 w-4" />
+        <span className="truncate">{selectedBranch?.name || 'Branch'}</span>
+      </div>
+    );
+  }
+
+  // Multi-branch - show dropdown
+  if (isCollapsed) {
+    return (
+      <DropdownMenu>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button className="flex w-full items-center justify-center p-2 rounded-lg hover:bg-accent">
+                <Building2 className="h-5 w-5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">Switch Branch</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="start" className="w-48">
+          <DropdownMenuLabel>Switch Branch</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {isLoading ? (
+            <div className="p-2">
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : (
+            branches?.map((branch) => (
+              <DropdownMenuItem
+                key={branch.id}
+                onClick={() => setSelectedBranch(branch.id)}
+                className="flex items-center justify-between"
+              >
+                <span className="truncate">{branch.name}</span>
+                {branch.id === branchId && <Check className="h-4 w-4 text-primary" />}
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex w-full items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-accent text-left">
+          <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+          {isLoading ? (
+            <Skeleton className="h-4 w-20" />
+          ) : (
+            <span className="flex-1 truncate">{selectedBranch?.name || 'Select Branch'}</span>
+          )}
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuLabel>Switch Branch</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isLoading ? (
+          <div className="p-2 space-y-2">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        ) : (
+          branches?.map((branch) => (
+            <DropdownMenuItem
+              key={branch.id}
+              onClick={() => setSelectedBranch(branch.id)}
+              className="flex items-center justify-between"
+            >
+              <span className="truncate">{branch.name}</span>
+              {branch.id === branchId && <Check className="h-4 w-4 text-primary" />}
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ============================================
+// User Profile Card
+// ============================================
+
+function UserProfileCard({ isCollapsed }: { isCollapsed: boolean }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const locale = useLocale();
+  const { user, refreshToken, logout } = useAuthStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } catch {
+      // Continue with logout even if API call fails
+    }
+    logout();
+    router.push('/login');
+  };
+
+  const handleLanguageToggle = () => {
+    // Cycle through locales
+    const currentIndex = locales.indexOf(locale as Locale);
+    const nextIndex = (currentIndex + 1) % locales.length;
+    const newLocale = locales[nextIndex];
+    document.cookie = `NEXT_LOCALE=${newLocale};path=/;max-age=31536000`;
+    router.refresh();
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'U';
+    const parts = name.split(' ');
+    return parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  };
+
+  const isSettingsActive = pathname.startsWith('/settings');
+
+  if (isCollapsed) {
+    // Collapsed: Stack of icon buttons
+    return (
+      <>
+        <div className="flex flex-col items-center gap-1">
+          {/* User Avatar with tooltip */}
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <div className="p-1">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                    {getInitials(user?.name)}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <div>
+                <p className="font-medium">{user?.name}</p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {user?.role?.replace(/_/g, ' ')}
+                </p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Link
+                href="/settings"
+                className={cn(
+                  'flex items-center justify-center rounded-lg px-2 py-2 text-sm transition-all',
+                  isSettingsActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <Settings className="h-5 w-5" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Settings</TooltipContent>
+          </Tooltip>
+
+          {/* Language Toggle */}
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleLanguageToggle}
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                {locale.toUpperCase()}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Switch to{' '}
+              {
+                localeNames[
+                  locales[(locales.indexOf(locale as Locale) + 1) % locales.length] as Locale
+                ]
+              }
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Logout */}
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setShowLogoutConfirm(true)}
+                className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-red-600"
+              >
+                <LogOut className="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Sign out</TooltipContent>
+          </Tooltip>
+        </div>
+
+        <ConfirmDialog
+          open={showLogoutConfirm}
+          onOpenChange={setShowLogoutConfirm}
+          title="Sign out"
+          description="Are you sure you want to sign out?"
+          confirmText="Sign out"
+          variant="destructive"
+          onConfirm={handleLogout}
+          isLoading={isLoggingOut}
+        />
+      </>
+    );
+  }
+
+  // Expanded: Horizontal layout
+  return (
+    <>
+      <div className="flex items-center gap-4 p-2">
+        {/* Settings Button */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Link
+              href="/settings"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
+                isSettingsActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <Settings className="h-5 w-5" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent>Settings</TooltipContent>
+        </Tooltip>
+
+        {/* Language Toggle Button */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handleLanguageToggle}
+              className="flex items-center justify-center h-8 px-2 rounded-md text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground border"
+            >
+              {locale.toUpperCase()}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Switch to{' '}
+            {
+              localeNames[
+                locales[(locales.indexOf(locale as Locale) + 1) % locales.length] as Locale
+              ]
+            }
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Logout Button */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-accent hover:text-red-600"
+            >
+              <LogOut className="size-4 text-destructive" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Sign out</TooltipContent>
+        </Tooltip>
+      </div>
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        onOpenChange={setShowLogoutConfirm}
+        title="Sign out"
+        description="Are you sure you want to sign out?"
+        confirmText="Sign out"
+        variant="destructive"
+        onConfirm={handleLogout}
+        isLoading={isLoggingOut}
+      />
+    </>
+  );
+}
+
+// ============================================
+// Main Sidebar Component
+// ============================================
+
 interface SidebarProps {
   className?: string;
 }
@@ -437,10 +737,10 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const t = useTranslations('navigation');
   const { sidebarCollapsed, toggleSidebarCollapse } = useUIStore();
+  const { user, tenant } = useAuthStore();
   const { hasPermission } = usePermissions();
   const resetAppointmentsToToday = useAppointmentsUIStore((state) => state.resetToToday);
 
-  // Filter nav items based on user permissions and feature flags
   const visibleMainNavItems = useMemo(
     () =>
       mainNavItems.filter(
@@ -448,79 +748,84 @@ export function Sidebar({ className }: SidebarProps) {
           (!item.permission || hasPermission(item.permission)) &&
           (!item.featureFlag || isFeatureEnabled(item.featureFlag))
       ),
-    [hasPermission, isFeatureEnabled]
+    [hasPermission]
   );
 
-  const visibleBottomNavItems = useMemo(
-    () =>
-      bottomNavItems.filter(
-        (item) =>
-          (!item.permission || hasPermission(item.permission)) &&
-          (!item.featureFlag || isFeatureEnabled(item.featureFlag))
-      ),
-    [hasPermission, isFeatureEnabled]
-  );
-
-  // Handle navigation - reset page-specific state when navigating via sidebar
   const handleNavigate = useCallback(
     (href: string) => {
-      // Reset appointments state to today when navigating to appointments
-      if (href === '/appointments') {
-        resetAppointmentsToToday();
-      }
-      // Add similar resets for other pages as needed
+      if (href === '/appointments') resetAppointmentsToToday();
     },
     [resetAppointmentsToToday]
   );
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'U';
+    const parts = name.split(' ');
+    return parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  };
 
   return (
     <TooltipProvider>
       <aside
         className={cn(
           'flex h-screen flex-col border-r bg-card transition-[width] duration-300 ease-in-out',
-          sidebarCollapsed ? 'w-16' : 'w-64',
+          sidebarCollapsed ? 'w-16' : 'w-56',
           className
         )}
       >
-        {/* Logo / Brand */}
+        {/* Brand */}
         <div
           className={cn(
-            'flex h-16 items-center border-b px-4',
+            'flex h-14 items-center border-b px-3',
             sidebarCollapsed ? 'justify-center' : 'justify-between'
           )}
         >
-          <Link
-            href="/today"
-            className={cn(
-              'flex items-center gap-2 font-bold',
-              sidebarCollapsed ? 'text-lg' : 'text-xl'
-            )}
-          >
+          <Link href="/today" className="flex items-center gap-2 font-bold text-lg">
             {sidebarCollapsed ? (
-              <span className="text-primary">SO</span>
+              tenant?.logoUrl ? (
+                <Image
+                  src={tenant.logoUrl}
+                  alt={tenant.name}
+                  width={32}
+                  height={32}
+                  className="rounded object-contain"
+                />
+              ) : (
+                <span className="text-primary">T</span>
+              )
             ) : (
               <>
-                <span className="text-primary">Salon</span>
-                <span>Ops</span>
+                <span>trimio</span>
+                {tenant?.logoUrl && (
+                  <>
+                    <span className="text-muted-foreground text-sm">×</span>
+                    <Image
+                      src={tenant.logoUrl}
+                      alt={tenant.name}
+                      width={24}
+                      height={24}
+                      className="rounded object-contain"
+                    />
+                  </>
+                )}
               </>
             )}
           </Link>
-
-          {/* Collapse toggle - only show on expanded */}
           {!sidebarCollapsed && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={toggleSidebarCollapse}
-              aria-label="Collapse sidebar"
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleSidebarCollapse}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
         </div>
 
-        {/* Main navigation */}
+        {/* Branch Selector */}
+        <div className="border-b px-2 py-2">
+          <SidebarBranchSelector isCollapsed={sidebarCollapsed} />
+        </div>
+
+        {/* Main Navigation */}
         <nav className="flex-1 overflow-y-auto p-2">
           <ul className="space-y-1">
             {visibleMainNavItems.map((item) => (
@@ -546,40 +851,39 @@ export function Sidebar({ className }: SidebarProps) {
           </ul>
         </nav>
 
-        {/* Bottom navigation */}
-        <div className="border-t p-2">
-          <ul className="space-y-1">
-            {visibleBottomNavItems.map((item) => (
-              <li key={item.href}>
-                <NavLink
-                  item={item}
-                  isCollapsed={sidebarCollapsed}
-                  t={t}
-                  onNavigate={handleNavigate}
-                />
-              </li>
-            ))}
-          </ul>
-
-          {/* Language Switcher */}
+        {/* Bottom Section */}
+        <div className="border-t p-2 space-y-1">
+          {/* Settings */}
           {!sidebarCollapsed && (
-            <div className="mt-2 px-1">
-              <LanguageSwitcherCompact />
+            <div className="flex items-center gap-2">
+              <Avatar className="h-9 w-9 shrink-0">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                  {getInitials(user?.name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate capitalize">
+                  {user?.role?.replace(/_/g, ' ')}
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Expand toggle - only show when collapsed */}
+          {/* Expand toggle when collapsed */}
           {sidebarCollapsed && (
             <Button
               variant="ghost"
               size="icon"
-              className="mt-2 h-8 w-full"
+              className="w-full h-8"
               onClick={toggleSidebarCollapse}
-              aria-label="Expand sidebar"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           )}
+
+          {/* User Profile */}
+          <UserProfileCard isCollapsed={sidebarCollapsed} />
         </div>
       </aside>
     </TooltipProvider>

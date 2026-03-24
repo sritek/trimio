@@ -593,3 +593,63 @@ export function useSendPayslipWhatsApp() {
     },
   });
 }
+
+// ============================================
+// Stylist Breaks Hooks
+// ============================================
+
+export interface StylistBreak {
+  id: string;
+  name: string;
+  dayOfWeek: number | null;
+  startTime: string;
+  endTime: string;
+  branchId: string;
+  isActive: boolean;
+}
+
+export const breakKeys = {
+  all: ['stylist-breaks'] as const,
+  list: (userId: string) => [...breakKeys.all, 'list', userId] as const,
+};
+
+export function useStylistBreaks(userId: string) {
+  return useQuery({
+    queryKey: breakKeys.list(userId),
+    queryFn: () => api.get<StylistBreak[]>(`/staff/${userId}/breaks`),
+    enabled: !!userId,
+  });
+}
+
+export function useCreateStylistBreak() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      userId,
+      ...input
+    }: {
+      userId: string;
+      branchId: string;
+      name: string;
+      dayOfWeek: number | null;
+      startTime: string;
+      endTime: string;
+    }) => api.post<StylistBreak>(`/staff/${userId}/breaks`, input),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: breakKeys.list(variables.userId) });
+    },
+  });
+}
+
+export function useDeleteStylistBreak() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ userId, breakId }: { userId: string; breakId: string }) =>
+      api.delete<void>(`/staff/${userId}/breaks/${breakId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: breakKeys.list(variables.userId) });
+    },
+  });
+}

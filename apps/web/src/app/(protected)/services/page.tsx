@@ -8,17 +8,13 @@ import { useTranslations } from 'next-intl';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 
-import { useCategories } from '@/hooks/queries/use-categories';
-import {
-  useDeleteService,
-  useDuplicateService,
-  useServicesPaginated,
-} from '@/hooks/queries/use-services';
+import { useDeleteService, useDuplicateService, useServices } from '@/hooks/queries/use-services';
 import { usePermissions } from '@/hooks/use-permissions';
 
 import {
   AccessDenied,
   ConfirmDialog,
+  FilterButton,
   PageContainer,
   PageContent,
   PageHeader,
@@ -26,15 +22,9 @@ import {
   SearchInput,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 import { ServiceTable } from './components/service-table';
+import { ServicesFilterSheet, type ServicesFiltersState } from './components/services-filter-sheet';
 
 import type { ServiceFilters } from '@/types/services';
 
@@ -46,30 +36,39 @@ export default function ServicesPage() {
   const { hasPermission } = usePermissions();
 
   const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('all');
-  const [isActiveFilter, setIsActiveFilter] = useState<string>('all');
+  const [filters, setFilters] = useState<ServicesFiltersState>({
+    categoryId: 'all',
+    isActive: 'all',
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const filters: ServiceFilters = {
+  const serviceFilters: ServiceFilters = {
     page,
     limit,
     search: search || undefined,
-    categoryId: categoryId !== 'all' ? categoryId : undefined,
-    isActive: isActiveFilter === 'all' ? undefined : isActiveFilter === 'active',
+    categoryId: filters.categoryId !== 'all' ? filters.categoryId : undefined,
+    isActive: filters.isActive === 'all' ? undefined : filters.isActive === 'active',
     sortBy: 'displayOrder',
     sortOrder: 'asc',
   };
 
-  const { data: servicesData, isLoading, error } = useServicesPaginated(filters);
-  const { data: categories } = useCategories({ flat: true });
+  const { data: servicesData, isLoading, error } = useServices(serviceFilters);
   const deleteService = useDeleteService();
   const duplicateService = useDuplicateService();
 
   const canWrite = hasPermission(PERMISSIONS.SERVICES_WRITE);
 
-  const hasFilters = !!search || categoryId !== 'all' || isActiveFilter !== 'all';
+  const hasFilters = !!search || filters.categoryId !== 'all' || filters.isActive !== 'all';
+  const activeFilterCount =
+    (filters.categoryId !== 'all' ? 1 : 0) + (filters.isActive !== 'all' ? 1 : 0);
+
+  const handleFiltersChange = useCallback((newFilters: ServicesFiltersState) => {
+    setFilters(newFilters);
+    setPage(1);
+  }, []);
 
   const handlePageSizeChange = useCallback((newLimit: number) => {
     setLimit(newLimit);
@@ -119,9 +118,6 @@ export default function ServicesPage() {
               <Button variant="outline" asChild>
                 <Link href="/services/categories">{tNav('categories')}</Link>
               </Button>
-              <Button variant="outline" asChild>
-                <Link href="/services/combos">{tNav('combos')}</Link>
-              </Button>
               {canWrite && (
                 <Button asChild>
                   <Link href="/services/new">
@@ -135,7 +131,7 @@ export default function ServicesPage() {
         />
 
         <PageContent>
-          {/* Filters */}
+          {/* Search and Filter */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
             <SearchInput
               value={search}
@@ -144,38 +140,7 @@ export default function ServicesPage() {
               className="flex-1 max-w-sm"
             />
 
-            <div className="flex flex-wrap gap-2">
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder={t('filters.allCategories')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('filters.allCategories')}</SelectItem>
-                  {categories?.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                        {cat.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={isActiveFilter} onValueChange={setIsActiveFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder={t('filters.allStatus')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('filters.allStatus')}</SelectItem>
-                  <SelectItem value="active">{t('filters.active')}</SelectItem>
-                  <SelectItem value="inactive">{t('filters.inactive')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <FilterButton onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
           </div>
 
           {/* Table */}
@@ -195,6 +160,14 @@ export default function ServicesPage() {
             hasFilters={hasFilters}
           />
         </PageContent>
+
+        {/* Filter Sheet */}
+        <ServicesFilterSheet
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+        />
 
         <ConfirmDialog
           open={!!deleteId}

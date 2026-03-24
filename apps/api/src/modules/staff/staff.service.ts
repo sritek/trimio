@@ -1905,3 +1905,105 @@ export const geoConfigService = {
     };
   },
 };
+
+// ============================================
+// Stylist Breaks Service
+// ============================================
+
+export const breaksService = {
+  /**
+   * List breaks for a stylist
+   */
+  async list(tenantId: string, stylistId: string, branchId?: string) {
+    const where: Prisma.StylistBreakWhereInput = {
+      tenantId,
+      stylistId,
+      isActive: true,
+    };
+
+    if (branchId) {
+      where.branchId = branchId;
+    }
+
+    const breaks = await prisma.stylistBreak.findMany({
+      where,
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+    });
+
+    return breaks;
+  },
+
+  /**
+   * Create a new break for a stylist
+   */
+  async create(
+    tenantId: string,
+    stylistId: string,
+    input: {
+      branchId: string;
+      name: string;
+      dayOfWeek: number | null;
+      startTime: string;
+      endTime: string;
+    },
+    createdBy: string
+  ) {
+    // Verify stylist exists
+    const user = await prisma.user.findFirst({
+      where: { id: stylistId, tenantId, deletedAt: null },
+    });
+
+    if (!user) {
+      throw new NotFoundError('STYLIST_NOT_FOUND', 'Stylist not found');
+    }
+
+    // Verify branch exists
+    const branch = await prisma.branch.findFirst({
+      where: { id: input.branchId, tenantId, deletedAt: null },
+    });
+
+    if (!branch) {
+      throw new NotFoundError('BRANCH_NOT_FOUND', 'Branch not found');
+    }
+
+    const breakRecord = await prisma.stylistBreak.create({
+      data: {
+        tenantId,
+        branchId: input.branchId,
+        stylistId,
+        name: input.name,
+        dayOfWeek: input.dayOfWeek,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        isActive: true,
+        createdBy,
+      },
+    });
+
+    return breakRecord;
+  },
+
+  /**
+   * Delete a break
+   */
+  async delete(tenantId: string, stylistId: string, breakId: string) {
+    const breakRecord = await prisma.stylistBreak.findFirst({
+      where: { id: breakId, tenantId, stylistId },
+    });
+
+    if (!breakRecord) {
+      throw new NotFoundError('BREAK_NOT_FOUND', 'Break not found');
+    }
+
+    await prisma.stylistBreak.delete({
+      where: { id: breakId },
+    });
+
+    return { success: true };
+  },
+};
+
+// Re-export for controller
+staffService.listBreaks = breaksService.list;
+staffService.createBreak = breaksService.create;
+staffService.deleteBreak = breaksService.delete;

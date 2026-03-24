@@ -12,10 +12,7 @@ export class VariantsService {
   /**
    * Get all variants for a service
    */
-  async getVariants(
-    tenantId: string,
-    serviceId: string
-  ): Promise<ServiceVariant[]> {
+  async getVariants(tenantId: string, serviceId: string): Promise<ServiceVariant[]> {
     // Verify service belongs to tenant
     const service = await prisma.service.findFirst({
       where: { id: serviceId, tenantId, deletedAt: null },
@@ -27,7 +24,7 @@ export class VariantsService {
 
     return prisma.serviceVariant.findMany({
       where: { serviceId },
-      orderBy: [{ variantGroup: 'asc' }, { displayOrder: 'asc' }],
+      orderBy: { displayOrder: 'asc' },
     });
   }
 
@@ -52,7 +49,7 @@ export class VariantsService {
     let displayOrder = data.displayOrder;
     if (displayOrder === undefined) {
       const maxOrder = await prisma.serviceVariant.aggregate({
-        where: { serviceId, variantGroup: data.variantGroup },
+        where: { serviceId },
         _max: { displayOrder: true },
       });
       displayOrder = (maxOrder._max.displayOrder ?? -1) + 1;
@@ -63,7 +60,6 @@ export class VariantsService {
         tenantId,
         serviceId,
         name: data.name,
-        variantGroup: data.variantGroup,
         priceAdjustmentType: data.priceAdjustmentType,
         priceAdjustment: data.priceAdjustment,
         durationAdjustment: data.durationAdjustment,
@@ -109,11 +105,7 @@ export class VariantsService {
   /**
    * Delete a variant
    */
-  async deleteVariant(
-    tenantId: string,
-    serviceId: string,
-    variantId: string
-  ): Promise<void> {
+  async deleteVariant(tenantId: string, serviceId: string, variantId: string): Promise<void> {
     // Verify service belongs to tenant
     const service = await prisma.service.findFirst({
       where: { id: serviceId, tenantId, deletedAt: null },

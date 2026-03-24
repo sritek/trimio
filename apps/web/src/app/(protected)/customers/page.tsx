@@ -18,34 +18,42 @@ import { usePermissions } from '@/hooks/use-permissions';
 import {
   AccessDenied,
   ConfirmDialog,
+  FilterButton,
   PageContainer,
   PageContent,
   PageHeader,
   PermissionGuard,
+  SearchInput,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
 
-import { CustomerFilters, type CustomerFiltersState } from './components/customer-filters';
 import { CustomerTable } from './components/customer-table';
+import {
+  CustomersFilterSheet,
+  type CustomersFiltersState,
+} from './components/customers-filter-sheet';
 
 import type { BookingStatus, CustomerFilters as CustomerFiltersType } from '@/types/customers';
 
 export default function CustomersPage() {
   const t = useTranslations('customers.list');
+  const tCommon = useTranslations('common');
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.CUSTOMERS_WRITE);
 
+  // Search state (separate from filters for debouncing)
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
   // Filter state
-  const [filters, setFilters] = useState<CustomerFiltersState>({
-    search: '',
+  const [filters, setFilters] = useState<CustomersFiltersState>({
     tag: 'all',
     status: 'all',
   });
+  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const debouncedSearch = useDebounce(filters.search, 300);
 
   // Build query filters
   const queryFilters: CustomerFiltersType = {
@@ -63,9 +71,18 @@ export default function CustomersPage() {
   const { data: customTags } = useCustomTags();
   const deleteCustomer = useDeleteCustomer();
 
+  // Calculate active filter count and hasFilters
+  const hasFilters = !!search || filters.tag !== 'all' || filters.status !== 'all';
+  const activeFilterCount = (filters.tag !== 'all' ? 1 : 0) + (filters.status !== 'all' ? 1 : 0);
+
   // Handlers
-  const handleFiltersChange = useCallback((newFilters: CustomerFiltersState) => {
+  const handleFiltersChange = useCallback((newFilters: CustomersFiltersState) => {
     setFilters(newFilters);
+    setPage(1);
+  }, []);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
     setPage(1);
   }, []);
 
@@ -89,8 +106,6 @@ export default function CustomersPage() {
     }
   }, [deleteId, deleteCustomer]);
 
-  const hasFilters = filters.search !== '' || filters.tag !== 'all' || filters.status !== 'all';
-
   return (
     <PermissionGuard permission={PERMISSIONS.CUSTOMERS_READ} fallback={<AccessDenied />}>
       <PageContainer>
@@ -110,14 +125,19 @@ export default function CustomersPage() {
         />
 
         <PageContent>
-          <div className="flex-shrink-0 mb-4">
-            <CustomerFilters
-              filters={filters}
-              onFiltersChange={handleFiltersChange}
-              customTags={customTags}
+          {/* Search and Filter */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
+            <SearchInput
+              value={search}
+              onChange={handleSearchChange}
+              placeholder={t('searchPlaceholder')}
+              className="flex-1 max-w-sm"
             />
+
+            <FilterButton onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
           </div>
 
+          {/* Table */}
           <CustomerTable
             data={customersData?.data || []}
             meta={customersData?.meta}
@@ -131,11 +151,20 @@ export default function CustomersPage() {
           />
         </PageContent>
 
+        {/* Filter Sheet */}
+        <CustomersFilterSheet
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          customTags={customTags}
+        />
+
         <ConfirmDialog
           open={!!deleteId}
           onOpenChange={(open) => !open && setDeleteId(null)}
-          title={t('confirmDeleteTitle')}
-          description={t('confirmDeleteDescription')}
+          title={tCommon('confirmDelete.title')}
+          description={tCommon('confirmDelete.description')}
           variant="destructive"
           onConfirm={confirmDelete}
           isLoading={deleteCustomer.isPending}

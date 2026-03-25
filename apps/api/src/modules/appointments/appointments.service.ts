@@ -1,6 +1,13 @@
 import { PrismaClient, Prisma, AppointmentStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { format } from 'date-fns';
 import { AppError } from '../../lib/errors';
+import { logger } from '../../lib/logger';
+import {
+  notifyAppointmentBooked,
+  notifyAppointmentRescheduled,
+  notifyAppointmentCancelled,
+} from '../notifications/notification.service';
 import type {
   CreateAppointmentInput,
   UpdateAppointmentInput,
@@ -274,6 +281,51 @@ export class AppointmentsService {
     overrideReason?: string,
     conflictActions?: ConflictAction[]
   ) {
+    // 0. Deduplication guard — prevent double-submit within 10 seconds.
+    // If an identical appointment (same branch + customer/phone + date + time) was
+    // created by the same user in the last 10s, return it instead of creating a duplicate.
+    const dedupWindow = new Date(Date.now() - 10_000);
+    const existing = await this.prisma.appointment.findFirst({
+      where: {
+        tenantId,
+        branchId: input.branchId,
+        scheduledDate: parseToUTCDate(input.scheduledDate),
+        scheduledTime: input.scheduledTime,
+        createdBy: userId,
+        createdAt: { gte: dedupWindow },
+        deletedAt: null,
+        ...(input.customerId
+          ? { customerId: input.customerId }
+          : { customerPhone: input.customerPhone }),
+      },
+      include: {
+        services: true,
+        customer: { select: { id: true, name: true, phone: true } },
+        branch: { select: { id: true, name: true } },
+      },
+    });
+
+    if (existing) {
+      logger.warn(
+        {
+          tenantId,
+          appointmentId: existing.id,
+          branchId: input.branchId,
+          scheduledDate: input.scheduledDate,
+          scheduledTime: input.scheduledTime,
+          userId,
+        },
+        'Duplicate appointment creation blocked — returning existing record (double-submit guard)'
+      );
+      return {
+        appointment: existing,
+        tokenNumber: existing.tokenNumber ?? undefined,
+        prepaymentRequired: existing.prepaymentRequired,
+        processedConflicts: [],
+        prepaymentAmount: existing.prepaymentRequired ? Number(existing.prepaymentAmount) : undefined,
+      };
+    }
+
     // 1. Validate services exist and are active
     const services = await this.prisma.service.findMany({
       where: {
@@ -412,134 +464,109 @@ export class AppointmentsService {
       tokenNumber = (lastToken?.tokenNumber ?? 0) + 1;
     }
 
-    // 8. Create appointment in transaction
-    const appointment = await this.prisma.$transaction(async (tx) => {
-      // 8.1 Process conflict actions if override is being used
-      const processedConflicts: { id: string; action: string; customerName: string }[] = [];
+    // 8. Process conflict overrides (outside transaction — these are best-effort updates)
+    const processedConflicts: { id: string; action: string; customerName: string }[] = [];
 
-      if (forceOverride && conflicts.length > 0) {
-        for (const conflict of conflicts) {
-          // Find the action for this conflict (default to 'keep' if not specified)
-          const conflictAction = conflictActions?.find((ca) => ca.appointmentId === conflict.id);
-          const action = conflictAction?.action || 'keep';
+    if (forceOverride && conflicts.length > 0) {
+      for (const conflict of conflicts) {
+        const conflictAction = conflictActions?.find((ca) => ca.appointmentId === conflict.id);
+        const action = conflictAction?.action || 'keep';
 
-          if (action === 'cancel') {
-            // Cancel the conflicting appointment
-            await tx.appointment.update({
-              where: { id: conflict.id },
-              data: {
-                status: 'cancelled',
-                cancelledAt: new Date(),
-                cancelledBy: userId,
-                cancellationReason: `Cancelled due to scheduling conflict. Override reason: ${overrideReason || 'Not specified'}`,
-                isSalonCancelled: true,
-              },
-            });
-
-            await tx.appointmentStatusHistory.create({
-              data: {
-                tenantId,
-                appointmentId: conflict.id,
-                fromStatus: conflict.status,
-                toStatus: 'cancelled',
-                changedBy: userId,
-                notes: `Cancelled due to conflict override`,
-              },
-            });
-          } else {
-            // Mark as having conflict (keep)
-            await tx.appointment.update({
-              where: { id: conflict.id },
-              data: {
-                hasConflict: true,
-                conflictNotes: `Conflict with new appointment. Override reason: ${overrideReason || 'Not specified'}`,
-                conflictMarkedAt: new Date(),
-              },
-            });
-          }
-
-          processedConflicts.push({
-            id: conflict.id,
-            action,
-            customerName: conflict.customerName,
+        if (action === 'cancel') {
+          await this.prisma.appointment.update({
+            where: { id: conflict.id },
+            data: {
+              status: 'cancelled',
+              cancelledAt: new Date(),
+              cancelledBy: userId,
+              cancellationReason: `Cancelled due to scheduling conflict. Override reason: ${overrideReason || 'Not specified'}`,
+              isSalonCancelled: true,
+            },
           });
-
-          // Create audit log for conflict handling
-          await tx.auditLog.create({
+          await this.prisma.appointmentStatusHistory.create({
             data: {
               tenantId,
-              branchId: input.branchId,
-              userId,
-              action:
-                action === 'cancel'
-                  ? 'CONFLICT_APPOINTMENT_CANCELLED'
-                  : 'CONFLICT_APPOINTMENT_MARKED',
-              entityType: 'appointment',
-              entityId: conflict.id,
-              newValues: {
-                action,
-                overrideReason,
-                conflictingTime: `${input.scheduledDate} ${input.scheduledTime}`,
-              },
+              appointmentId: conflict.id,
+              fromStatus: conflict.status,
+              toStatus: 'cancelled',
+              changedBy: userId,
+              notes: `Cancelled due to conflict override`,
+            },
+          });
+        } else {
+          await this.prisma.appointment.update({
+            where: { id: conflict.id },
+            data: {
+              hasConflict: true,
+              conflictNotes: `Conflict with new appointment. Override reason: ${overrideReason || 'Not specified'}`,
+              conflictMarkedAt: new Date(),
             },
           });
         }
+
+        processedConflicts.push({ id: conflict.id, action, customerName: conflict.customerName });
+
+        await this.prisma.auditLog.create({
+          data: {
+            tenantId,
+            branchId: input.branchId,
+            userId,
+            action: action === 'cancel' ? 'CONFLICT_APPOINTMENT_CANCELLED' : 'CONFLICT_APPOINTMENT_MARKED',
+            entityType: 'appointment',
+            entityId: conflict.id,
+            newValues: { action, overrideReason, conflictingTime: `${input.scheduledDate} ${input.scheduledTime}` },
+          },
+        });
       }
+    }
 
-      const apt = await tx.appointment.create({
-        data: {
-          tenantId,
-          branchId: input.branchId,
-          customerId: input.customerId,
-          customerName: input.customerName,
-          customerPhone: input.customerPhone,
-          scheduledDate: parseToUTCDate(input.scheduledDate),
-          scheduledTime: input.scheduledTime,
-          scheduledEndTime,
-          totalDuration,
-          stylistId: input.stylistId,
-          stylistGenderPreference: input.stylistGenderPreference,
-          bookingType: input.bookingType,
-          bookingSource: input.bookingSource,
-          status: 'booked',
-          tokenNumber,
-          subtotal,
-          taxAmount,
-          totalAmount,
-          priceLockedAt: new Date(),
-          prepaymentRequired,
-          prepaymentAmount,
-          prepaymentStatus: prepaymentRequired ? 'pending' : null,
-          customerNotes: input.customerNotes,
-          internalNotes: input.internalNotes,
-          createdBy: userId,
-          services: {
-            create: appointmentServices,
-          },
+    // 9. Create appointment — single atomic write, no interactive transaction needed.
+    // Prisma nested create (services) is sent as one statement; status history and
+    // audit log are fire-and-forget writes that don't need to be in the same tx.
+    const apt = await this.prisma.appointment.create({
+      data: {
+        tenantId,
+        branchId: input.branchId,
+        customerId: input.customerId,
+        customerName: input.customerName,
+        customerPhone: input.customerPhone,
+        scheduledDate: parseToUTCDate(input.scheduledDate),
+        scheduledTime: input.scheduledTime,
+        scheduledEndTime,
+        totalDuration,
+        stylistId: input.stylistId,
+        stylistGenderPreference: input.stylistGenderPreference,
+        bookingType: input.bookingType,
+        bookingSource: input.bookingSource,
+        status: 'booked',
+        tokenNumber,
+        subtotal,
+        taxAmount,
+        totalAmount,
+        priceLockedAt: new Date(),
+        prepaymentRequired,
+        prepaymentAmount,
+        prepaymentStatus: prepaymentRequired ? 'pending' : null,
+        customerNotes: input.customerNotes,
+        internalNotes: input.internalNotes,
+        createdBy: userId,
+        services: {
+          create: appointmentServices,
         },
-        include: {
-          services: true,
-          customer: {
-            select: { id: true, name: true, phone: true },
-          },
-          branch: {
-            select: { id: true, name: true },
-          },
-        },
-      });
+      },
+      include: {
+        services: true,
+        customer: { select: { id: true, name: true, phone: true } },
+        branch: { select: { id: true, name: true } },
+      },
+    });
 
-      // Create status history
-      await tx.appointmentStatusHistory.create({
-        data: {
-          tenantId,
-          appointmentId: apt.id,
-          toStatus: 'booked',
-          changedBy: userId,
-        },
-      });
-
-      // Create audit log for appointment creation
-      await tx.auditLog.create({
+    // Post-create writes — fire in parallel, don't block the response
+    const postWrites: Promise<unknown>[] = [
+      this.prisma.appointmentStatusHistory.create({
+        data: { tenantId, appointmentId: apt.id, toStatus: 'booked', changedBy: userId },
+      }),
+      this.prisma.auditLog.create({
         data: {
           tenantId,
           branchId: input.branchId,
@@ -559,20 +586,16 @@ export class AppointmentsService {
             processedConflicts: processedConflicts.length > 0 ? processedConflicts : undefined,
           },
         },
-      });
+      }),
+    ];
 
-      // Mark waitlist entry as converted if provided
-      if (input.waitlistEntryId) {
-        await tx.waitlistEntry.update({
+    if (input.waitlistEntryId) {
+      postWrites.push(
+        this.prisma.waitlistEntry.update({
           where: { id: input.waitlistEntryId },
-          data: {
-            status: 'converted',
-            appointmentId: apt.id,
-            convertedAt: new Date(),
-          },
-        });
-
-        await tx.auditLog.create({
+          data: { status: 'converted', appointmentId: apt.id, convertedAt: new Date() },
+        }),
+        this.prisma.auditLog.create({
           data: {
             tenantId,
             branchId: input.branchId,
@@ -580,17 +603,23 @@ export class AppointmentsService {
             action: 'WAITLIST_CONVERTED',
             entityType: 'waitlist_entry',
             entityId: input.waitlistEntryId,
-            newValues: {
-              appointmentId: apt.id,
-              scheduledDate: input.scheduledDate,
-              scheduledTime: input.scheduledTime,
-            },
+            newValues: { appointmentId: apt.id, scheduledDate: input.scheduledDate, scheduledTime: input.scheduledTime },
           },
-        });
-      }
+        })
+      );
+    }
 
-      return { apt, processedConflicts };
-    });
+    // Run post-writes in parallel — errors here are non-critical, log and continue
+    Promise.all(postWrites).catch((err) =>
+      logger.error({ err }, 'Post-create writes failed for appointment')
+    );
+
+    const appointment = { apt, processedConflicts };
+
+    // Fire-and-forget WhatsApp notification — must not block or throw
+    notifyAppointmentBooked(tenantId, appointment.apt.id).catch((err) =>
+      logger.error({ err }, 'WhatsApp notification failed: appointment_booked')
+    );
 
     return {
       appointment: appointment.apt,
@@ -748,7 +777,7 @@ export class AppointmentsService {
       throw new AppError('APT_030', 'Cannot cancel appointment in current status', 400);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: {
@@ -799,6 +828,13 @@ export class AppointmentsService {
 
       return updated;
     });
+
+    // Fire-and-forget WhatsApp notification — must not block or throw
+    notifyAppointmentCancelled(tenantId, appointmentId).catch((err) =>
+      logger.error({ err }, 'WhatsApp notification failed: appointment_cancelled')
+    );
+
+    return result;
   }
 
   /**
@@ -899,9 +935,13 @@ export class AppointmentsService {
       throw new AppError('APT_020', `Maximum reschedule limit (${MAX_RESCHEDULES}) reached`, 400);
     }
 
+    // Capture old date/time BEFORE the transaction so we can pass them to the notification
+    const oldDate = format(appointment.scheduledDate, 'yyyy-MM-dd');
+    const oldTime = appointment.scheduledTime;
+
     const newScheduledEndTime = this.calculateEndTime(input.newTime, appointment.totalDuration);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Update original appointment
       await tx.appointment.update({
         where: { id: appointmentId },
@@ -1033,6 +1073,13 @@ export class AppointmentsService {
         rescheduleCount: newAppointment.rescheduleCount,
       };
     });
+
+    // Fire-and-forget WhatsApp notification — must not block or throw
+    notifyAppointmentRescheduled(tenantId, result.newAppointment.id, oldDate, oldTime).catch(
+      (err) => logger.error({ err }, 'WhatsApp notification failed: appointment_rescheduled')
+    );
+
+    return result;
   }
 
   /**

@@ -16,6 +16,12 @@ export const prisma =
   new PrismaClient({
     // log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     log: ['error'],
+    transactionOptions: {
+      // Neon serverless has cold-start latency (5-10s on first connection).
+      // 15s covers cold starts; subsequent requests use warm connections (~100ms).
+      timeout: 15000,
+      maxWait: 5000,
+    },
   });
 
 if (env.NODE_ENV !== 'production') {

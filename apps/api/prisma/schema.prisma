@@ -2700,3 +2700,50 @@ model Station {
   @@index([branchId, status])
   @@map("stations")
 }
+
+// ============================================
+// WhatsApp Notification Logs
+// ============================================
+
+enum WhatsappNotificationType {
+  appointment_booked
+  appointment_rescheduled
+  appointment_cancelled
+  invoice_finalized
+}
+
+enum WhatsappNotificationStatus {
+  accepted
+  failed
+  skipped
+}
+
+enum WhatsappReferenceType {
+  appointment
+  invoice
+}
+
+model WhatsappNotificationLog {
+  id             String                     @id @default(cuid())
+  tenantId       String                     @map("tenant_id")
+  type           WhatsappNotificationType
+  recipientPhone String?                    @map("recipient_phone") @db.VarChar(20)
+  templateName   String                     @map("template_name") @db.VarChar(255)
+  templateParams Json                       @map("template_params")
+  status         WhatsappNotificationStatus
+  errorMessage   String?                    @map("error_message") @db.Text
+  attemptCount   Int                        @default(1) @map("attempt_count")
+  referenceId    String                     @map("reference_id")
+  referenceType  WhatsappReferenceType      @map("reference_type")
+  sentAt         DateTime?                  @map("sent_at")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+
+  // NO unique constraint on (referenceId, type) — same appointment can be
+  // rescheduled multiple times, each generating a valid new notification.
+  // Idempotency is enforced in application logic via 60-second time-window.
+
+  @@index([tenantId, createdAt])
+  @@index([referenceId, type, createdAt])
+  @@map("whatsapp_notification_logs")
+}

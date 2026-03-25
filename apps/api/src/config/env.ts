@@ -58,6 +58,17 @@ const envSchema = z
     ENABLE_ONLINE_BOOKING: booleanSchema.default(false),
     ENABLE_MARKETING: booleanSchema.default(false),
 
+    // WhatsApp Notifications (Meta Cloud API)
+    // All optional — app starts and runs without them.
+    // Absence of WHATSAPP_ACCESS_TOKEN disables the notification system entirely.
+    // Absence of other vars while ACCESS_TOKEN is set = misconfigured (logged as failed).
+    WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    WHATSAPP_TEMPLATE_APPOINTMENT_BOOKED: z.string().optional(),
+    WHATSAPP_TEMPLATE_APPOINTMENT_RESCHEDULED: z.string().optional(),
+    WHATSAPP_TEMPLATE_APPOINTMENT_CANCELLED: z.string().optional(),
+    WHATSAPP_TEMPLATE_INVOICE_FINALIZED: z.string().optional(),
+
     // Internal Admin Portal
     INTERNAL_ADMIN_EMAIL: z.string().email().default('admin@trimio.com'),
     INTERNAL_ADMIN_PASSWORD: z.string().min(8).default('admin123456'),

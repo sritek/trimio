@@ -6,9 +6,11 @@
 import { Prisma, PaymentStatus as PrismaPaymentStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequestError, NotFoundError } from '../../lib/errors';
+import { logger } from '../../lib/logger';
 import { env } from '../../config/env';
 import { fifoEngine } from '../inventory/fifo-engine';
 import { stockService } from '../inventory/stock.service';
+import { notifyInvoiceFinalized } from '../notifications/notification.service';
 import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
@@ -1080,6 +1082,11 @@ export const billingService = {
         }
       }
     });
+
+    // Fire-and-forget WhatsApp notification — must not block or throw
+    notifyInvoiceFinalized(ctx.tenantId, invoiceId).catch((err) =>
+      logger.error({ err }, 'WhatsApp notification failed: invoice_finalized')
+    );
 
     return this.getInvoice(invoiceId, ctx.tenantId);
   },

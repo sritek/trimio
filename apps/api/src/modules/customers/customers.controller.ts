@@ -22,6 +22,7 @@ import type {
   CustomerSearchQuery,
   CreateNoteBody,
   NotesQuery,
+  PhoneLookupQuery,
 } from './customers.schema';
 
 // Roles that should see masked phone numbers
@@ -63,6 +64,21 @@ export class CustomersController {
       : customers;
 
     return reply.send(successResponse(data));
+  }
+
+  /**
+   * Lookup customer by exact phone number
+   * Returns customer basic info if found, null otherwise
+   */
+  async lookupByPhone(
+    request: FastifyRequest<{ Querystring: PhoneLookupQuery }>,
+    reply: FastifyReply
+  ) {
+    const { tenantId } = request.user;
+
+    const customer = await customersService.lookupByPhone(tenantId, request.query.phone);
+
+    return reply.send(successResponse(customer));
   }
 
   /**

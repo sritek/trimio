@@ -123,6 +123,29 @@ export class CustomersService {
   }
 
   /**
+   * Lookup customer by exact phone number
+   * Returns customer if found, null otherwise
+   */
+  async lookupByPhone(
+    tenantId: string,
+    phone: string
+  ): Promise<{ id: string; name: string; phone: string } | null> {
+    const customer = await prisma.customer.findFirst({
+      where: {
+        tenantId,
+        phone,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+      },
+    });
+    return customer;
+  }
+
+  /**
    * Get a single customer by ID
    */
   async getCustomerById(

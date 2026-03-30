@@ -414,6 +414,7 @@ export class AppointmentsService {
 
     // 7.5. Auto-create or find customer if phone is provided but no customerId
     let resolvedCustomerId = input.customerId;
+    let resolvedCustomerName = input.customerName;
     let customerWasCreated = false;
 
     // Check if we should auto-create/find customer:
@@ -430,12 +431,13 @@ export class AppointmentsService {
           phone: input.customerPhone,
           deletedAt: null,
         },
-        select: { id: true, bookingStatus: true },
+        select: { id: true, name: true, bookingStatus: true },
       });
 
       if (existingCustomer) {
-        // Use existing customer
+        // Use existing customer and their stored name (for data consistency)
         resolvedCustomerId = existingCustomer.id;
+        resolvedCustomerName = existingCustomer.name;
 
         // Check if existing customer is blocked (for online bookings)
         if (input.bookingType === 'online' && existingCustomer.bookingStatus === 'blocked') {
@@ -462,6 +464,7 @@ export class AppointmentsService {
             tenantId,
             phone: input.customerPhone,
             name: input.customerName || 'Guest',
+            tags: ['New'], // Auto-assign "New" tag for new customers
             firstVisitBranchId: input.branchId,
           },
         });
@@ -479,6 +482,7 @@ export class AppointmentsService {
             newValues: {
               name: newCustomer.name,
               phone: newCustomer.phone,
+              tags: ['New'],
               source: 'appointment_booking',
             },
           },
@@ -562,7 +566,7 @@ export class AppointmentsService {
           tenantId,
           branchId: input.branchId,
           customerId: resolvedCustomerId,
-          customerName: input.customerName,
+          customerName: resolvedCustomerName, // Use resolved name (existing customer's name or input name)
           customerPhone: input.customerPhone,
           scheduledDate: parseToUTCDate(input.scheduledDate),
           scheduledTime: input.scheduledTime,
@@ -670,6 +674,7 @@ export class AppointmentsService {
       prepaymentRequired,
       processedConflicts: appointment.processedConflicts,
       prepaymentAmount: prepaymentRequired ? prepaymentAmount : undefined,
+      customerCreated: customerWasCreated,
     };
   }
 

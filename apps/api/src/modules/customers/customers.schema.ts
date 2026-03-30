@@ -84,6 +84,11 @@ export const customerSearchQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(20).default(10),
 });
 
+// Phone lookup - for checking if customer exists by phone
+export const phoneLookupQuerySchema = z.object({
+  phone: z.string().regex(/^[6-9]\d{9}$/, 'Invalid phone number'),
+});
+
 // ============================================
 // Customer Notes Schemas
 // ============================================
@@ -159,6 +164,7 @@ export type UpdateCustomerBody = z.infer<typeof updateCustomerBodySchema>;
 export type UpdateCustomerPhoneBody = z.infer<typeof updateCustomerPhoneBodySchema>;
 export type CustomerQuery = z.infer<typeof customerQuerySchema>;
 export type CustomerSearchQuery = z.infer<typeof customerSearchQuerySchema>;
+export type PhoneLookupQuery = z.infer<typeof phoneLookupQuerySchema>;
 
 export type CreateNoteBody = z.infer<typeof createNoteBodySchema>;
 export type NotesQuery = z.infer<typeof notesQuerySchema>;

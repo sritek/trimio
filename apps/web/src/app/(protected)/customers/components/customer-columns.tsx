@@ -1,9 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, MoreHorizontal, Pencil, Trash2, Wallet } from 'lucide-react';
-
-import { formatCurrency } from '@/lib/format';
+import { AlertTriangle, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +24,7 @@ import type { BookingStatus, Customer } from '@/types/customers';
 export function getTagVariant(tag: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (tag) {
     case 'VIP':
-      return 'default';
+      return 'default';``
     case 'New':
       return 'secondary';
     case 'Inactive':
@@ -128,20 +126,10 @@ export function getCustomerColumns({
     },
     {
       accessorKey: 'loyaltyPoints',
-      header: () => <div className="text-right">Loyalty</div>,
+      header: 'Loyalty',
       cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1 text-amber-600">
+        <div className="flex items-center gap-1 text-amber-600">
           <span>{row.original.loyaltyPoints.toLocaleString()} pts</span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'walletBalance',
-      header: () => <div className="text-right">Wallet</div>,
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <Wallet className="h-3 w-3 text-green-600" />
-          <span>{formatCurrency(row.original.walletBalance)}</span>
         </div>
       ),
     },

@@ -122,6 +122,25 @@ export function useCustomer(id: string) {
 }
 
 /**
+ * Lookup customer by exact phone number
+ * Returns customer basic info if found, null otherwise
+ */
+export function useCustomerPhoneLookup(phone: string) {
+  // Only lookup if phone is a valid 10-digit number
+  const isValidPhone = /^[6-9]\d{9}$/.test(phone);
+
+  return useQuery({
+    queryKey: [...customerKeys.all, 'phone-lookup', phone],
+    queryFn: () =>
+      api.get<{ id: string; name: string; phone: string } | null>('/customers/phone-lookup', {
+        phone,
+      }),
+    enabled: isValidPhone,
+    staleTime: 30000, // Cache for 30 seconds
+  });
+}
+
+/**
  * Create a new customer
  */
 export function useCreateCustomer() {

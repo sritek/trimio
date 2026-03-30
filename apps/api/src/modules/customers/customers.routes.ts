@@ -20,6 +20,7 @@ import {
   updateCustomerPhoneBodySchema,
   customerQuerySchema,
   customerSearchQuerySchema,
+  phoneLookupQuerySchema,
   createNoteBodySchema,
   notesQuerySchema,
   createTagBodySchema,
@@ -88,6 +89,28 @@ export default async function customersRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       return customersController.searchCustomers(request as any, reply);
+    }
+  );
+
+  // Lookup customer by phone (exact match)
+  // Note: Using /phone-lookup path to avoid conflict with /customers/:id route
+  app.get(
+    '/customers/phone-lookup',
+    {
+      schema: {
+        description: 'Check if customer exists by exact phone number',
+        tags: ['Customers'],
+        security: [{ bearerAuth: [] }],
+        querystring: phoneLookupQuerySchema,
+        response: {
+          200: successResponseSchema,
+          401: errorResponseSchema,
+        },
+      },
+      preHandler: [authenticate, requirePermission('customers:read')],
+    },
+    async (request, reply) => {
+      return customersController.lookupByPhone(request as any, reply);
     }
   );
 

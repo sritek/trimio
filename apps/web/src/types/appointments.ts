@@ -309,6 +309,7 @@ export interface CreateAppointmentResponse {
   tokenNumber?: number;
   prepaymentRequired: boolean;
   prepaymentAmount?: number;
+  customerCreated?: boolean;
 }
 
 export interface RescheduleResponse {

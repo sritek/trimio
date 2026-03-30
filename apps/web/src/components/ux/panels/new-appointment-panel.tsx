@@ -31,6 +31,7 @@ import {
   UserPlus,
   UserX,
   ClipboardList,
+  CheckCircle2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -48,17 +49,24 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DatePicker, CustomerCombobox, ServiceCombobox, TimeSlotPicker } from '@/components/common';
+import {
+  DatePicker,
+  CustomerCombobox,
+  ServiceCombobox,
+  TimeSlotPicker,
+  PhoneInput,
+} from '@/components/common';
 import type { CustomerOption } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useClosePanel, useSlideOverUnsavedChanges } from '@/components/ux/slide-over';
 import { useCreateAppointment, useStylistBusySlots } from '@/hooks/queries/use-appointments';
-import { useCustomerSearch } from '@/hooks/queries/use-customers';
+import { useCustomerSearch, useCustomerPhoneLookup } from '@/hooks/queries/use-customers';
 import { useServices } from '@/hooks/queries/use-services';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useWaitlistCount, useWaitlistMatches } from '@/hooks/queries/use-waitlist';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
@@ -198,8 +206,24 @@ export function NewAppointmentPanel({
   const watchedStylistId = watch('stylistId');
   const watchedBookingType = watch('bookingType');
   const watchedAssignLater = watch('assignLater');
+  const watchedCustomerPhone = watch('customerPhone');
 
-  console.log('watchedStylistId', watchedStylistId);
+  // Debounce phone number to avoid excessive API calls while typing
+  const debouncedPhone = useDebounce(watchedCustomerPhone || '', 600);
+
+  // Phone lookup - check if customer exists when typing phone in new customer mode
+  // Only triggers after user stops typing for 600ms
+  const { data: phoneLookupData, isLoading: phoneLookupLoading } = useCustomerPhoneLookup(
+    isNewCustomer ? debouncedPhone : ''
+  );
+
+  // When phone lookup finds existing customer, auto-fill the name
+  useEffect(() => {
+    if (isNewCustomer && phoneLookupData && debouncedPhone) {
+      // Auto-fill the name from existing customer
+      setValue('customerName', phoneLookupData.name);
+    }
+  }, [isNewCustomer, phoneLookupData, debouncedPhone, setValue]);
 
   // Fetch stylist busy slots when stylist and date are selected
   const { data: busySlotsData, isLoading: busySlotsLoading } = useStylistBusySlots(
@@ -373,7 +397,9 @@ export function NewAppointmentPanel({
             {isNewCustomer && (
               <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">New Customer</span>
+                  <span className="text-sm font-medium">
+                    {phoneLookupData ? 'Existing Customer' : 'New Customer'}
+                  </span>
                   <button
                     type="button"
                     onClick={handleClearCustomer}
@@ -382,21 +408,51 @@ export function NewAppointmentPanel({
                     <X className="h-4 w-4 text-muted-foreground" />
                   </button>
                 </div>
-                <Input
-                  placeholder="Customer name *"
-                  {...register('customerName')}
-                  className={cn(errors.customerName && 'border-destructive')}
-                />
-                {errors.customerName && (
-                  <p className="text-xs text-destructive">{errors.customerName.message}</p>
-                )}
-                <Input
-                  placeholder="Phone number (10 digits)"
-                  {...register('customerPhone')}
-                  className={cn(errors.customerPhone && 'border-destructive')}
-                />
-                {errors.customerPhone && (
-                  <p className="text-xs text-destructive">{errors.customerPhone.message}</p>
+
+                {/* Show existing customer card if found */}
+                {phoneLookupData ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border-2 border-primary bg-primary/5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-medium">
+                      {phoneLookupData.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{phoneLookupData.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        +91 {phoneLookupData.phone.slice(0, 5)} {phoneLookupData.phone.slice(5)}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Phone input */}
+                    <div className="relative">
+                      <PhoneInput
+                        value={watchedCustomerPhone || ''}
+                        onChange={(value) => setValue('customerPhone', value)}
+                        placeholder="98765 43210"
+                        showCountryCode
+                      />
+                      {phoneLookupLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        </div>
+                      )}
+                    </div>
+                    {errors.customerPhone && (
+                      <p className="text-xs text-destructive">{errors.customerPhone.message}</p>
+                    )}
+
+                    {/* Customer name input */}
+                    <Input
+                      placeholder="Customer name *"
+                      {...register('customerName')}
+                      className={cn(errors.customerName && 'border-destructive')}
+                    />
+                    {errors.customerName && (
+                      <p className="text-xs text-destructive">{errors.customerName.message}</p>
+                    )}
+                  </>
                 )}
               </div>
             )}

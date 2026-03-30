@@ -14,6 +14,7 @@ import {
   type ResourceCalendarParams,
 } from './use-resource-calendar';
 import { floorViewKeys } from './use-stations';
+import { customerKeys } from './use-customers';
 import type {
   Appointment,
   AppointmentFilters,
@@ -215,6 +216,11 @@ export function useCreateAppointment() {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       // Also invalidate calendar to ensure consistency (will refetch in background)
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+
+      // If a new customer was created, invalidate customers list so it appears in Customers page
+      if (response.customerCreated) {
+        queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      }
     },
 
     onError: (_error, _newAppointment, context) => {

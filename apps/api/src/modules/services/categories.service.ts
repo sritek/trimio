@@ -246,6 +246,7 @@ export class CategoriesService {
 
   /**
    * Delete a category (soft delete)
+   * Appends timestamp to slug to allow reusing the same name later
    */
   async deleteCategory(tenantId: string, categoryId: string): Promise<void> {
     const category = await prisma.serviceCategory.findFirst({
@@ -274,9 +275,15 @@ export class CategoriesService {
       );
     }
 
+    // Append timestamp to slug to free up the original slug for reuse
+    const deletedSlug = `${category.slug}_deleted_${Date.now()}`;
+
     await prisma.serviceCategory.update({
       where: { id: categoryId },
-      data: { deletedAt: new Date() },
+      data: {
+        slug: deletedSlug,
+        deletedAt: new Date(),
+      },
     });
   }
 

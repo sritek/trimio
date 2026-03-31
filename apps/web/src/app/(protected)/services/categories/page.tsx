@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Folder, FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { toast } from 'sonner';
 
 import {
   useCategories,
@@ -13,6 +14,7 @@ import {
   useDeleteCategory,
   useUpdateCategory,
 } from '@/hooks/queries/use-categories';
+import { useErrorHandler } from '@/hooks/use-error-handler';
 
 import {
   ActionMenu,
@@ -58,6 +60,7 @@ type CategoryFormData = z.infer<typeof categorySchema>;
 
 export default function CategoriesPage() {
   const t = useTranslations('common');
+  const { handleError } = useErrorHandler();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -111,29 +114,45 @@ export default function CategoriesPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
-  };
+  }, []);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     if (deleteId) {
-      await deleteCategory.mutateAsync(deleteId);
-      setDeleteId(null);
-    }
-  };
-
-  const onSubmit = async (data: CategoryFormData) => {
-    try {
-      if (editingCategory) {
-        await updateCategory.mutateAsync({ id: editingCategory.id, data });
-      } else {
-        await createCategory.mutateAsync(data);
+      try {
+        await deleteCategory.mutateAsync(deleteId);
+        toast.success('Category deleted successfully');
+        setDeleteId(null);
+      } catch (error) {
+        handleError(error, {
+          customMessage: 'Failed to delete category',
+        });
       }
-      setIsDialogOpen(false);
-    } catch (error) {
-      console.error('Failed to save category:', error);
     }
-  };
+  }, [deleteId, deleteCategory, handleError]);
+
+  const onSubmit = useCallback(
+    async (data: CategoryFormData) => {
+      try {
+        if (editingCategory) {
+          await updateCategory.mutateAsync({ id: editingCategory.id, data });
+          toast.success('Category updated successfully');
+        } else {
+          await createCategory.mutateAsync(data);
+          toast.success('Category created successfully');
+        }
+        setIsDialogOpen(false);
+      } catch (error) {
+        handleError(error, {
+          customMessage: editingCategory
+            ? 'Failed to update category'
+            : 'Failed to create category',
+        });
+      }
+    },
+    [editingCategory, updateCategory, createCategory, handleError]
+  );
 
   const isPending = createCategory.isPending || updateCategory.isPending;
 

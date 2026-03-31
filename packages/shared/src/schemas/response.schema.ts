@@ -77,5 +77,7 @@ export const paginatedResponse = <T extends z.ZodTypeAny>(itemSchema: T) =>
  */
 export const messageResponseSchema = z.object({
   success: z.literal(true),
-  message: z.string(),
+  data: z.object({
+    message: z.string(),
+  }),
 });

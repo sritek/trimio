@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import type { ColumnDef } from '@/components/common';
 import type { BookingStatus, Customer } from '@/types/customers';
@@ -24,7 +23,8 @@ import type { BookingStatus, Customer } from '@/types/customers';
 export function getTagVariant(tag: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (tag) {
     case 'VIP':
-      return 'default';``
+      return 'default';
+      ``;
     case 'New':
       return 'secondary';
     case 'Inactive':
@@ -77,18 +77,6 @@ export function getCustomerColumns({
                 <Link href={`/customers/${customer.id}`} className="font-medium hover:underline">
                   {customer.name}
                 </Link>
-                {customer.allergies && customer.allergies.length > 0 && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Allergies: {customer.allergies.join(', ')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
               </div>
               {customer.email && (
                 <span className="text-sm text-muted-foreground">{customer.email}</span>

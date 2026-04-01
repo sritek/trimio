@@ -6,7 +6,7 @@
  * Calls quickBill API to create invoice and mark appointment as completed.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useClosePanel } from '@/components/ux/slide-over';
 import { SlideOverContent } from '@/components/ux/slide-over/slide-over-content';
 import { SlideOverFooter } from '@/components/ux/slide-over/slide-over-footer';
@@ -17,6 +17,13 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -24,9 +31,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SplitPaymentInput } from '@/components/common';
-import { useAppointment, useCompleteAppointment } from '@/hooks/queries/use-appointments';
-import { useQuickBill } from '@/hooks/queries/use-invoices';
+import { useAppointment } from '@/hooks/queries/use-appointments';
+import { useQuickBill, useCalculateTotals } from '@/hooks/queries/use-invoices';
+import { useLoyaltyConfig } from '@/hooks/queries/use-customers';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useErrorHandler } from '@/hooks/use-error-handler';
 import { toast } from 'sonner';
@@ -40,9 +49,12 @@ import {
   Calendar,
   Clock,
   Star,
+  ChevronDown,
+  Tag,
+  Gift,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import type { PaymentInput } from '@/types/billing';
+import type { PaymentInput, DiscountInput } from '@/types/billing';
 
 // ============================================
 // Props
@@ -51,8 +63,6 @@ import type { PaymentInput } from '@/types/billing';
 interface CheckoutPanelProps {
   appointmentId: string;
   onComplete?: (invoiceId: string) => void;
-  isPending?: boolean; // For pending appointments from previous days
-  scheduledTime?: string; // HH:mm format (for pending appointments)
 }
 
 // ============================================
@@ -180,10 +190,14 @@ function ServiceItem({
 function TotalsSection({
   subtotal,
   taxAmount,
+  discountAmount,
+  loyaltyDiscount,
   grandTotal,
 }: {
   subtotal: number;
   taxAmount: number;
+  discountAmount: number;
+  loyaltyDiscount: number;
   grandTotal: number;
 }) {
   return (
@@ -192,6 +206,20 @@ function TotalsSection({
         <span className="text-muted-foreground">Subtotal</span>
         <span>₹{subtotal.toFixed(2)}</span>
       </div>
+
+      {discountAmount > 0 && (
+        <div className="flex justify-between text-sm text-green-600">
+          <span>Discount</span>
+          <span>-₹{discountAmount.toFixed(2)}</span>
+        </div>
+      )}
+
+      {loyaltyDiscount > 0 && (
+        <div className="flex justify-between text-sm text-amber-600">
+          <span>Loyalty Points</span>
+          <span>-₹{loyaltyDiscount.toFixed(2)}</span>
+        </div>
+      )}
 
       {taxAmount > 0 && (
         <div className="flex justify-between text-sm">
@@ -221,6 +249,9 @@ interface PaymentConfirmDialogProps {
   services: { name: string; stylistName?: string }[];
   payments: PaymentInput[];
   grandTotal: number;
+  discountAmount: number;
+  loyaltyDiscount: number;
+  loyaltyPointsRedeemed: number;
 }
 
 function PaymentConfirmDialog({
@@ -234,6 +265,9 @@ function PaymentConfirmDialog({
   services,
   payments,
   grandTotal,
+  discountAmount,
+  loyaltyDiscount,
+  loyaltyPointsRedeemed,
 }: PaymentConfirmDialogProps) {
   const totalPayment = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const isFullyPaid = Math.abs(totalPayment - grandTotal) < 0.01;
@@ -294,6 +328,18 @@ function PaymentConfirmDialog({
           <div>
             <Label className="text-xs text-muted-foreground">Payment</Label>
             <div className="mt-1 space-y-1">
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between text-sm text-green-600">
+                  <span>Discount Applied</span>
+                  <span>-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {loyaltyDiscount > 0 && (
+                <div className="flex items-center justify-between text-sm text-amber-600">
+                  <span>Loyalty Points ({loyaltyPointsRedeemed} pts)</span>
+                  <span>-₹{loyaltyDiscount.toFixed(2)}</span>
+                </div>
+              )}
               {payments
                 .filter((p) => p.amount > 0)
                 .map((p, i) => (
@@ -338,12 +384,7 @@ function PaymentConfirmDialog({
 // Main Component
 // ============================================
 
-export function CheckoutPanel({
-  appointmentId,
-  onComplete,
-  isPending = false,
-  scheduledTime,
-}: CheckoutPanelProps) {
+export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps) {
   const closePanel = useClosePanel();
   const { branchId } = useBranchContext();
   const { handleError } = useErrorHandler();
@@ -351,21 +392,106 @@ export function CheckoutPanel({
   // State
   const [payments, setPayments] = useState<PaymentInput[]>([{ paymentMethod: 'cash', amount: 0 }]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [completionTime, setCompletionTime] = useState<string>(
-    scheduledTime ||
-      new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-  );
   const [isCompletingAppointment, setIsCompletingAppointment] = useState(false);
+
+  // Discount state
+  const [discountType, setDiscountType] = useState<'percentage' | 'flat'>('percentage');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState<string>('');
+  const [showDiscountSection, setShowDiscountSection] = useState(false);
+
+  // Loyalty state
+  const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState<number>(0);
+  const [showLoyaltySection, setShowLoyaltySection] = useState(false);
+
+  // Completion time state
+  const [completionTime, setCompletionTime] = useState<string>(
+    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+  );
 
   // Queries
   const { data: appointment, isLoading: isLoadingAppointment } = useAppointment(appointmentId);
+  const { data: loyaltyConfig } = useLoyaltyConfig();
   const quickBill = useQuickBill();
-  const completeAppointmentMutation = useCompleteAppointment();
+  const calculateTotals = useCalculateTotals();
 
-  // Calculate totals from appointment services
+  // Customer loyalty info
+  const customerLoyaltyPoints = appointment?.customer?.loyaltyPoints || 0;
+  const customerWalletBalance = appointment?.customer?.walletBalance || 0;
+  // Get redemption value from loyalty config (default to 1 if not configured)
+  const loyaltyPointValue = loyaltyConfig?.redemptionValuePerPoint ?? 1;
+  const isLoyaltyEnabled = loyaltyConfig?.isEnabled ?? false;
+  const maxLoyaltyDiscount = customerLoyaltyPoints * loyaltyPointValue;
+
+  // Backend-calculated totals state
+  const [calculatedTotals, setCalculatedTotals] = useState<{
+    subtotal: number;
+    taxAmount: number;
+    discountAmount: number;
+    loyaltyDiscount: number;
+    grandTotal: number;
+  } | null>(null);
+
+  // Calculate totals using backend API when inputs change
+  useEffect(() => {
+    if (!branchId || !appointment?.services || appointment.services.length === 0) {
+      setCalculatedTotals(null);
+      return;
+    }
+
+    const items = appointment.services.map((service) => ({
+      itemType: 'service' as const,
+      referenceId: service.serviceId,
+      quantity: service.quantity,
+      stylistId: service.stylistId || undefined,
+    }));
+
+    const discounts: DiscountInput[] = [];
+    if (discountValue > 0) {
+      discounts.push({
+        discountType: 'manual',
+        calculationType: discountType,
+        calculationValue: discountValue,
+        appliedTo: 'subtotal',
+        reason: discountReason || undefined,
+      });
+    }
+
+    calculateTotals.mutate(
+      {
+        branchId,
+        items,
+        discounts: discounts.length > 0 ? discounts : undefined,
+        redeemLoyaltyPoints: loyaltyPointsToRedeem > 0 ? loyaltyPointsToRedeem : undefined,
+      },
+      {
+        onSuccess: (data: any) => {
+          setCalculatedTotals({
+            subtotal: data.subtotal || 0,
+            taxAmount: data.totalTax || 0,
+            discountAmount: data.discountAmount || 0,
+            loyaltyDiscount: data.loyaltyDiscount || 0,
+            grandTotal: data.grandTotal || 0,
+          });
+        },
+        onError: () => {
+          // Fallback to local calculation if API fails
+          setCalculatedTotals(null);
+        },
+      }
+    );
+  }, [branchId, appointment?.services, discountType, discountValue, loyaltyPointsToRedeem]);
+
+  // Use backend-calculated totals or fallback to local calculation
   const totals = useMemo(() => {
+    // If we have backend-calculated totals, use them
+    if (calculatedTotals) {
+      return calculatedTotals;
+    }
+
+    // Fallback to local calculation (for initial render before API responds)
     if (!appointment?.services) {
-      return { subtotal: 0, taxAmount: 0, grandTotal: 0 };
+      return { subtotal: 0, taxAmount: 0, discountAmount: 0, loyaltyDiscount: 0, grandTotal: 0 };
     }
 
     const subtotal = appointment.services.reduce(
@@ -373,10 +499,34 @@ export function CheckoutPanel({
       0
     );
     const taxAmount = appointment.services.reduce((sum, s) => sum + Number(s.taxAmount), 0);
-    const grandTotal = subtotal + taxAmount;
 
-    return { subtotal, taxAmount, grandTotal };
-  }, [appointment?.services]);
+    // Calculate discount
+    let discountAmount = 0;
+    if (discountValue > 0) {
+      if (discountType === 'percentage') {
+        discountAmount = (subtotal * discountValue) / 100;
+      } else {
+        discountAmount = discountValue;
+      }
+      // Cap discount at subtotal
+      discountAmount = Math.min(discountAmount, subtotal);
+    }
+
+    // Calculate loyalty discount
+    const loyaltyDiscount = Math.min(loyaltyPointsToRedeem * loyaltyPointValue, maxLoyaltyDiscount);
+
+    const grandTotal = Math.max(0, subtotal + taxAmount - discountAmount - loyaltyDiscount);
+
+    return { subtotal, taxAmount, discountAmount, loyaltyDiscount, grandTotal };
+  }, [
+    calculatedTotals,
+    appointment?.services,
+    discountType,
+    discountValue,
+    loyaltyPointsToRedeem,
+    loyaltyPointValue,
+    maxLoyaltyDiscount,
+  ]);
 
   // Auto-fill first payment amount when totals change
   useMemo(() => {
@@ -397,15 +547,7 @@ export function CheckoutPanel({
     try {
       setIsCompletingAppointment(true);
 
-      // Step 1: Only complete the appointment if it's not already completed
-      if (appointment.status !== 'completed') {
-        await completeAppointmentMutation.mutateAsync({
-          appointmentId,
-          completionTime,
-        });
-      }
-
-      // Step 2: Build items from appointment services
+      // Build items from appointment services
       const items = (appointment.services || []).map((service) => ({
         itemType: 'service' as const,
         referenceId: service.serviceId,
@@ -413,10 +555,26 @@ export function CheckoutPanel({
         stylistId: service.stylistId || undefined,
       }));
 
-      // Step 3: Filter out zero-amount payments
+      // Build discounts array if discount applied
+      const discounts: DiscountInput[] = [];
+      if (discountValue > 0 && totals.discountAmount > 0) {
+        discounts.push({
+          discountType: 'manual',
+          calculationType: discountType,
+          calculationValue: discountValue,
+          appliedTo: 'subtotal',
+          reason: discountReason || undefined,
+        });
+      }
+
+      // Filter out zero-amount payments
       const validPayments = payments.filter((p) => p.amount > 0);
 
-      // Step 4: Create invoice
+      // Build completedAt datetime from scheduled date and completion time
+      const scheduledDate = appointment.scheduledDate.split('T')[0]; // Get YYYY-MM-DD
+      const completedAtDateTime = new Date(`${scheduledDate}T${completionTime}:00`).toISOString();
+
+      // Create invoice and complete appointment (quickBill handles both)
       quickBill.mutate(
         {
           branchId,
@@ -424,7 +582,10 @@ export function CheckoutPanel({
           customerName: appointment.customerName || undefined,
           customerPhone: appointment.customerPhone || undefined,
           appointmentId,
+          completedAt: completedAtDateTime,
           items,
+          discounts: discounts.length > 0 ? discounts : undefined,
+          redeemLoyaltyPoints: loyaltyPointsToRedeem > 0 ? loyaltyPointsToRedeem : undefined,
           payments: validPayments,
         },
         {
@@ -448,7 +609,7 @@ export function CheckoutPanel({
       );
     } catch (error) {
       handleError(error, {
-        customMessage: 'Failed to complete appointment. Please try again.',
+        customMessage: 'Failed to complete checkout. Please try again.',
       });
       setIsCompletingAppointment(false);
     }
@@ -457,7 +618,11 @@ export function CheckoutPanel({
     appointment,
     appointmentId,
     completionTime,
-    completeAppointmentMutation,
+    discountType,
+    discountValue,
+    discountReason,
+    totals.discountAmount,
+    loyaltyPointsToRedeem,
     payments,
     quickBill,
     onComplete,
@@ -522,7 +687,8 @@ export function CheckoutPanel({
     );
   }
 
-  const canComplete = isFullyPaid && (appointment.services || []).length > 0;
+  const canComplete =
+    isFullyPaid && (appointment.services || []).length > 0 && !calculateTotals.isPending;
 
   return (
     <div className="flex flex-col h-full">
@@ -536,32 +702,6 @@ export function CheckoutPanel({
           loyaltyPoints={appointment.customer?.loyaltyPoints}
           walletBalance={appointment.customer?.walletBalance}
         />
-
-        {/* Completion Time Input - Only show if appointment is not already completed */}
-        {!isPending && appointment.status !== 'completed' && (
-          <>
-            <Separator />
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <h3 className="font-semibold">Completion Time</h3>
-              </div>
-
-              <div>
-                <Label htmlFor="completion-time" className="text-sm">
-                  Completion Time
-                </Label>
-                <Input
-                  id="completion-time"
-                  type="time"
-                  value={completionTime}
-                  onChange={(e) => setCompletionTime(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-          </>
-        )}
 
         {/* Services */}
         <div>
@@ -590,8 +730,177 @@ export function CheckoutPanel({
         <TotalsSection
           subtotal={totals.subtotal}
           taxAmount={totals.taxAmount}
+          discountAmount={totals.discountAmount}
+          loyaltyDiscount={totals.loyaltyDiscount}
           grandTotal={totals.grandTotal}
         />
+
+        {/* Discount Section */}
+        <Collapsible open={showDiscountSection} onOpenChange={setShowDiscountSection}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              <span className="flex items-center gap-2">
+                <Tag className="h-4 w-4" />
+                Apply Discount
+                {totals.discountAmount > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    -₹{totals.discountAmount.toFixed(2)}
+                  </Badge>
+                )}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showDiscountSection ? 'rotate-180' : ''}`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3 space-y-3">
+            <div className="rounded-lg border p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Type</Label>
+                  <Select
+                    value={discountType}
+                    onValueChange={(v) => setDiscountType(v as 'percentage' | 'flat')}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage (%)</SelectItem>
+                      <SelectItem value="flat">Flat Amount (₹)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Value</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={discountType === 'percentage' ? 100 : totals.subtotal}
+                      value={discountValue || ''}
+                      onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
+                      className="pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                      {discountType === 'percentage' ? '%' : '₹'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Reason (optional)</Label>
+                <Input
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="e.g., First visit, Loyalty reward"
+                  className="mt-1"
+                />
+              </div>
+              {discountValue > 0 && (
+                <div className="text-sm text-green-600 font-medium">
+                  Discount: -₹
+                  {(() => {
+                    // Show local preview calculation while backend calculates
+                    if (calculatedTotals?.discountAmount) {
+                      return calculatedTotals.discountAmount.toFixed(2);
+                    }
+                    // Local preview calculation
+                    const subtotal =
+                      appointment?.services?.reduce(
+                        (sum, s) => sum + Number(s.unitPrice) * s.quantity,
+                        0
+                      ) || 0;
+                    if (discountType === 'percentage') {
+                      return ((subtotal * discountValue) / 100).toFixed(2);
+                    }
+                    return Math.min(discountValue, subtotal).toFixed(2);
+                  })()}
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Loyalty Points Section - Only show if loyalty is enabled and customer has points */}
+        {isLoyaltyEnabled && customerLoyaltyPoints > 0 && (
+          <Collapsible open={showLoyaltySection} onOpenChange={setShowLoyaltySection}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <Gift className="h-4 w-4" />
+                  Redeem Loyalty Points
+                  <Badge variant="secondary" className="ml-2">
+                    <Star className="h-3 w-3 mr-1 text-amber-500" />
+                    {customerLoyaltyPoints} pts available
+                  </Badge>
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${showLoyaltySection ? 'rotate-180' : ''}`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <div className="rounded-lg border p-3 space-y-3">
+                <div>
+                  <Label className="text-xs">Points to Redeem</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={customerLoyaltyPoints}
+                      value={loyaltyPointsToRedeem || ''}
+                      onChange={(e) =>
+                        setLoyaltyPointsToRedeem(
+                          Math.min(Number(e.target.value) || 0, customerLoyaltyPoints)
+                        )
+                      }
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLoyaltyPointsToRedeem(customerLoyaltyPoints)}
+                    >
+                      Use All
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    1 point = ₹{Number(loyaltyPointValue).toFixed(2)}
+                  </p>
+                </div>
+                {loyaltyPointsToRedeem > 0 && (
+                  <div className="text-sm text-amber-600 font-medium">
+                    Discount: -₹
+                    {(
+                      calculatedTotals?.loyaltyDiscount ?? loyaltyPointsToRedeem * loyaltyPointValue
+                    ).toFixed(2)}{' '}
+                    ({loyaltyPointsToRedeem} points)
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Completion Time */}
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-medium text-sm">Completion Time</h3>
+          </div>
+          <div>
+            <Label htmlFor="completion-time" className="text-xs text-muted-foreground">
+              Actual completion time
+            </Label>
+            <Input
+              id="completion-time"
+              type="time"
+              value={completionTime}
+              onChange={(e) => setCompletionTime(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+        </div>
 
         {/* Split Payments */}
         <SplitPaymentInput
@@ -637,6 +946,9 @@ export function CheckoutPanel({
         }))}
         payments={payments}
         grandTotal={totals.grandTotal}
+        discountAmount={totals.discountAmount}
+        loyaltyDiscount={totals.loyaltyDiscount}
+        loyaltyPointsRedeemed={loyaltyPointsToRedeem}
       />
     </div>
   );

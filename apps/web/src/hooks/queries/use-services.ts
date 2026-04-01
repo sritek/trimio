@@ -115,17 +115,3 @@ export function useDeleteService() {
     },
   });
 }
-
-/**
- * Duplicate a service
- */
-export function useDuplicateService() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => api.post<Service>(`/services/${id}/duplicate`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: serviceKeys.lists() });
-    },
-  });
-}

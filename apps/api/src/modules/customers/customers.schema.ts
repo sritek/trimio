@@ -124,7 +124,7 @@ export const addTagsBodySchema = z.object({
 
 export const loyaltyConfigSchema = z.object({
   pointsPerUnit: z.number().min(0).max(1).default(0.01),
-  redemptionValuePerPoint: z.number().min(0).max(100).default(0.5),
+  redemptionValuePerPoint: z.number().min(0).max(100).default(1), // 1 point = ₹1
   expiryDays: z.number().int().min(0).max(3650).default(365), // 0 = no expiry
   isEnabled: z.boolean().default(true),
 });

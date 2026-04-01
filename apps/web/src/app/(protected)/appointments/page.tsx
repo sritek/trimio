@@ -14,10 +14,6 @@ import { PERMISSIONS } from '@salon-ops/shared';
 
 import {
   useAppointments,
-  useCheckIn,
-  useStartAppointment,
-  useCompleteAppointment,
-  useCancelAppointment,
   useMarkNoShow,
   useUnassignedCount,
 } from '@/hooks/queries/use-appointments';
@@ -66,8 +62,7 @@ export default function AppointmentsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.APPOINTMENTS_WRITE);
-  const { openAppointmentDetails, openNewAppointment, openCheckout, openUnassignedAppointments } =
-    useOpenPanel();
+  const { openAppointmentDetails, openNewAppointment, openUnassignedAppointments } = useOpenPanel();
   const isMobile = useMediaQuery('(max-width: 768px)');
 
   // View mode state
@@ -197,10 +192,6 @@ export default function AppointmentsPage() {
   const waitlistCount = waitlistCountData?.count || 0;
 
   // Mutations
-  const checkIn = useCheckIn();
-  const startAppointment = useStartAppointment();
-  const completeAppointment = useCompleteAppointment();
-  const cancelAppointment = useCancelAppointment();
   const markNoShow = useMarkNoShow();
   const moveAppointment = useMoveAppointment();
 
@@ -209,8 +200,6 @@ export default function AppointmentsPage() {
     (id: string) => openAppointmentDetails(id),
     [openAppointmentDetails]
   );
-
-  const handleCheckout = useCallback((id: string) => openCheckout(id), [openCheckout]);
 
   const handleFiltersChange = useCallback(
     (newFilters: ListFiltersState) => setListFilters(newFilters),
@@ -226,30 +215,6 @@ export default function AppointmentsPage() {
     },
     [setListLimit, setListPage]
   );
-
-  const handleCheckIn = useCallback(async (id: string) => await checkIn.mutateAsync(id), [checkIn]);
-
-  const handleStart = useCallback(
-    async (id: string) => await startAppointment.mutateAsync(id),
-    [startAppointment]
-  );
-
-  const handleComplete = useCallback(
-    async (id: string) => await completeAppointment.mutateAsync({ appointmentId: id }),
-    [completeAppointment]
-  );
-
-  const handleCancel = useCallback(
-    async (id: string) => {
-      const reason = prompt(t('list.cancelReason'));
-      if (reason) {
-        await cancelAppointment.mutateAsync({ id, data: { reason } });
-      }
-    },
-    [cancelAppointment, t]
-  );
-
-  const handleNoShow = useCallback((id: string) => setNoShowId(id), []);
 
   const confirmNoShow = useCallback(async () => {
     if (noShowId) {
@@ -411,17 +376,10 @@ export default function AppointmentsPage() {
               data={appointments}
               meta={meta}
               isLoading={isLoadingList}
-              canWrite={canWrite}
               page={listPage}
               onPageChange={handlePageChange}
               onPageSizeChange={handlePageSizeChange}
               onView={handleView}
-              onCheckIn={handleCheckIn}
-              onStart={handleStart}
-              onComplete={handleComplete}
-              onCancel={handleCancel}
-              onNoShow={handleNoShow}
-              onCheckout={handleCheckout}
               hasFilters={hasListFilters || !!debouncedSearch}
               onFilterClick={() => setListFilterOpen(true)}
               activeFilterCount={listFilterCount}

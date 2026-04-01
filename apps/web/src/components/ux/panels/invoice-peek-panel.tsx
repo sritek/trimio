@@ -18,12 +18,12 @@ import {
   CreditCard,
   Banknote,
   Smartphone,
-  ExternalLink,
-  Printer,
   XCircle,
   CheckCircle,
   Plus,
   Edit,
+  Star,
+  Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,15 +64,15 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
   const finalizeInvoice = useFinalizeInvoice();
   const cancelInvoice = useCancelInvoice();
 
-  const handleViewFull = useCallback(() => {
-    closePanel();
-    router.push(`/billing/${invoiceId}`);
-  }, [closePanel, router, invoiceId]);
-
   const handleEdit = useCallback(() => {
     closePanel();
     openEditInvoice(invoiceId);
   }, [closePanel, openEditInvoice, invoiceId]);
+
+  const handleAddPayment = useCallback(() => {
+    closePanel();
+    router.push(`/billing/${invoiceId}`);
+  }, [closePanel, router, invoiceId]);
 
   const handleFinalize = useCallback(async () => {
     try {
@@ -214,8 +214,20 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
             </div>
             {invoice.discountAmount > 0 && (
               <div className="flex justify-between text-sm text-green-600">
-                <span>Discount</span>
+                <span className="flex items-center gap-1">
+                  <Tag className="h-3 w-3" />
+                  Discount
+                </span>
                 <span>-{formatCurrency(invoice.discountAmount)}</span>
+              </div>
+            )}
+            {invoice.loyaltyDiscount > 0 && (
+              <div className="flex justify-between text-sm text-amber-600">
+                <span className="flex items-center gap-1">
+                  <Star className="h-3 w-3" />
+                  Loyalty ({invoice.loyaltyPointsRedeemed} pts)
+                </span>
+                <span>-{formatCurrency(invoice.loyaltyDiscount)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
@@ -235,6 +247,12 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
               <div className="flex justify-between text-sm text-red-600 font-medium">
                 <span>Due</span>
                 <span>{formatCurrency(invoice.amountDue)}</span>
+              </div>
+            )}
+            {invoice.loyaltyPointsEarned > 0 && (
+              <div className="flex justify-between text-sm text-amber-600 pt-1 border-t mt-2">
+                <span>Points Earned</span>
+                <span>+{invoice.loyaltyPointsEarned} pts</span>
               </div>
             )}
           </div>
@@ -278,7 +296,7 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
             </Button>
           )}
           {isDraft && invoice.amountDue > 0 && (
-            <Button className="flex-1" onClick={handleViewFull}>
+            <Button className="flex-1" onClick={handleAddPayment}>
               <Plus className="mr-2 h-4 w-4" />
               Add Payment
             </Button>
@@ -287,24 +305,15 @@ export function InvoicePeekPanel({ invoiceId }: InvoicePeekPanelProps) {
 
         {/* Secondary Actions */}
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={handleViewFull}>
-            <ExternalLink className="mr-2 h-4 w-4" />
-            View Full Details
-          </Button>
-          {!isDraft && (
-            <Button variant="outline" size="icon">
-              <Printer className="h-4 w-4" />
-            </Button>
-          )}
           {isDraft && (
             <Button
               variant="outline"
-              size="icon"
-              className="text-destructive hover:text-destructive"
+              className="flex-1 text-destructive hover:text-destructive"
               onClick={() => setShowCancelDialog(true)}
               disabled={cancelInvoice.isPending}
             >
-              <XCircle className="h-4 w-4" />
+              <XCircle className="mr-2 h-4 w-4" />
+              Cancel Invoice
             </Button>
           )}
         </div>

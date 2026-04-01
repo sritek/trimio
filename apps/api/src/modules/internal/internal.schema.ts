@@ -36,6 +36,11 @@ export const createTenantBodySchema = z.object({
   logoUrl: z.string().url().optional(),
   subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).default('trial'),
   trialDays: z.number().int().min(0).max(90).default(14),
+  // Loyalty configuration
+  loyaltyEnabled: z.boolean().default(true),
+  loyaltyPointsPerUnit: z.number().min(0).max(1).default(0.01), // Points earned per ₹1 spent
+  loyaltyRedemptionValue: z.number().min(0).max(100).default(1), // ₹ value per point redeemed
+  loyaltyExpiryDays: z.number().int().min(0).max(3650).default(365), // 0 = no expiry
 });
 
 export type CreateTenantBody = z.infer<typeof createTenantBodySchema>;
@@ -133,6 +138,16 @@ export const updateSuperOwnerBodySchema = z.object({
 });
 
 export type UpdateSuperOwnerBody = z.infer<typeof updateSuperOwnerBodySchema>;
+
+// Update loyalty config (for internal admin)
+export const updateLoyaltyConfigBodySchema = z.object({
+  isEnabled: z.boolean().optional(),
+  pointsPerUnit: z.number().min(0).max(1).optional(),
+  redemptionValuePerPoint: z.number().min(0).max(100).optional(),
+  expiryDays: z.number().int().min(0).max(3650).optional(),
+});
+
+export type UpdateLoyaltyConfigBody = z.infer<typeof updateLoyaltyConfigBodySchema>;
 
 // Response schemas
 export const tenantResponseSchema = z.object({

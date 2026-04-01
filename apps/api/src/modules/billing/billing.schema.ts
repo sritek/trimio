@@ -218,6 +218,7 @@ export type ApplyDiscountInput = z.infer<typeof applyDiscountSchema>;
 
 export const finalizeInvoiceSchema = z.object({
   payments: z.array(paymentInputSchema).optional(),
+  completedAt: z.string().datetime().optional(), // ISO datetime for appointment completion
 });
 
 export type FinalizeInvoiceInput = z.infer<typeof finalizeInvoiceSchema>;
@@ -343,6 +344,7 @@ export const quickBillSchema = z
       .optional(),
     customerEmail: z.string().email().optional(),
     appointmentId: z.string().uuid().optional(),
+    completedAt: z.string().datetime().optional(), // ISO datetime for appointment completion
     items: z.array(invoiceItemInputSchema).min(1),
     discounts: z.array(discountInputSchema).optional(),
     redeemLoyaltyPoints: z.number().int().min(0).optional(),

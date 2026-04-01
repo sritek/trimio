@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 
-import { useDeleteService, useDuplicateService, useServices } from '@/hooks/queries/use-services';
+import { useDeleteService, useServices } from '@/hooks/queries/use-services';
 import { usePermissions } from '@/hooks/use-permissions';
 
 import {
@@ -57,7 +57,6 @@ export default function ServicesPage() {
 
   const { data: servicesData, isLoading, error } = useServices(serviceFilters);
   const deleteService = useDeleteService();
-  const duplicateService = useDuplicateService();
 
   const canWrite = hasPermission(PERMISSIONS.SERVICES_WRITE);
 
@@ -80,13 +79,6 @@ export default function ServicesPage() {
       router.push(`/services/${id}?edit=true`);
     },
     [router]
-  );
-
-  const handleDuplicate = useCallback(
-    async (id: string) => {
-      await duplicateService.mutateAsync(id);
-    },
-    [duplicateService]
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -147,7 +139,6 @@ export default function ServicesPage() {
             onPageChange={setPage}
             onPageSizeChange={handlePageSizeChange}
             onEdit={handleEdit}
-            onDuplicate={handleDuplicate}
             onDelete={handleDelete}
             hasFilters={hasFilters}
           />

@@ -54,7 +54,7 @@ const staffFormSchema = z.object({
   gender: z.enum(['male', 'female', 'other']).optional(),
 
   // Employment fields
-  employeeCode: z.string().max(20, 'Employee code is too long').optional().or(z.literal('')),
+  employeeCode: z.string().min(1, 'Employee code is required').max(20, 'Employee code is too long'),
   dateOfJoining: z.date({ required_error: 'Date of joining is required' }),
   employmentType: z.enum(['full_time', 'part_time', 'contract', 'intern'], {
     required_error: 'Please select employment type',
@@ -451,7 +451,7 @@ export function StaffForm({ staff, branchId, onSuccess }: StaffFormProps) {
                   name="employeeCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('employeeCode')}</FormLabel>
+                      <FormLabel>{t('employeeCode')} *</FormLabel>
                       <FormControl>
                         <Input placeholder="EMP001" {...field} />
                       </FormControl>
@@ -470,7 +470,7 @@ export function StaffForm({ staff, branchId, onSuccess }: StaffFormProps) {
                   name="employeeCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('employeeCode')}</FormLabel>
+                      <FormLabel>{t('employeeCode')} *</FormLabel>
                       <FormControl>
                         <Input placeholder="EMP001" {...field} />
                       </FormControl>

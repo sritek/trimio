@@ -22,7 +22,7 @@ export class LoyaltyService {
         data: {
           tenantId,
           pointsPerUnit: 0.01,
-          redemptionValuePerPoint: 0.5,
+          redemptionValuePerPoint: 1, // 1 point = ₹1
           expiryDays: 365,
           isEnabled: true,
         },

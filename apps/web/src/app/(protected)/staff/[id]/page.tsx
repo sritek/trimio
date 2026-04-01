@@ -166,19 +166,14 @@ export default function StaffDetailPage() {
         <PageHeader
           title={staffUser?.name || 'Staff Member'}
           description={staff.designation || staff.employeeCode || 'Staff Profile'}
+          backHref="/staff"
           actions={
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push('/staff')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                {tCommon('actions.back')}
-              </Button>
-              <Button asChild>
-                <Link href={`/staff/${staffId}/edit`}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  {tCommon('actions.edit')}
-                </Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href={`/staff/${staffId}/edit`}>
+                <Edit className="mr-2 h-4 w-4" />
+                {tCommon('actions.edit')}
+              </Link>
+            </Button>
           }
         />
 

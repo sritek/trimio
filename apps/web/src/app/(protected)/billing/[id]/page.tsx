@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import {
-  ArrowLeft,
   CreditCard,
   Phone,
   User,
@@ -15,6 +14,10 @@ import {
   Smartphone,
   Calendar,
   Hash,
+  Star,
+  Tag,
+  Percent,
+  Users,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -167,34 +170,30 @@ export default function InvoiceDetailPage() {
         <PageHeader
           title={invoice.invoiceNumber || 'Draft Invoice'}
           description={`Created on ${format(parseISO(invoice.createdAt), 'PPP')}`}
+          backHref="/billing"
           actions={
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => router.push('/billing')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Invoices
-              </Button>
-              {canWrite && isDraft && (
-                <>
-                  {canFinalize && (
-                    <Button size="sm" onClick={handleOpenFinalizeDialog}>
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Finalize & Pay
-                    </Button>
-                  )}
-                  {canCancel && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowCancelDialog(true)}
-                      disabled={cancelInvoice.isPending}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Cancel
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+            canWrite &&
+            isDraft && (
+              <div className="flex gap-2">
+                {canFinalize && (
+                  <Button size="sm" onClick={handleOpenFinalizeDialog}>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Finalize & Pay
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowCancelDialog(true)}
+                    disabled={cancelInvoice.isPending}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            )
           }
         />
 
@@ -272,12 +271,13 @@ export default function InvoiceDetailPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[40%]">Item</TableHead>
-                        <TableHead className="text-center w-[10%]">Qty</TableHead>
-                        <TableHead className="text-right w-[15%]">Price</TableHead>
+                        <TableHead className="w-[35%]">Item</TableHead>
+                        <TableHead className="w-[15%]">Staff</TableHead>
+                        <TableHead className="text-center w-[8%]">Qty</TableHead>
+                        <TableHead className="text-right w-[12%]">Price</TableHead>
                         <TableHead className="text-right w-[10%]">Discount</TableHead>
-                        <TableHead className="text-right w-[10%]">Tax</TableHead>
-                        <TableHead className="text-right w-[15%]">Total</TableHead>
+                        <TableHead className="text-right w-[8%]">Tax</TableHead>
+                        <TableHead className="text-right w-[12%]">Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -289,6 +289,13 @@ export default function InvoiceDetailPage() {
                               <span className="text-muted-foreground ml-1">
                                 ({item.variantName})
                               </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.stylistName ? (
+                              <span className="text-sm">{item.stylistName}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">-</span>
                             )}
                           </TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
@@ -322,6 +329,24 @@ export default function InvoiceDetailPage() {
                         <span className="text-muted-foreground">Subtotal</span>
                         <span>{formatCurrency(invoice.subtotal)}</span>
                       </div>
+                      {invoice.discountAmount > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span className="flex items-center gap-1">
+                            <Tag className="h-3 w-3" />
+                            Discount
+                          </span>
+                          <span>-{formatCurrency(invoice.discountAmount)}</span>
+                        </div>
+                      )}
+                      {invoice.loyaltyDiscount > 0 && (
+                        <div className="flex justify-between text-amber-600">
+                          <span className="flex items-center gap-1">
+                            <Star className="h-3 w-3" />
+                            Loyalty ({invoice.loyaltyPointsRedeemed} pts)
+                          </span>
+                          <span>-{formatCurrency(invoice.loyaltyDiscount)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Taxable Amount</span>
                         <span>{formatCurrency(invoice.taxableAmount)}</span>
@@ -397,6 +422,70 @@ export default function InvoiceDetailPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Staff & Commission Section */}
+              {invoice.items &&
+                invoice.items.some(
+                  (item) => item.stylistName && item.commissionAmount && item.commissionAmount > 0
+                ) && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Staff & Commission
+                      </h3>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Staff</TableHead>
+                            <TableHead>Service</TableHead>
+                            <TableHead className="text-right">Service Amount</TableHead>
+                            <TableHead className="text-center">Commission Rate</TableHead>
+                            <TableHead className="text-right">Commission</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoice.items
+                            .filter(
+                              (item) =>
+                                item.stylistName &&
+                                item.commissionAmount &&
+                                item.commissionAmount > 0
+                            )
+                            .map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-medium">{item.stylistName}</TableCell>
+                                <TableCell>{item.name}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatCurrency(item.netAmount)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {item.commissionType === 'percentage'
+                                    ? `${item.commissionRate}%`
+                                    : formatCurrency(item.commissionRate || 0)}
+                                </TableCell>
+                                <TableCell className="text-right font-medium text-green-600">
+                                  {formatCurrency(item.commissionAmount || 0)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                      <div className="mt-3 pt-3 border-t flex justify-end">
+                        <div className="text-sm">
+                          <span className="text-muted-foreground mr-2">Total Commission:</span>
+                          <span className="font-semibold text-green-600">
+                            {formatCurrency(
+                              invoice.items
+                                .filter((item) => item.commissionAmount)
+                                .reduce((sum, item) => sum + (item.commissionAmount || 0), 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
             </div>
 
             <div>

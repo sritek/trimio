@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
 import { Eye } from 'lucide-react';
 
 import { formatCurrency } from '@/lib/format';
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 
 import { StatusBadge } from '@/components/common';
@@ -12,22 +14,38 @@ import type { ColumnDef } from '@/components/common';
 import type { Invoice } from '@/types/billing';
 
 // ============================================
+// Helper Functions
+// ============================================
+
+function getPrimaryStylist(invoice: Invoice): string | null {
+  // Get the first stylist name from invoice items
+  if (invoice.items && invoice.items.length > 0) {
+    for (const item of invoice.items) {
+      if (item.stylistName) {
+        return item.stylistName;
+      }
+    }
+  }
+  return null;
+}
+
+// ============================================
 // Column Definitions
 // ============================================
 
 interface GetColumnsOptions {
-  onView: (id: string) => void;
+  onQuickView: (id: string) => void;
 }
 
-export function getInvoiceColumns({ onView }: GetColumnsOptions): ColumnDef<Invoice>[] {
+export function getInvoiceColumns({ onQuickView }: GetColumnsOptions): ColumnDef<Invoice>[] {
   return [
     {
       accessorKey: 'invoiceNumber',
       header: 'Invoice Number',
       cell: ({ row }) => (
-        <span className="font-medium">
+        <Link href={`/billing/${row.original.id}`} className="font-medium hover:underline">
           {row.original.invoiceNumber || `Draft-${row.original.id.slice(0, 8)}`}
-        </span>
+        </Link>
       ),
     },
     {
@@ -48,6 +66,32 @@ export function getInvoiceColumns({ onView }: GetColumnsOptions): ColumnDef<Invo
       ),
     },
     {
+      id: 'stylist',
+      header: 'Staff',
+      cell: ({ row }) => {
+        const stylistName = getPrimaryStylist(row.original);
+        if (!stylistName) {
+          return <span className="text-muted-foreground text-sm">-</span>;
+        }
+        const initials = stylistName
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2);
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar className="h-6 w-6">
+              <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-sm">{stylistName}</span>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'grandTotal',
       header: () => <div className="text-right">Amount</div>,
       cell: ({ row }) => (
@@ -66,7 +110,7 @@ export function getInvoiceColumns({ onView }: GetColumnsOptions): ColumnDef<Invo
     },
     {
       id: 'actions',
-      cell: ({ row }) => <InvoiceActions invoice={row.original} onView={onView} />,
+      cell: ({ row }) => <InvoiceActions invoice={row.original} onQuickView={onQuickView} />,
     },
   ];
 }
@@ -77,18 +121,18 @@ export function getInvoiceColumns({ onView }: GetColumnsOptions): ColumnDef<Invo
 
 interface InvoiceActionsProps {
   invoice: Invoice;
-  onView: (id: string) => void;
+  onQuickView: (id: string) => void;
 }
 
-function InvoiceActions({ invoice, onView }: InvoiceActionsProps) {
+function InvoiceActions({ invoice, onQuickView }: InvoiceActionsProps) {
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label="View Invoice"
-      onClick={() => onView(invoice.id)}
+      aria-label="Quick View Invoice"
+      onClick={() => onQuickView(invoice.id)}
     >
-      <Eye className="mr-2 h-4 w-4" />
+      <Eye className="h-4 w-4" />
     </Button>
   );
 }

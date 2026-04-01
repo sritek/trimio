@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { Calendar, Clock, User, RefreshCw, AlertTriangle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,26 @@ interface RescheduleAppointmentDialogProps {
 
 const MAX_RESCHEDULES = 3;
 
+/**
+ * Parse a date string to Date object for display
+ * Handles both 'yyyy-MM-dd' and ISO datetime formats
+ */
+function parseDateString(dateStr: string): Date {
+  // If it's an ISO datetime string, extract just the date part
+  const datePart = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  // Create date using local timezone by parsing as yyyy-MM-dd
+  const [year, month, day] = datePart.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Format a date string to 'yyyy-MM-dd' for API
+ * Handles both 'yyyy-MM-dd' and ISO datetime formats
+ */
+function toDateString(dateStr: string): string {
+  return dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+}
+
 export function RescheduleAppointmentDialog({
   open,
   onOpenChange,
@@ -70,7 +90,7 @@ export function RescheduleAppointmentDialog({
   // Initialize form when dialog opens
   useEffect(() => {
     if (open && appointment) {
-      setNewDate(appointment.scheduledDate);
+      setNewDate(toDateString(appointment.scheduledDate));
       setNewTime(appointment.scheduledTime);
       setStylistId(appointment.stylistId || '');
       setReason('');
@@ -169,7 +189,7 @@ export function RescheduleAppointmentDialog({
             <div className="p-3 rounded-lg bg-muted/50 text-sm">
               <p className="text-muted-foreground mb-1">Current schedule:</p>
               <p className="font-medium">
-                {format(parseISO(appointment.scheduledDate), 'EEE, MMM d, yyyy')} at{' '}
+                {format(parseDateString(appointment.scheduledDate), 'EEE, MMM d, yyyy')} at{' '}
                 {appointment.scheduledTime}
               </p>
               {rescheduleCount > 0 && (
@@ -186,7 +206,7 @@ export function RescheduleAppointmentDialog({
                 New Date
               </Label>
               <DatePicker
-                value={newDate ? new Date(newDate) : undefined}
+                value={newDate ? parseDateString(newDate) : undefined}
                 onChange={(date) => setNewDate(date ? format(date, 'yyyy-MM-dd') : '')}
                 placeholder="Select new date"
               />

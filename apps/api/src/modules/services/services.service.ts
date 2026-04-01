@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
+import { NotFoundError } from '../../lib/errors';
 
 import type { Prisma, Service } from '@prisma/client';
 import type {
@@ -277,7 +278,7 @@ export class ServicesService {
     });
 
     if (!service) {
-      throw new Error('Service not found');
+      throw new NotFoundError('SERVICE_NOT_FOUND', 'Service not found');
     }
 
     // Soft delete if has appointments
@@ -296,80 +297,6 @@ export class ServicesService {
         prisma.service.delete({ where: { id: serviceId } }),
       ]);
     }
-  }
-
-  /**
-   * Duplicate a service
-   */
-  async duplicateService(
-    tenantId: string,
-    serviceId: string,
-    createdBy?: string
-  ): Promise<Service> {
-    const original = await prisma.service.findFirst({
-      where: { id: serviceId, tenantId, deletedAt: null },
-      include: {
-        variants: true,
-      },
-    });
-
-    if (!original) {
-      throw new Error('Service not found');
-    }
-
-    // Generate new SKU
-    let newSku = `${original.sku}-COPY`;
-    let counter = 1;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const exists = await prisma.service.findUnique({
-        where: { tenantId_sku: { tenantId, sku: newSku } },
-      });
-      if (!exists) break;
-      newSku = `${original.sku}-COPY-${counter++}`;
-    }
-
-    // Create duplicate
-    const duplicate = await prisma.service.create({
-      data: {
-        tenantId,
-        categoryId: original.categoryId,
-        sku: newSku,
-        name: `${original.name} (Copy)`,
-        description: original.description,
-        basePrice: original.basePrice,
-        taxRate: original.taxRate,
-        isTaxInclusive: original.isTaxInclusive,
-        durationMinutes: original.durationMinutes,
-        activeTimeMinutes: original.activeTimeMinutes,
-        processingTimeMinutes: original.processingTimeMinutes,
-        genderApplicable: original.genderApplicable,
-        commissionType: original.commissionType,
-        commissionValue: original.commissionValue,
-        displayOrder: original.displayOrder + 1,
-        imageUrl: original.imageUrl,
-        isActive: false, // Start as inactive
-        createdBy,
-      },
-    });
-
-    // Duplicate variants
-    if (original.variants.length > 0) {
-      await prisma.serviceVariant.createMany({
-        data: original.variants.map((v) => ({
-          tenantId,
-          serviceId: duplicate.id,
-          name: v.name,
-          priceAdjustmentType: v.priceAdjustmentType,
-          priceAdjustment: v.priceAdjustment,
-          durationAdjustment: v.durationAdjustment,
-          displayOrder: v.displayOrder,
-          isActive: v.isActive,
-        })),
-      });
-    }
-
-    return duplicate;
   }
 
   /**

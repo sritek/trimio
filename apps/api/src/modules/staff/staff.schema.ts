@@ -69,7 +69,7 @@ export const createStaffSchema = z.object({
     .optional(),
 
   // Employment
-  employeeCode: z.string().max(50).optional(),
+  employeeCode: z.string().min(1, 'Employee code is required').max(50),
   designation: z.string().max(100).optional(),
   department: z.string().max(100).optional(),
   dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

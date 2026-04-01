@@ -26,14 +26,12 @@ import type { Service } from '@/types/services';
 interface GetColumnsOptions {
   canWrite: boolean;
   onEdit: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
 export function getServiceColumns({
   canWrite,
   onEdit,
-  onDuplicate,
   onDelete,
 }: GetColumnsOptions): ColumnDef<Service>[] {
   return [
@@ -82,12 +80,7 @@ export function getServiceColumns({
       id: 'actions',
       cell: ({ row }) =>
         canWrite ? (
-          <ServiceActions
-            service={row.original}
-            onEdit={onEdit}
-            onDuplicate={onDuplicate}
-            onDelete={onDelete}
-          />
+          <ServiceActions service={row.original} onEdit={onEdit} onDelete={onDelete} />
         ) : null,
     },
   ];
@@ -122,11 +115,10 @@ function ServiceStatusBadge({ service }: { service: Service }) {
 interface ServiceActionsProps {
   service: Service;
   onEdit: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-function ServiceActions({ service, onEdit, onDuplicate, onDelete }: ServiceActionsProps) {
+function ServiceActions({ service, onEdit, onDelete }: ServiceActionsProps) {
   const t = useTranslations('common');
 
   return (
@@ -140,10 +132,6 @@ function ServiceActions({ service, onEdit, onDuplicate, onDelete }: ServiceActio
         <DropdownMenuItem onClick={() => onEdit(service.id)}>
           <Pencil className="mr-2 h-4 w-4" />
           {t('actions.edit')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onDuplicate(service.id)}>
-          <Copy className="mr-2 h-4 w-4" />
-          {t('actions.duplicate')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onDelete(service.id)} className="text-destructive">

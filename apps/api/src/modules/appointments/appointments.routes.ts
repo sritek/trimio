@@ -13,6 +13,7 @@ import { WalkInQueueService } from './walk-in-queue.service';
 import { StylistScheduleService } from './stylist-schedule.service';
 import { authenticate } from '../../middleware/auth.middleware';
 import { requirePermission, requireAnyPermission } from '../../middleware/permission.guard';
+import { deleteResponse } from '../../lib/response';
 import { prisma } from '../../lib/prisma';
 
 import {
@@ -976,7 +977,7 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       const { tenantId } = (request as any).user!;
       const { breakId } = request.params;
       await stylistScheduleService.deleteBreak(tenantId, breakId);
-      return reply.send({ success: true, message: 'Break deleted successfully' });
+      return reply.send(deleteResponse('Break deleted successfully'));
     }
   );
 
@@ -1033,7 +1034,7 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       const { tenantId } = (request as any).user!;
       const { slotId } = request.params;
       await stylistScheduleService.deleteBlockedSlot(tenantId, slotId);
-      return reply.send({ success: true, message: 'Blocked slot removed successfully' });
+      return reply.send(deleteResponse('Blocked slot removed successfully'));
     }
   );
 }

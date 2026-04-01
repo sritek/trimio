@@ -87,7 +87,7 @@ export default function BillingPage() {
     setPage(1);
   }, []);
 
-  const handleView = useCallback(
+  const handleQuickView = useCallback(
     (id: string) => {
       openInvoicePeek(id);
     },
@@ -148,7 +148,7 @@ export default function BillingPage() {
             page={page}
             onPageChange={setPage}
             onPageSizeChange={handlePageSizeChange}
-            onView={handleView}
+            onQuickView={handleQuickView}
             onCreateNew={handleCreateNew}
             hasFilters={hasFilters}
           />

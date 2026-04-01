@@ -95,17 +95,6 @@ export class ServicesController {
   }
 
   /**
-   * Duplicate a service
-   */
-  async duplicateService(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    const { tenantId, sub } = request.user;
-
-    const service = await servicesService.duplicateService(tenantId, request.params.id, sub);
-
-    return reply.code(201).send(successResponse(service));
-  }
-
-  /**
    * Get service catalog
    */
   async getServiceCatalog(

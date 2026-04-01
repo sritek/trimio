@@ -227,6 +227,7 @@ export interface CreateInvoiceInput {
 
 export interface QuickBillInput extends CreateInvoiceInput {
   payments: PaymentInput[];
+  completedAt?: string; // ISO datetime for appointment completion
 }
 
 // ============================================

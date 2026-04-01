@@ -76,10 +76,7 @@ export function useOpenPanel() {
   const openPanel = useSlideOverStore((s) => s.open);
 
   return {
-    openAppointmentDetails: (
-      appointmentId: string,
-      options?: { isCheckoutMode?: boolean; isPending?: boolean; scheduledDate?: string }
-    ) =>
+    openAppointmentDetails: (appointmentId: string, options?: { isCheckoutMode?: boolean }) =>
       openPanel(
         PANEL_IDS.APPOINTMENT_DETAILS,
         { appointmentId, ...options },
@@ -104,15 +101,8 @@ export function useOpenPanel() {
         { title: 'Customer Profile', width: 'medium' }
       ),
 
-    openCheckout: (
-      appointmentId: string,
-      options?: { isPending?: boolean; scheduledDate?: string; scheduledTime?: string }
-    ) =>
-      openPanel(
-        PANEL_IDS.CHECKOUT,
-        { appointmentId, ...options },
-        { title: 'Checkout', width: 'wide' }
-      ),
+    openCheckout: (appointmentId: string) =>
+      openPanel(PANEL_IDS.CHECKOUT, { appointmentId }, { title: 'Checkout', width: 'wide' }),
 
     openUnassignedAppointments: () =>
       openPanel(

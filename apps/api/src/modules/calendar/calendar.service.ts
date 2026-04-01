@@ -198,7 +198,7 @@ export class CalendarService {
     // Get day of week for filtering breaks (0 = Sunday, 6 = Saturday)
     const dayOfWeek = getDayOfWeek(date);
 
-    const [breaks, blockedSlots] = await Promise.all([
+    const [breaks, blockedSlots, attendanceRecords] = await Promise.all([
       this.prisma.stylistBreak.findMany({
         where: {
           tenantId,
@@ -218,7 +218,18 @@ export class CalendarService {
           },
         },
       }),
+      this.prisma.attendance.findMany({
+        where: {
+          tenantId,
+          userId: { in: stylistIds },
+          attendanceDate: startDate,
+          status: { in: ['absent', 'on_leave'] },
+        },
+        select: { userId: true, status: true },
+      }),
     ]);
+
+    const absentStylistIds = new Set(attendanceRecords.map((a) => a.userId));
 
     // Build stylists array with availability info, sorted alphabetically by name
     const stylists: CalendarStylist[] = userBranches
@@ -247,13 +258,14 @@ export class CalendarService {
         // Check if stylist has full day blocked for the requested date
         // Since we already filtered blockedSlots by date range, just check isFullDay
         const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
+        const isAbsentOrOnLeave = absentStylistIds.has(ub.user.id);
 
         return {
           id: ub.user.id,
           name: ub.user.name,
           avatar: ub.user.avatarUrl,
           color: STYLIST_COLORS[index % STYLIST_COLORS.length],
-          isAvailable: !isFullDayBlocked,
+          isAvailable: !isFullDayBlocked && !isAbsentOrOnLeave,
           workingHours: workingHours,
           breaks: stylistBreaks,
           blockedSlots: stylistBlocked,

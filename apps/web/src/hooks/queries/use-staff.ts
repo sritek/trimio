@@ -3,6 +3,7 @@
  */
 
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 
 import { api } from '@/lib/api/client';
 import type {
@@ -266,7 +267,7 @@ export function useDailyAttendanceRange(
   const end = new Date(dateTo + 'T00:00:00');
   const cursor = new Date(start);
   while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10));
+    dates.push(format(cursor, 'yyyy-MM-dd'));
     cursor.setDate(cursor.getDate() + 1);
   }
 

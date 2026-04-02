@@ -13,7 +13,7 @@ import { WalkInQueueService } from './walk-in-queue.service';
 import { StylistScheduleService } from './stylist-schedule.service';
 import { authenticate } from '../../middleware/auth.middleware';
 import { requirePermission, requireAnyPermission } from '../../middleware/permission.guard';
-import { deleteResponse } from '../../lib/response';
+import { deleteResponse, successResponse } from '../../lib/response';
 import { prisma } from '../../lib/prisma';
 
 import {
@@ -55,7 +55,6 @@ import {
   GetAvailableSlotsInput,
   GetCalendarInput,
 } from './appointments.schema';
-import { deleteResponse, successResponse } from '@/lib';
 
 export async function appointmentsRoutes(fastify: FastifyInstance) {
   const appointmentsService = new AppointmentsService(prisma);

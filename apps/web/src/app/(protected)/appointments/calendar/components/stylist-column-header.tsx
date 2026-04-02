@@ -54,7 +54,7 @@ export function StylistColumnHeader({
         <span
           className={cn(
             'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-            stylist.isAvailable ? 'bg-green-500' : 'bg-gray-400'
+            stylist.isAvailable ? 'bg-green-500' : 'bg-red-500'
           )}
         />
       </div>

@@ -9,6 +9,7 @@ import Cookies from 'js-cookie';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useBranchStore } from './branch-store';
+import { getQueryClient } from '@/providers/query-provider';
 
 interface User {
   id: string;
@@ -91,6 +92,13 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Clear branch selection when logging out
         useBranchStore.getState().clearSelectedBranch();
+
+        // Clear TanStack Query cache to prevent stale data from previous tenant
+        const queryClient = getQueryClient();
+        if (queryClient) {
+          queryClient.clear();
+        }
+
         set({
           user: null,
           tenant: null,

@@ -48,6 +48,11 @@ export const EMPTY_TENANT_FORM = {
   subscriptionStatus: 'active' as SubscriptionStatus,
   trialDays: DEFAULT_TRIAL_DAYS,
   logoUrl: '',
+  // Loyalty defaults
+  loyaltyEnabled: true,
+  loyaltyPointsPerUnit: 0.01, // 1 point per ₹100 spent
+  loyaltyRedemptionValue: 1, // 1 point = ₹1
+  loyaltyExpiryDays: 365,
 };
 
 export const EMPTY_BRANCH_FORM = {

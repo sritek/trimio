@@ -18,12 +18,16 @@ import {
   Phone,
   Edit,
   Plus,
+  Star,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useAdminStore } from '@/stores/admin-store';
 
 import { PlanBadge, FormDialog, BranchForm, OwnerForm, TenantForm } from '../../components';
@@ -45,6 +49,7 @@ import type {
   FormErrors,
   SubscriptionPlan,
   SubscriptionStatus,
+  LoyaltyConfig,
 } from '../../types';
 
 export default function TenantDetailPage() {
@@ -69,6 +74,10 @@ export default function TenantDetailPage() {
     subscriptionStatus: 'active',
     trialDays: 14,
     logoUrl: '',
+    loyaltyEnabled: true,
+    loyaltyPointsPerUnit: 0.01,
+    loyaltyRedemptionValue: 1,
+    loyaltyExpiryDays: 365,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -100,6 +109,11 @@ export default function TenantDetailPage() {
   const [editOwnerData, setEditOwnerData] = useState<OwnerFormData>({ ...EMPTY_OWNER_FORM });
   const [editOwnerErrors, setEditOwnerErrors] = useState<FormErrors>({});
 
+  // Loyalty config state
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig | null>(null);
+  const [isLoyaltyLoading, setIsLoyaltyLoading] = useState(false);
+  const [isSavingLoyalty, setIsSavingLoyalty] = useState(false);
+
   useEffect(() => {
     setIsHydrated(true);
   }, []);
@@ -127,6 +141,56 @@ export default function TenantDetailPage() {
     }
   }, [isHydrated, accessToken, fetchTenant]);
 
+  // Fetch loyalty config when tenant is loaded
+  const fetchLoyaltyConfig = useCallback(async () => {
+    if (!accessToken || !tenant) return;
+
+    setIsLoyaltyLoading(true);
+    try {
+      const config = await api.getLoyaltyConfig(tenant.id);
+      setLoyaltyConfig(config);
+    } catch (error) {
+      console.error('Failed to fetch loyalty config:', error);
+    } finally {
+      setIsLoyaltyLoading(false);
+    }
+  }, [accessToken, tenant, api]);
+
+  useEffect(() => {
+    if (tenant) {
+      fetchLoyaltyConfig();
+    }
+  }, [tenant, fetchLoyaltyConfig]);
+
+  // ============================================
+  // LOYALTY CONFIG
+  // ============================================
+
+  const handleLoyaltyChange = (field: keyof LoyaltyConfig, value: boolean | number) => {
+    if (loyaltyConfig) {
+      setLoyaltyConfig({ ...loyaltyConfig, [field]: value });
+    }
+  };
+
+  const handleSaveLoyaltyConfig = async () => {
+    if (!loyaltyConfig || !tenant) return;
+
+    setIsSavingLoyalty(true);
+    try {
+      await api.updateLoyaltyConfig(tenant.id, {
+        isEnabled: loyaltyConfig.isEnabled,
+        pointsPerUnit: loyaltyConfig.pointsPerUnit,
+        redemptionValuePerPoint: loyaltyConfig.redemptionValuePerPoint,
+        expiryDays: loyaltyConfig.expiryDays,
+      });
+      toast.success('Loyalty configuration saved');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save loyalty config');
+    } finally {
+      setIsSavingLoyalty(false);
+    }
+  };
+
   // ============================================
   // EDIT TENANT
   // ============================================
@@ -142,6 +206,10 @@ export default function TenantDetailPage() {
         subscriptionStatus: tenant.subscriptionStatus as SubscriptionStatus,
         trialDays: 14,
         logoUrl: tenant.logoUrl || '',
+        loyaltyEnabled: loyaltyConfig?.isEnabled ?? true,
+        loyaltyPointsPerUnit: loyaltyConfig?.pointsPerUnit ?? 0.01,
+        loyaltyRedemptionValue: loyaltyConfig?.redemptionValuePerPoint ?? 1,
+        loyaltyExpiryDays: loyaltyConfig?.expiryDays ?? 365,
       });
       setLogoPreview(tenant.logoUrl);
       setLogoFile(null);
@@ -570,6 +638,125 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Loyalty Program Configuration */}
+      <Card className="bg-white border-slate-200 shadow-sm mt-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-slate-900 flex items-center gap-2">
+            <Star className="h-5 w-5 text-amber-500" />
+            Loyalty Program
+          </CardTitle>
+          {loyaltyConfig && (
+            <Badge
+              variant="outline"
+              className={
+                loyaltyConfig.isEnabled
+                  ? 'border-green-300 text-green-700 bg-green-50'
+                  : 'border-slate-300 text-slate-500 bg-slate-50'
+              }
+            >
+              {loyaltyConfig.isEnabled ? 'Enabled' : 'Disabled'}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent>
+          {isLoyaltyLoading ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-10 bg-slate-100 rounded" />
+              <div className="h-10 bg-slate-100 rounded" />
+            </div>
+          ) : loyaltyConfig ? (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
+                <div>
+                  <Label className="text-slate-700">Enable Loyalty Program</Label>
+                  <p className="text-xs text-slate-500">
+                    Allow customers to earn and redeem loyalty points
+                  </p>
+                </div>
+                <Switch
+                  checked={loyaltyConfig.isEnabled}
+                  onCheckedChange={(checked) => handleLoyaltyChange('isEnabled', checked)}
+                />
+              </div>
+
+              {loyaltyConfig.isEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Points per ₹100 spent</Label>
+                    <Input
+                      type="number"
+                      value={loyaltyConfig.pointsPerUnit * 100}
+                      onChange={(e) =>
+                        handleLoyaltyChange(
+                          'pointsPerUnit',
+                          e.target.value ? parseFloat(e.target.value) / 100 : 0
+                        )
+                      }
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      className="border-slate-300"
+                    />
+                    <p className="text-xs text-slate-500">
+                      e.g., 1 means customer earns 1 point per ₹100 spent
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">₹ value per point</Label>
+                    <Input
+                      type="number"
+                      value={loyaltyConfig.redemptionValuePerPoint}
+                      onChange={(e) =>
+                        handleLoyaltyChange(
+                          'redemptionValuePerPoint',
+                          e.target.value ? parseFloat(e.target.value) : 0
+                        )
+                      }
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      className="border-slate-300"
+                    />
+                    <p className="text-xs text-slate-500">e.g., 1 means 1 point = ₹1 discount</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-slate-700">Points Expiry (days)</Label>
+                    <Input
+                      type="number"
+                      value={loyaltyConfig.expiryDays}
+                      onChange={(e) =>
+                        handleLoyaltyChange(
+                          'expiryDays',
+                          e.target.value ? parseInt(e.target.value) : 0
+                        )
+                      }
+                      min={0}
+                      max={3650}
+                      className="border-slate-300"
+                    />
+                    <p className="text-xs text-slate-500">
+                      0 = points never expire. Default is 365 days.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveLoyaltyConfig}
+                  disabled={isSavingLoyalty}
+                  className="bg-amber-500 hover:bg-amber-600 text-white"
+                >
+                  {isSavingLoyalty ? 'Saving...' : 'Save Loyalty Settings'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">Failed to load loyalty configuration.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit Tenant Dialog */}
       <FormDialog

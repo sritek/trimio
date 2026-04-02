@@ -129,7 +129,9 @@ export type ListQuery = z.infer<typeof listQuerySchema>;
  */
 export const messageResponseSchema = z.object({
   success: z.literal(true),
-  message: z.string(),
+  data: z.object({
+    message: z.string(),
+  }),
 });
 
 export type MessageResponse = z.infer<typeof messageResponseSchema>;

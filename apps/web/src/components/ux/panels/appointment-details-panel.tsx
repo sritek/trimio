@@ -32,8 +32,6 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { StatusBadge, Notice } from '@/components/common';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
@@ -46,10 +44,9 @@ import {
   RescheduleAppointmentDialog,
   StartServiceDialog,
 } from '@/components/ux/dialogs';
-import { useAppointment, useCompleteAppointment } from '@/hooks/queries/use-appointments';
+import { useAppointment } from '@/hooks/queries/use-appointments';
 import { useAuthStore } from '@/stores/auth-store';
 import { maskPhoneNumber, shouldMaskPhoneForRole } from '@/lib/phone-masking';
-import { useErrorHandler } from '@/hooks/use-error-handler';
 import { AppointmentStatus } from '@/types/appointments';
 import { cn } from '@/lib/utils';
 
@@ -57,8 +54,6 @@ interface AppointmentDetailsPanelProps {
   appointmentId: string;
   // For floor view checkout flow
   isCheckoutMode?: boolean;
-  isPending?: boolean;
-  scheduledDate?: string;
 }
 
 // Status action configurations - removed 'complete' from in_progress since checkout handles it
@@ -84,14 +79,11 @@ const STATUS_ACTIONS = {
 export function AppointmentDetailsPanel({
   appointmentId,
   isCheckoutMode = false,
-  isPending = false,
-  scheduledDate,
 }: AppointmentDetailsPanelProps) {
   const closePanel = useClosePanel();
   const router = useRouter();
   const { openCheckout } = useOpenPanel();
   const { user } = useAuthStore();
-  const { handleError } = useErrorHandler();
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
 
   // Dialog states
@@ -104,18 +96,8 @@ export function AppointmentDetailsPanel({
   const [editServicesDialogOpen, setEditServicesDialogOpen] = useState(false);
   const [startServiceDialogOpen, setStartServiceDialogOpen] = useState(false);
 
-  // Checkout mode state
-  const [completionDate, setCompletionDate] = useState<string>(
-    scheduledDate || new Date().toISOString().split('T')[0]
-  );
-  const [completionTime, setCompletionTime] = useState<string>(
-    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-  );
-  const [isCompletingAppointment, setIsCompletingAppointment] = useState(false);
-
   // Queries
   const { data: appointment, isLoading, error } = useAppointment(appointmentId);
-  const completeAppointmentMutation = useCompleteAppointment();
 
   // Get available actions based on current status
   const availableActions = useMemo(() => {
@@ -165,37 +147,14 @@ export function AppointmentDetailsPanel({
     setRescheduleDialogOpen(true);
   }, []);
 
-  // Handle proceed to checkout from floor view (completes appointment then opens checkout)
-  const handleProceedToCheckout = useCallback(async () => {
+  // Handle proceed to checkout from floor view (opens checkout panel directly)
+  // Note: The appointment will be marked as completed when the invoice is finalized
+  const handleProceedToCheckout = useCallback(() => {
     if (!appointmentId) return;
 
-    try {
-      setIsCompletingAppointment(true);
-
-      // Complete the appointment with provided times
-      await completeAppointmentMutation.mutateAsync({
-        appointmentId,
-        completionDate,
-        completionTime,
-      });
-
-      // Open checkout panel with the completed appointment
-      openCheckout(appointmentId);
-    } catch (error) {
-      handleError(error, {
-        customMessage: 'Failed to complete appointment. Please try again.',
-      });
-    } finally {
-      setIsCompletingAppointment(false);
-    }
-  }, [
-    appointmentId,
-    completionDate,
-    completionTime,
-    completeAppointmentMutation,
-    openCheckout,
-    handleError,
-  ]);
+    // Open checkout panel - appointment completion happens when invoice is finalized
+    openCheckout(appointmentId);
+  }, [appointmentId, openCheckout]);
 
   // Loading state
   if (isLoading) {
@@ -421,54 +380,6 @@ export function AppointmentDetailsPanel({
           </>
         )}
 
-        {/* Completion Time Input - Only show in checkout mode */}
-        {isCheckoutMode && (
-          <>
-            <Separator />
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <h3 className="font-semibold">Completion Time</h3>
-              </div>
-
-              {isPending && (
-                <div>
-                  <Label htmlFor="completion-date" className="text-sm">
-                    Completion Date
-                  </Label>
-                  <Input
-                    id="completion-date"
-                    type="date"
-                    value={completionDate}
-                    onChange={(e) => setCompletionDate(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
-              <div>
-                <Label htmlFor="completion-time" className="text-sm">
-                  Completion Time
-                </Label>
-                <Input
-                  id="completion-time"
-                  type="time"
-                  value={completionTime}
-                  onChange={(e) => setCompletionTime(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-
-              {isPending && (
-                <div className="flex gap-2 rounded bg-blue-50 dark:bg-blue-950/20 p-2 text-xs text-blue-700 dark:text-blue-400">
-                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                  <p>Completing appointment from {scheduledDate}</p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
         {/* Status Notices */}
         {/* Payment Completed - Show for completed appointments */}
         {appointment.status === 'completed' && (
@@ -538,13 +449,8 @@ export function AppointmentDetailsPanel({
       <div className="border-t p-4 space-y-3">
         {/* Checkout Mode - Show Confirm & Proceed button */}
         {isCheckoutMode && (
-          <Button
-            className="w-full"
-            size="lg"
-            onClick={handleProceedToCheckout}
-            disabled={isCompletingAppointment}
-          >
-            {isCompletingAppointment ? 'Completing...' : 'Confirm & Proceed to Checkout'}
+          <Button className="w-full" size="lg" onClick={handleProceedToCheckout}>
+            Confirm & Proceed to Checkout
           </Button>
         )}
 

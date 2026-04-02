@@ -54,6 +54,17 @@ export interface TenantDetail extends Tenant {
   users: Owner[];
 }
 
+export interface LoyaltyConfig {
+  id: string;
+  tenantId: string;
+  isEnabled: boolean;
+  pointsPerUnit: number;
+  redemptionValuePerPoint: number;
+  expiryDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ============================================
 // FORM DATA TYPES
 // ============================================
@@ -67,6 +78,11 @@ export interface TenantFormData {
   subscriptionStatus: SubscriptionStatus;
   trialDays: number;
   logoUrl: string;
+  // Loyalty configuration
+  loyaltyEnabled: boolean;
+  loyaltyPointsPerUnit: number;
+  loyaltyRedemptionValue: number;
+  loyaltyExpiryDays: number;
 }
 
 export interface BranchFormData {

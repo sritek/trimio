@@ -18,6 +18,7 @@ import type {
   Branch,
   Owner,
   TenantsResponse,
+  LoyaltyConfig,
 } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -167,6 +168,11 @@ export function useInternalApi() {
           phone: data.phone || undefined,
           subscriptionPlan: data.subscriptionPlan,
           trialDays: data.trialDays,
+          // Loyalty config
+          loyaltyEnabled: data.loyaltyEnabled,
+          loyaltyPointsPerUnit: data.loyaltyPointsPerUnit,
+          loyaltyRedemptionValue: data.loyaltyRedemptionValue,
+          loyaltyExpiryDays: data.loyaltyExpiryDays,
         }),
       });
     },
@@ -274,6 +280,32 @@ export function useInternalApi() {
   );
 
   // ============================================
+  // LOYALTY CONFIG OPERATIONS
+  // ============================================
+
+  const getLoyaltyConfig = useCallback(
+    async (tenantId: string): Promise<LoyaltyConfig> => {
+      return apiFetch<LoyaltyConfig>(`/tenants/${tenantId}/loyalty-config`);
+    },
+    [apiFetch]
+  );
+
+  const updateLoyaltyConfig = useCallback(
+    async (tenantId: string, data: Partial<LoyaltyConfig>): Promise<LoyaltyConfig> => {
+      return apiFetch<LoyaltyConfig>(`/tenants/${tenantId}/loyalty-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          isEnabled: data.isEnabled,
+          pointsPerUnit: data.pointsPerUnit,
+          redemptionValuePerPoint: data.redemptionValuePerPoint,
+          expiryDays: data.expiryDays,
+        }),
+      });
+    },
+    [apiFetch]
+  );
+
+  // ============================================
   // LOGO UPLOAD
   // ============================================
 
@@ -299,6 +331,9 @@ export function useInternalApi() {
       // Owner
       createOwner,
       updateOwner,
+      // Loyalty Config
+      getLoyaltyConfig,
+      updateLoyaltyConfig,
       // Upload
       uploadLogo,
     }),
@@ -311,6 +346,8 @@ export function useInternalApi() {
       updateBranch,
       createOwner,
       updateOwner,
+      getLoyaltyConfig,
+      updateLoyaltyConfig,
       uploadLogo,
     ]
   );

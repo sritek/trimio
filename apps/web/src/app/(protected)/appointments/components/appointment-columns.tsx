@@ -1,31 +1,12 @@
 'use client';
 
-import {
-  AlertTriangle,
-  Calendar,
-  CheckCircle,
-  Clock,
-  CreditCard,
-  Eye,
-  MoreHorizontal,
-  Phone,
-  Play,
-  User,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, Calendar, Eye, Phone, User } from 'lucide-react';
 
 import { formatCurrency } from '@/lib/format';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { AppointmentStatusBadge } from './appointment-status-badge';
@@ -55,26 +36,10 @@ const bookingTypeIcons: Record<BookingType, React.ReactNode> = {
 // ============================================
 
 interface GetColumnsOptions {
-  canWrite: boolean;
   onView: (id: string) => void;
-  onCheckIn: (id: string) => void;
-  onStart: (id: string) => void;
-  onComplete: (id: string) => void;
-  onCancel: (id: string) => void;
-  onNoShow: (id: string) => void;
-  onCheckout?: (id: string) => void;
 }
 
-export function getAppointmentColumns({
-  canWrite,
-  onView,
-  onCheckIn,
-  onStart,
-  onComplete,
-  onCancel,
-  onNoShow,
-  onCheckout,
-}: GetColumnsOptions): ColumnDef<Appointment>[] {
+export function getAppointmentColumns({ onView }: GetColumnsOptions): ColumnDef<Appointment>[] {
   return [
     {
       accessorKey: 'scheduledDateTime',
@@ -205,122 +170,10 @@ export function getAppointmentColumns({
     {
       id: 'actions',
       cell: ({ row }) => (
-        <AppointmentActions
-          appointment={row.original}
-          canWrite={canWrite}
-          onView={onView}
-          onCheckIn={onCheckIn}
-          onStart={onStart}
-          onComplete={onComplete}
-          onCancel={onCancel}
-          onNoShow={onNoShow}
-          onCheckout={onCheckout}
-        />
+        <Button variant="ghost" size="icon" onClick={() => onView(row.original.id)}>
+          <Eye className="h-4 w-4" />
+        </Button>
       ),
     },
   ];
-}
-
-// ============================================
-// Actions Component
-// ============================================
-
-interface AppointmentActionsProps {
-  appointment: Appointment;
-  canWrite: boolean;
-  onView: (id: string) => void;
-  onCheckIn: (id: string) => void;
-  onStart: (id: string) => void;
-  onComplete: (id: string) => void;
-  onCancel: (id: string) => void;
-  onNoShow: (id: string) => void;
-  onCheckout?: (id: string) => void;
-}
-
-function AppointmentActions({
-  appointment,
-  canWrite,
-  onView,
-  onCheckIn,
-  onStart,
-  onComplete,
-  onCancel,
-  onNoShow,
-  onCheckout,
-}: AppointmentActionsProps) {
-  const { status, id } = appointment;
-
-  const canCheckIn = status === 'booked' || status === 'confirmed';
-  const canStart = status === 'checked_in';
-  const canComplete = status === 'in_progress';
-  const canCancel = status === 'booked' || status === 'confirmed' || status === 'checked_in';
-  const canMarkNoShow = status === 'booked' || status === 'confirmed';
-  const canCheckout = status === 'in_progress' || status === 'completed';
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => onView(id)}>
-          <Eye className="mr-2 h-4 w-4" />
-          View Details
-        </DropdownMenuItem>
-
-        {canWrite && (
-          <>
-            <DropdownMenuSeparator />
-
-            {canCheckIn && (
-              <DropdownMenuItem onClick={() => onCheckIn(id)}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Check In
-              </DropdownMenuItem>
-            )}
-
-            {canStart && (
-              <DropdownMenuItem onClick={() => onStart(id)}>
-                <Play className="mr-2 h-4 w-4" />
-                Start Service
-              </DropdownMenuItem>
-            )}
-
-            {canComplete && (
-              <DropdownMenuItem onClick={() => onComplete(id)}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Complete
-              </DropdownMenuItem>
-            )}
-
-            {canCheckout && onCheckout && (
-              <DropdownMenuItem onClick={() => onCheckout(id)}>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Checkout
-              </DropdownMenuItem>
-            )}
-
-            {canCancel && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onCancel(id)} className="text-destructive">
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Cancel
-                </DropdownMenuItem>
-              </>
-            )}
-
-            {canMarkNoShow && (
-              <DropdownMenuItem onClick={() => onNoShow(id)} className="text-destructive">
-                <Clock className="mr-2 h-4 w-4" />
-                Mark No-Show
-              </DropdownMenuItem>
-            )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }

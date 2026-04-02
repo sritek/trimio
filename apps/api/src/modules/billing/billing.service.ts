@@ -101,6 +101,14 @@ class InvoiceCalculator {
       loyaltyPointsToRedeem?: number;
       walletAmountToUse?: number;
       membershipId?: string;
+      discounts?: Array<{
+        discountType: string;
+        calculationType: 'percentage' | 'flat';
+        calculationValue: number;
+        appliedTo: 'subtotal' | 'item';
+        appliedItemIndex?: number;
+        reason?: string;
+      }>;
     } = {}
   ): Promise<InvoiceCalculation> {
     // 1. Fetch service details and calculate item amounts
@@ -114,19 +122,50 @@ class InvoiceCalculator {
     // 2. Calculate subtotal
     const subtotal = calculatedItems.reduce((sum, item) => sum + item.grossAmount, 0);
 
-    // 3. Calculate total discount
-    const discountAmount = calculatedItems.reduce((sum, item) => sum + item.discountAmount, 0);
+    // 3. Apply manual discounts
+    let manualDiscountAmount = 0;
+    if (options.discounts && options.discounts.length > 0) {
+      for (const discount of options.discounts) {
+        if (discount.appliedTo === 'subtotal') {
+          // Apply to entire subtotal
+          if (discount.calculationType === 'percentage') {
+            manualDiscountAmount += (subtotal * discount.calculationValue) / 100;
+          } else {
+            manualDiscountAmount += discount.calculationValue;
+          }
+        } else if (discount.appliedTo === 'item' && discount.appliedItemIndex !== undefined) {
+          // Apply to specific item
+          const item = calculatedItems[discount.appliedItemIndex];
+          if (item) {
+            let itemDiscount = 0;
+            if (discount.calculationType === 'percentage') {
+              itemDiscount = (item.grossAmount * discount.calculationValue) / 100;
+            } else {
+              itemDiscount = discount.calculationValue;
+            }
+            item.discountAmount += itemDiscount;
+            manualDiscountAmount += itemDiscount;
+          }
+        }
+      }
+      // Cap discount at subtotal
+      manualDiscountAmount = Math.min(manualDiscountAmount, subtotal);
+    }
 
-    // 4. Calculate taxable amount
+    // 4. Calculate total discount (item-level + manual)
+    const itemLevelDiscount = calculatedItems.reduce((sum, item) => sum + item.discountAmount, 0);
+    const discountAmount = itemLevelDiscount + (manualDiscountAmount - itemLevelDiscount);
+
+    // 5. Calculate taxable amount
     const taxableAmount = subtotal - discountAmount;
 
-    // 5. Calculate taxes
+    // 6. Calculate taxes
     const cgstAmount = calculatedItems.reduce((sum, item) => sum + item.cgstAmount, 0);
     const sgstAmount = calculatedItems.reduce((sum, item) => sum + item.sgstAmount, 0);
     const igstAmount = calculatedItems.reduce((sum, item) => sum + item.igstAmount, 0);
     const totalTax = cgstAmount + sgstAmount + igstAmount;
 
-    // 6. Apply loyalty discount
+    // 7. Apply loyalty discount
     let loyaltyDiscount = 0;
     if (options.loyaltyPointsToRedeem && options.loyaltyPointsToRedeem > 0) {
       const loyaltyConfig = await prisma.loyaltyConfig.findUnique({
@@ -138,17 +177,17 @@ class InvoiceCalculator {
       }
     }
 
-    // 7. Calculate grand total before wallet
+    // 8. Calculate grand total before wallet
     let grandTotal = taxableAmount + totalTax - loyaltyDiscount;
 
-    // 8. Apply wallet
+    // 9. Apply wallet
     let walletUsed = 0;
     if (options.walletAmountToUse && options.walletAmountToUse > 0) {
       walletUsed = Math.min(options.walletAmountToUse, grandTotal);
       grandTotal -= walletUsed;
     }
 
-    // 9. Round off to nearest rupee
+    // 10. Round off to nearest rupee
     const roundOff = this.calculateRoundOff(grandTotal);
     grandTotal = Math.round(grandTotal);
 
@@ -430,14 +469,15 @@ export const billingService = {
       customerEmail = customer.email || undefined;
     }
 
-    // Calculate invoice
+    // Calculate invoice with discounts
     const calculation = await calculator.calculate(input.items, tenantId, branchId, {
       isIgst: !!input.placeOfSupply,
       loyaltyPointsToRedeem: input.redeemLoyaltyPoints,
       walletAmountToUse: input.useWalletAmount,
+      discounts: input.discounts,
     });
 
-    // Create invoice with items
+    // Create invoice with items and discounts
     const invoice = await prisma.invoice.create({
       data: {
         tenantId,
@@ -490,6 +530,7 @@ export const billingService = {
             netAmount: item.netAmount,
             hsnSacCode: item.hsnSacCode,
             stylistId: item.stylistId,
+            stylistName: item.stylistName,
             assistantId: item.assistantId,
             commissionType: item.commissionType,
             commissionRate: item.commissionRate,
@@ -497,6 +538,49 @@ export const billingService = {
             displayOrder: index,
           })),
         },
+        // Create discount records if any discounts were applied
+        ...(input.discounts && input.discounts.length > 0
+          ? {
+              discounts: {
+                create: input.discounts.map((discount) => {
+                  // Calculate the actual discount amount for this discount
+                  let discountAmount = 0;
+                  if (discount.appliedTo === 'subtotal') {
+                    if (discount.calculationType === 'percentage') {
+                      discountAmount = (calculation.subtotal * discount.calculationValue) / 100;
+                    } else {
+                      discountAmount = discount.calculationValue;
+                    }
+                  } else if (
+                    discount.appliedTo === 'item' &&
+                    discount.appliedItemIndex !== undefined
+                  ) {
+                    const item = calculation.items[discount.appliedItemIndex];
+                    if (item) {
+                      if (discount.calculationType === 'percentage') {
+                        discountAmount = (item.grossAmount * discount.calculationValue) / 100;
+                      } else {
+                        discountAmount = discount.calculationValue;
+                      }
+                    }
+                  }
+
+                  return {
+                    tenantId,
+                    discountType: discount.discountType,
+                    discountSource: discount.discountSource,
+                    discountName: discount.reason || `${discount.discountType} discount`,
+                    calculationType: discount.calculationType,
+                    calculationValue: discount.calculationValue,
+                    appliedTo: discount.appliedTo,
+                    discountAmount: Math.round(discountAmount * 100) / 100,
+                    requiresApproval: false,
+                    createdBy: userId,
+                  };
+                }),
+              },
+            }
+          : {}),
       },
       include: {
         items: true,
@@ -571,7 +655,7 @@ export const billingService = {
       prisma.invoice.findMany({
         where,
         include: {
-          items: { select: { id: true, name: true, netAmount: true } },
+          items: { select: { id: true, name: true, netAmount: true, stylistName: true } },
           payments: { select: { id: true, paymentMethod: true, amount: true } },
         },
         orderBy: { [sortBy]: sortOrder },
@@ -693,6 +777,7 @@ export const billingService = {
           netAmount: itemData.netAmount,
           hsnSacCode: itemData.hsnSacCode,
           stylistId: itemData.stylistId,
+          stylistName: itemData.stylistName,
           assistantId: itemData.assistantId,
           commissionType: itemData.commissionType,
           commissionRate: itemData.commissionRate,
@@ -771,7 +856,8 @@ export const billingService = {
     const newAmountPaid = Number(invoice.amountPaid) + totalPayment;
     const newAmountDue = Number(invoice.grandTotal) - newAmountPaid;
 
-    if (newAmountDue < -0.01) {
+    // Allow small tolerance for rounding differences (up to 1 rupee)
+    if (newAmountDue < -1) {
       throw new BadRequestError('OVERPAYMENT', 'Payment amount exceeds invoice total');
     }
 
@@ -1008,7 +1094,10 @@ export const billingService = {
       if (invoice.appointmentId) {
         await tx.appointment.update({
           where: { id: invoice.appointmentId },
-          data: { status: 'completed' },
+          data: {
+            status: 'completed',
+            completedAt: input.completedAt ? new Date(input.completedAt) : new Date(),
+          },
         });
       }
 
@@ -1146,12 +1235,12 @@ export const billingService = {
 
   /**
    * Quick bill - create and finalize in one step
-   * If a draft invoice already exists for the appointment, reuse it
+   * If a draft invoice already exists for the appointment, delete it and create a new one
+   * to ensure discounts and loyalty points are properly applied
    */
   async quickBill(input: QuickBillInput, ctx: TenantContext) {
-    let invoice;
-
-    // Check if there's already a draft invoice for this appointment
+    // If there's an existing draft invoice for this appointment, delete it
+    // This ensures we always use the latest discounts and loyalty points
     if (input.appointmentId) {
       const existingInvoice = await prisma.invoice.findFirst({
         where: {
@@ -1159,26 +1248,28 @@ export const billingService = {
           appointmentId: input.appointmentId,
           status: InvoiceStatus.DRAFT,
         },
-        include: {
-          items: true,
-          payments: true,
-          discounts: true,
-        },
       });
 
       if (existingInvoice) {
-        // Reuse existing draft invoice
-        invoice = existingInvoice;
+        // Delete existing draft invoice and its related records
+        await prisma.$transaction([
+          prisma.invoiceDiscount.deleteMany({ where: { invoiceId: existingInvoice.id } }),
+          prisma.invoiceItem.deleteMany({ where: { invoiceId: existingInvoice.id } }),
+          prisma.payment.deleteMany({ where: { invoiceId: existingInvoice.id } }),
+          prisma.invoice.delete({ where: { id: existingInvoice.id } }),
+        ]);
       }
     }
 
-    // Create new invoice if no existing draft found
-    if (!invoice) {
-      invoice = await this.createInvoice(input, ctx);
-    }
+    // Create new invoice with the latest discounts and loyalty points
+    const invoice = await this.createInvoice(input, ctx);
 
-    // Finalize with payments
-    return this.finalizeInvoice(invoice.id, { payments: input.payments }, ctx);
+    // Finalize with payments and completion time
+    return this.finalizeInvoice(
+      invoice.id,
+      { payments: input.payments, completedAt: input.completedAt },
+      ctx
+    );
   },
 
   /**
@@ -1189,6 +1280,7 @@ export const billingService = {
       isIgst: input.isIgst,
       loyaltyPointsToRedeem: input.redeemLoyaltyPoints,
       walletAmountToUse: input.useWalletAmount,
+      discounts: input.discounts,
     });
   },
 

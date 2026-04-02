@@ -3,17 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import {
-  ArrowLeft,
-  Clock,
-  CreditCard,
-  Edit,
-  Mail,
-  MapPin,
-  Phone,
-  User,
-  Wallet,
-} from 'lucide-react';
+import { Calendar, Clock, CreditCard, Edit, Mail, MapPin, Phone, User, Wallet } from 'lucide-react';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 
@@ -166,19 +156,14 @@ export default function StaffDetailPage() {
         <PageHeader
           title={staffUser?.name || 'Staff Member'}
           description={staff.designation || staff.employeeCode || 'Staff Profile'}
+          backHref="/staff"
           actions={
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push('/staff')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                {tCommon('actions.back')}
-              </Button>
-              <Button asChild>
-                <Link href={`/staff/${staffId}/edit`}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  {tCommon('actions.edit')}
-                </Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href={`/staff/${staffId}/edit`}>
+                <Edit className="mr-2 h-4 w-4" />
+                {tCommon('actions.edit')}
+              </Link>
+            </Button>
           }
         />
 

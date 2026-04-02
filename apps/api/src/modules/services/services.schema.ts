@@ -289,7 +289,9 @@ export const paginatedResponseSchema = z.object({
 
 export const messageResponseSchema = z.object({
   success: z.literal(true),
-  message: z.string(),
+  data: z.object({
+    message: z.string(),
+  }),
 });
 
 export const errorResponseSchema = z.object({

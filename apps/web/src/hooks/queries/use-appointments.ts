@@ -335,51 +335,6 @@ export function useCheckIn() {
 }
 
 /**
- * Start appointment service
- */
-export function useStartAppointment() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => api.post<Appointment>(`/appointments/${id}/start`),
-
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: resourceCalendarKeys.all });
-
-      // Optimistically update status
-      queryClient.setQueriesData<ResourceCalendarData>(
-        { queryKey: resourceCalendarKeys.all },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            appointments: old.appointments.map((apt) =>
-              apt.id === id ? { ...apt, status: 'in_progress' } : apt
-            ),
-          };
-        }
-      );
-
-      return { id };
-    },
-
-    onSuccess: (_, id) => {
-      toast.success('Appointment started');
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
-      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
-      // Also invalidate floor view since station status may have changed
-      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
-    },
-
-    onError: () => {
-      toast.error('Failed to start appointment');
-      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
-    },
-  });
-}
-
-/**
  * Complete appointment
  */
 export function useCompleteAppointment() {
@@ -596,9 +551,16 @@ export function useRescheduleAppointment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: RescheduleAppointmentInput }) =>
       api.post<RescheduleResponse>(`/appointments/${id}/reschedule`, data),
-    onSuccess: () => {
+    onSuccess: (_, { id }) => {
+      toast.success('Appointment rescheduled');
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+      // Invalidate calendar views so the change reflects immediately
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+    },
+    onError: () => {
+      toast.error('Failed to reschedule appointment');
     },
   });
 }

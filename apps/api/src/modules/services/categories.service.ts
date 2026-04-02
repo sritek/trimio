@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
+import { NotFoundError, ConflictError, BadRequestError } from '../../lib/errors';
 
 import type { ServiceCategory } from '@prisma/client';
 import type {
@@ -130,7 +131,7 @@ export class CategoriesService {
     });
 
     if (existing) {
-      throw new Error('Category with this slug already exists');
+      throw new ConflictError('DUPLICATE_ENTRY', 'Category with this slug already exists');
     }
 
     // Calculate level based on parent
@@ -140,11 +141,14 @@ export class CategoriesService {
         where: { id: data.parentId },
       });
       if (!parent || parent.tenantId !== tenantId) {
-        throw new Error('Parent category not found');
+        throw new NotFoundError('PARENT_NOT_FOUND', 'Parent category not found');
       }
       level = parent.level + 1;
       if (level > 3) {
-        throw new Error('Maximum category depth (3 levels) exceeded');
+        throw new BadRequestError(
+          'MAX_DEPTH_EXCEEDED',
+          'Maximum category depth (3 levels) exceeded'
+        );
       }
     }
 
@@ -187,7 +191,7 @@ export class CategoriesService {
     });
 
     if (!existing) {
-      throw new Error('Category not found');
+      throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     // Check slug uniqueness if changed
@@ -200,7 +204,7 @@ export class CategoriesService {
         },
       });
       if (duplicate) {
-        throw new Error('Category with this slug already exists');
+        throw new ConflictError('DUPLICATE_ENTRY', 'Category with this slug already exists');
       }
     }
 
@@ -212,18 +216,21 @@ export class CategoriesService {
       } else {
         // Prevent circular reference
         if (data.parentId === categoryId) {
-          throw new Error('Category cannot be its own parent');
+          throw new BadRequestError('CIRCULAR_REFERENCE', 'Category cannot be its own parent');
         }
 
         const parent = await prisma.serviceCategory.findUnique({
           where: { id: data.parentId },
         });
         if (!parent || parent.tenantId !== tenantId) {
-          throw new Error('Parent category not found');
+          throw new NotFoundError('PARENT_NOT_FOUND', 'Parent category not found');
         }
         level = parent.level + 1;
         if (level > 3) {
-          throw new Error('Maximum category depth (3 levels) exceeded');
+          throw new BadRequestError(
+            'MAX_DEPTH_EXCEEDED',
+            'Maximum category depth (3 levels) exceeded'
+          );
         }
       }
     }
@@ -239,6 +246,7 @@ export class CategoriesService {
 
   /**
    * Delete a category (soft delete)
+   * Appends timestamp to slug to allow reusing the same name later
    */
   async deleteCategory(tenantId: string, categoryId: string): Promise<void> {
     const category = await prisma.serviceCategory.findFirst({
@@ -251,22 +259,31 @@ export class CategoriesService {
     });
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     // Check for subcategories
     if (category._count.subCategories > 0) {
-      throw new Error('Cannot delete category with subcategories');
+      throw new BadRequestError('HAS_SUBCATEGORIES', 'Cannot delete category with subcategories');
     }
 
     // Check for active services
     if (category._count.services > 0) {
-      throw new Error('Cannot delete category with services. Move or delete services first.');
+      throw new BadRequestError(
+        'HAS_SERVICES',
+        'Cannot delete category with services. Move or delete services first.'
+      );
     }
+
+    // Append timestamp to slug to free up the original slug for reuse
+    const deletedSlug = `${category.slug}_deleted_${Date.now()}`;
 
     await prisma.serviceCategory.update({
       where: { id: categoryId },
-      data: { deletedAt: new Date() },
+      data: {
+        slug: deletedSlug,
+        deletedAt: new Date(),
+      },
     });
   }
 
@@ -285,7 +302,7 @@ export class CategoriesService {
     });
 
     if (categories.length !== categoryIds.length) {
-      throw new Error('Some categories not found');
+      throw new NotFoundError('CATEGORIES_NOT_FOUND', 'Some categories not found');
     }
 
     // Update display orders in transaction

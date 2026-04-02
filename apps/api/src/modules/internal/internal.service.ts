@@ -16,6 +16,7 @@ import type {
   UpdateTenantBody,
   UpdateBranchBody,
   UpdateSuperOwnerBody,
+  UpdateLoyaltyConfigBody,
 } from './internal.schema';
 
 export class InternalService {
@@ -34,21 +35,37 @@ export class InternalService {
 
     const slug = this.generateSlug(data.name);
 
-    const tenant = await prisma.tenant.create({
-      data: {
-        name: data.name,
-        slug,
-        legalName: data.legalName,
-        email: data.email,
-        phone: data.phone,
-        logoUrl: data.logoUrl,
-        subscriptionPlan: data.subscriptionPlan,
-        subscriptionStatus: 'active',
-        trialEndsAt:
-          data.subscriptionPlan === 'trial'
-            ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1000)
-            : null,
-      },
+    // Create tenant and loyalty config in a transaction
+    const tenant = await prisma.$transaction(async (tx) => {
+      const newTenant = await tx.tenant.create({
+        data: {
+          name: data.name,
+          slug,
+          legalName: data.legalName,
+          email: data.email,
+          phone: data.phone,
+          logoUrl: data.logoUrl,
+          subscriptionPlan: data.subscriptionPlan,
+          subscriptionStatus: 'active',
+          trialEndsAt:
+            data.subscriptionPlan === 'trial'
+              ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1000)
+              : null,
+        },
+      });
+
+      // Create loyalty config for the tenant
+      await tx.loyaltyConfig.create({
+        data: {
+          tenantId: newTenant.id,
+          isEnabled: data.loyaltyEnabled ?? true,
+          pointsPerUnit: data.loyaltyPointsPerUnit ?? 0.01,
+          redemptionValuePerPoint: data.loyaltyRedemptionValue ?? 1,
+          expiryDays: data.loyaltyExpiryDays ?? 365,
+        },
+      });
+
+      return newTenant;
     });
 
     return tenant;
@@ -415,6 +432,65 @@ export class InternalService {
     });
 
     return updatedUser;
+  }
+
+  /**
+   * Get loyalty config for a tenant
+   */
+  async getLoyaltyConfig(tenantId: string) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
+    }
+
+    let config = await prisma.loyaltyConfig.findUnique({
+      where: { tenantId },
+    });
+
+    // Create default config if not exists
+    if (!config) {
+      config = await prisma.loyaltyConfig.create({
+        data: {
+          tenantId,
+          pointsPerUnit: 0.01,
+          redemptionValuePerPoint: 1,
+          expiryDays: 365,
+          isEnabled: true,
+        },
+      });
+    }
+
+    return config;
+  }
+
+  /**
+   * Update loyalty config for a tenant
+   */
+  async updateLoyaltyConfig(tenantId: string, data: UpdateLoyaltyConfigBody) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
+    }
+
+    const config = await prisma.loyaltyConfig.upsert({
+      where: { tenantId },
+      update: data,
+      create: {
+        tenantId,
+        isEnabled: data.isEnabled ?? true,
+        pointsPerUnit: data.pointsPerUnit ?? 0.01,
+        redemptionValuePerPoint: data.redemptionValuePerPoint ?? 1,
+        expiryDays: data.expiryDays ?? 365,
+      },
+    });
+
+    return config;
   }
 
   /**

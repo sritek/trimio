@@ -21,6 +21,7 @@ import {
   updateTenantBodySchema,
   updateBranchBodySchema,
   updateSuperOwnerBodySchema,
+  updateLoyaltyConfigBodySchema,
 } from './internal.schema';
 
 export default async function internalRoutes(fastify: FastifyInstance) {
@@ -215,6 +216,41 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         const { id } = request.params as { id: string };
         const user = await internalService.updateSuperOwner(id, request.body);
         return reply.send(successResponse(user));
+      }
+    );
+
+    // GET /internal/tenants/:tenantId/loyalty-config - Get loyalty config
+    protectedApp.get(
+      '/tenants/:tenantId/loyalty-config',
+      {
+        schema: {
+          description: 'Get loyalty configuration for a tenant',
+          tags: ['Internal Admin'],
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      async (request, reply) => {
+        const { tenantId } = request.params as { tenantId: string };
+        const config = await internalService.getLoyaltyConfig(tenantId);
+        return reply.send(successResponse(config));
+      }
+    );
+
+    // PATCH /internal/tenants/:tenantId/loyalty-config - Update loyalty config
+    protectedApp.patch(
+      '/tenants/:tenantId/loyalty-config',
+      {
+        schema: {
+          description: 'Update loyalty configuration for a tenant',
+          tags: ['Internal Admin'],
+          security: [{ bearerAuth: [] }],
+          body: updateLoyaltyConfigBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { tenantId } = request.params as { tenantId: string };
+        const config = await internalService.updateLoyaltyConfig(tenantId, request.body);
+        return reply.send(successResponse(config));
       }
     );
 

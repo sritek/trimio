@@ -15,17 +15,10 @@ interface AppointmentTableProps {
   data: Appointment[];
   meta?: PaginationMeta;
   isLoading: boolean;
-  canWrite: boolean;
   page: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onView: (id: string) => void;
-  onCheckIn: (id: string) => void;
-  onStart: (id: string) => void;
-  onComplete: (id: string) => void;
-  onCancel: (id: string) => void;
-  onNoShow: (id: string) => void;
-  onCheckout?: (id: string) => void;
   hasFilters: boolean;
   // Filter button
   onFilterClick?: () => void;
@@ -39,17 +32,10 @@ export function AppointmentTable({
   data,
   meta,
   isLoading,
-  canWrite,
   page,
   onPageChange,
   onPageSizeChange,
   onView,
-  onCheckIn,
-  onStart,
-  onComplete,
-  onCancel,
-  onNoShow,
-  onCheckout,
   hasFilters,
   onFilterClick,
   activeFilterCount = 0,
@@ -61,16 +47,9 @@ export function AppointmentTable({
   const columns = useMemo(
     () =>
       getAppointmentColumns({
-        canWrite,
         onView,
-        onCheckIn,
-        onStart,
-        onComplete,
-        onCancel,
-        onNoShow,
-        onCheckout,
       }),
-    [canWrite, onView, onCheckIn, onStart, onComplete, onCancel, onNoShow, onCheckout]
+    [onView]
   );
 
   const emptyState = (

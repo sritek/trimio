@@ -24,7 +24,7 @@ interface InvoiceTableProps {
   page: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  onView: (id: string) => void;
+  onQuickView: (id: string) => void;
   onCreateNew: () => void;
   hasFilters: boolean;
 }
@@ -41,12 +41,12 @@ export function InvoiceTable({
   page,
   onPageChange,
   onPageSizeChange,
-  onView,
+  onQuickView,
   onCreateNew,
   hasFilters,
 }: InvoiceTableProps) {
   const t = useTranslations('billing');
-  const columns = useMemo(() => getInvoiceColumns({ onView }), [onView]);
+  const columns = useMemo(() => getInvoiceColumns({ onQuickView }), [onQuickView]);
 
   const emptyState = (
     <EmptyState

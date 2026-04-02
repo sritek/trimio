@@ -157,7 +157,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
         },
@@ -347,7 +346,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
         },
@@ -356,28 +354,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       return servicesController.deleteService(request as any, reply);
-    }
-  );
-
-  // POST /services/:id/duplicate
-  app.post(
-    '/services/:id/duplicate',
-    {
-      schema: {
-        description: 'Duplicate a service',
-        tags: ['Services'],
-        security: [{ bearerAuth: [] }],
-        params: idParamSchema,
-        response: {
-          201: successResponseSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-      },
-      preHandler: [authenticate, requirePermission(PERMISSIONS.SERVICES_WRITE)],
-    },
-    async (request, reply) => {
-      return servicesController.duplicateService(request as any, reply);
     }
   );
 
@@ -465,7 +441,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         params: serviceVariantParamsSchema,
         response: {
-          200: messageResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
         },
@@ -673,7 +648,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
         },
@@ -788,7 +762,6 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         params: idParamSchema,
         response: {
-          200: messageResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
         },

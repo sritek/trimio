@@ -3,7 +3,17 @@
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Clock, CreditCard, Edit, Mail, MapPin, Phone, User, Wallet } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock,
+  CreditCard,
+  Edit,
+  Mail,
+  MapPin,
+  Phone,
+  User,
+  Wallet,
+} from 'lucide-react';
 
 import { PERMISSIONS } from '@salon-ops/shared';
 

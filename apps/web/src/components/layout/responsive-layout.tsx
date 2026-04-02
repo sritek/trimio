@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 
 import { useUIStore } from '@/stores/ui-store';
-import { BottomNav, FloatingActionButton } from '@/components/ux/mobile';
+import { BottomNav } from '@/components/ux/mobile';
 
 interface ResponsiveLayoutProps {
   children: React.ReactNode;
@@ -48,9 +48,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
 
       {/* Mobile Bottom Navigation - visible on screens < 768px */}
       <BottomNav className="md:hidden" />
-
-      {/* Floating Action Button - visible on screens < 768px */}
-      <FloatingActionButton className="md:hidden" />
     </>
   );
 }

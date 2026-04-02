@@ -453,19 +453,8 @@ export async function updateGeoConfig(
 // Attendance Lock Controllers
 // ============================================
 
-import { isMonthLocked } from './attendance-lock.service';
 import { payslipService } from './payslip.service';
 import { performanceService } from './performance.service';
-
-export async function getAttendanceLockStatus(
-  request: FastifyRequest<{ Querystring: { month: string; branchId?: string } }>,
-  reply: FastifyReply
-) {
-  const { tenantId } = request.user!;
-  const { month, branchId } = request.query;
-  const status = await isMonthLocked(tenantId, branchId || null, month);
-  return reply.send(successResponse(status));
-}
 
 // ============================================
 // Payslip Controllers
@@ -553,11 +542,7 @@ export async function listBreaks(
   reply: FastifyReply
 ) {
   const { tenantId } = request.user!;
-  const breaks = await breaksService.list(
-    tenantId,
-    request.params.userId,
-    request.query.branchId
-  );
+  const breaks = await breaksService.list(tenantId, request.params.userId, request.query.branchId);
   return reply.send(successResponse(breaks));
 }
 

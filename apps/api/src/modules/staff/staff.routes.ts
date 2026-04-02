@@ -28,7 +28,6 @@ import {
   generatePayrollSchema,
   listPayrollQuerySchema,
   updateGeoConfigSchema,
-  attendanceLockStatusQuerySchema,
   createBreakSchema,
   listBreaksQuerySchema,
 } from './staff.schema';
@@ -84,12 +83,6 @@ export async function staffRoutes(fastify: FastifyInstance) {
     '/attendance/daily',
     { schema: { tags: ['Attendance'], querystring: dailyAttendanceQuerySchema } },
     controller.getDailyAttendance
-  );
-
-  app.get(
-    '/attendance/lock-status',
-    { schema: { tags: ['Attendance'], querystring: attendanceLockStatusQuerySchema } },
-    controller.getAttendanceLockStatus
   );
 
   // ============================================

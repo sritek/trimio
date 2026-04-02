@@ -31,6 +31,7 @@ export const calendarStylistSchema = z.object({
   avatar: z.string().nullable(),
   color: z.string(),
   isAvailable: z.boolean(),
+  attendanceStatus: z.string(),
   workingHours: z
     .object({
       start: z.string(),

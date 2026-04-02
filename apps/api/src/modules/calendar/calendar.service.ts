@@ -223,13 +223,12 @@ export class CalendarService {
           tenantId,
           userId: { in: stylistIds },
           attendanceDate: startDate,
-          status: { in: ['absent', 'on_leave'] },
         },
         select: { userId: true, status: true },
       }),
     ]);
 
-    const absentStylistIds = new Set(attendanceRecords.map((a) => a.userId));
+    const attendanceMap = new Map(attendanceRecords.map((a) => [a.userId, a.status]));
 
     // Build stylists array with availability info, sorted alphabetically by name
     const stylists: CalendarStylist[] = userBranches
@@ -258,7 +257,8 @@ export class CalendarService {
         // Check if stylist has full day blocked for the requested date
         // Since we already filtered blockedSlots by date range, just check isFullDay
         const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
-        const isAbsentOrOnLeave = absentStylistIds.has(ub.user.id);
+        const attendanceStatus = attendanceMap.get(ub.user.id) ?? 'not_marked';
+        const isAbsentOrOnLeave = attendanceStatus === 'absent' || attendanceStatus === 'on_leave';
 
         return {
           id: ub.user.id,
@@ -266,6 +266,7 @@ export class CalendarService {
           avatar: ub.user.avatarUrl,
           color: STYLIST_COLORS[index % STYLIST_COLORS.length],
           isAvailable: !isFullDayBlocked && !isAbsentOrOnLeave,
+          attendanceStatus,
           workingHours: workingHours,
           breaks: stylistBreaks,
           blockedSlots: stylistBlocked,

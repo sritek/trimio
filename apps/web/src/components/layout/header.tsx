@@ -11,6 +11,7 @@ import { Menu } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/ui-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -19,6 +20,12 @@ interface HeaderProps {
 
 export function Header({ className }: HeaderProps) {
   const { setMobileNavOpen } = useUIStore();
+  const { user } = useAuthStore();
+
+  // Stylists have the "More" button in the bottom nav, so hide the header hamburger
+  if (user?.role === 'stylist') {
+    return null;
+  }
 
   return (
     <header

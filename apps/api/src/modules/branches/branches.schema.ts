@@ -12,8 +12,8 @@ export const branchQuerySchema = z.object({
 // Working hours schema for a single day
 const dayWorkingHoursSchema = z.object({
   isOpen: z.boolean(),
-  open: z.string().nullable().optional(),
-  close: z.string().nullable().optional(),
+  openTime: z.string().nullable().optional(),
+  closeTime: z.string().nullable().optional(),
 });
 
 // Update branch body schema

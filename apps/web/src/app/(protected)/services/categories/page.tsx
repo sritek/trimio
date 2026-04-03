@@ -15,6 +15,7 @@ import {
   useUpdateCategory,
 } from '@/hooks/queries/use-categories';
 import { useErrorHandler } from '@/hooks/use-error-handler';
+import { usePermissions, PERMISSIONS } from '@/hooks/use-permissions';
 
 import {
   ActionMenu,
@@ -61,6 +62,8 @@ type CategoryFormData = z.infer<typeof categorySchema>;
 export default function CategoriesPage() {
   const t = useTranslations('common');
   const { handleError } = useErrorHandler();
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission(PERMISSIONS.SERVICES_WRITE);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -163,10 +166,12 @@ export default function CategoriesPage() {
         description="Organize your services into categories"
         backHref="/services"
         actions={
-          <Button onClick={handleOpenCreate}>
-            <FolderPlus className="mr-2 h-4 w-4" />
-            Add Category
-          </Button>
+          canWrite ? (
+            <Button onClick={handleOpenCreate}>
+              <FolderPlus className="mr-2 h-4 w-4" />
+              Add Category
+            </Button>
+          ) : undefined
         }
       />
 
@@ -183,10 +188,12 @@ export default function CategoriesPage() {
             title="No categories"
             description="Create your first category to start organizing services."
             action={
-              <Button onClick={handleOpenCreate}>
-                <FolderPlus className="mr-2 h-4 w-4" />
-                Add Category
-              </Button>
+              canWrite ? (
+                <Button onClick={handleOpenCreate}>
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  Add Category
+                </Button>
+              ) : undefined
             }
           />
         ) : (
@@ -219,18 +226,22 @@ export default function CategoriesPage() {
 
                   <ActionMenu
                     items={[
-                      {
-                        label: 'Edit',
-                        icon: Pencil,
-                        onClick: () => handleOpenEdit(category),
-                      },
-                      {
-                        label: 'Delete',
-                        icon: Trash2,
-                        onClick: () => handleDelete(category.id),
-                        variant: 'destructive',
-                        separator: true,
-                      },
+                      ...(canWrite
+                        ? [
+                            {
+                              label: 'Edit',
+                              icon: Pencil,
+                              onClick: () => handleOpenEdit(category),
+                            },
+                            {
+                              label: 'Delete',
+                              icon: Trash2,
+                              onClick: () => handleDelete(category.id),
+                              variant: 'destructive' as const,
+                              separator: true,
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                 </div>

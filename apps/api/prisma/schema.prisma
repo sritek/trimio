@@ -298,6 +298,7 @@ model Customer {
   bookingStatus      String    @default("normal") @map("booking_status") @db.VarChar(20)
   firstVisitBranchId String?   @map("first_visit_branch_id")
   marketingConsent   Boolean   @default(true) @map("marketing_consent")
+  source             String    @default("manual") @map("source") @db.VarChar(30)
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   deletedAt          DateTime? @map("deleted_at")

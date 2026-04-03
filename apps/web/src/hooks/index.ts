@@ -15,7 +15,6 @@ export { useLongPress } from './use-long-press';
 
 // Real-time event hooks
 export { useAppointmentEvents } from './use-appointment-events';
-export { useWalkInEvents } from './use-walk-in-events';
 
 // Optimistic update hooks
 export {

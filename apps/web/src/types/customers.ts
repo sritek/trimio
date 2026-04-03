@@ -26,6 +26,7 @@ export interface Customer {
   bookingStatus: BookingStatus;
   firstVisitBranchId?: string | null;
   marketingConsent: boolean;
+  source: CustomerSource;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -48,6 +49,16 @@ export interface CustomerPreferences {
 }
 
 export type BookingStatus = 'normal' | 'prepaid_only' | 'blocked';
+
+export type CustomerSource = 'manual' | 'walk_in' | 'online_booking' | 'phone' | 'import';
+
+export const CUSTOMER_SOURCE_LABELS: Record<CustomerSource, string> = {
+  manual: 'Manual Entry',
+  walk_in: 'Walk-in',
+  online_booking: 'Online Booking',
+  phone: 'Phone Booking',
+  import: 'Imported',
+};
 
 export interface CreateCustomerInput {
   phone: string;

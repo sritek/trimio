@@ -7,7 +7,7 @@
 
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, List, Plus, UserPlus, ClipboardList, UserX } from 'lucide-react';
+import { Calendar, List, Plus, UserX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { PERMISSIONS } from '@salon-ops/shared';
@@ -18,7 +18,6 @@ import {
   useUnassignedCount,
 } from '@/hooks/queries/use-appointments';
 import { useResourceCalendar, useMoveAppointment } from '@/hooks/queries/use-resource-calendar';
-import { useWaitlistCount } from '@/hooks/queries/use-waitlist';
 import { useDebounce } from '@/hooks/use-debounce';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useBranchContext } from '@/hooks/use-branch-context';
@@ -187,9 +186,7 @@ export default function AppointmentsPage() {
 
   // Badge counts
   const { data: unassignedCountData } = useUnassignedCount(branchId || '');
-  const { data: waitlistCountData } = useWaitlistCount(branchId || '');
   const unassignedCount = unassignedCountData?.count || 0;
-  const waitlistCount = waitlistCountData?.count || 0;
 
   // Mutations
   const markNoShow = useMarkNoShow();
@@ -288,16 +285,6 @@ export default function AppointmentsPage() {
           actions={
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 mr-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => router.push('/walk-in')}
-                >
-                  <UserPlus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Walk-in</span>
-                </Button>
-
                 {unassignedCount > 0 && (
                   <Button
                     variant="ghost"
@@ -308,20 +295,6 @@ export default function AppointmentsPage() {
                     <UserX className="h-4 w-4" />
                     <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                       {unassignedCount}
-                    </Badge>
-                  </Button>
-                )}
-
-                {waitlistCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5"
-                    onClick={() => router.push('/waitlist')}
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                      {waitlistCount}
                     </Badge>
                   </Button>
                 )}

@@ -46,7 +46,6 @@ import { calendarRoutes } from './modules/calendar';
 import { realTimeRoutes } from './modules/real-time';
 import { searchRoutes } from './modules/search';
 import { branchRoutes } from './modules/branches';
-import { waitlistRoutes } from './modules/waitlist';
 import { tenantRoutes } from './modules/tenant';
 import { usersRoutes } from './modules/users';
 import { stationTypesRoutes } from './modules/station-types';
@@ -224,9 +223,6 @@ async function registerRoutes() {
 
   // Users routes
   fastify.register(usersRoutes, { prefix: '/api/v1/users' });
-
-  // Waitlist routes
-  fastify.register(waitlistRoutes, { prefix: '/api/v1/waitlist' });
 
   // Station Types routes
   fastify.register(stationTypesRoutes, { prefix: '/api/v1' });

@@ -9,7 +9,6 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
 import { AvailabilityService } from './availability.service';
-import { WalkInQueueService } from './walk-in-queue.service';
 import { StylistScheduleService } from './stylist-schedule.service';
 import { authenticate } from '../../middleware/auth.middleware';
 import { requirePermission, requireAnyPermission } from '../../middleware/permission.guard';
@@ -29,12 +28,9 @@ import {
   updateServicesSchema,
   cancelAppointmentSchema,
   rescheduleAppointmentSchema,
-  addToQueueSchema,
-  getQueueSchema,
   createStylistBreakSchema,
   createBlockedSlotSchema,
   getStylistScheduleSchema,
-  serveQueueBodySchema,
   listUnassignedQuerySchema,
   assignStylistSchema,
   assignStationSchema,
@@ -59,7 +55,6 @@ import {
 export async function appointmentsRoutes(fastify: FastifyInstance) {
   const appointmentsService = new AppointmentsService(prisma);
   const availabilityService = new AvailabilityService(prisma);
-  const walkInQueueService = new WalkInQueueService(prisma, appointmentsService);
   const stylistScheduleService = new StylistScheduleService(prisma);
   const controller = new AppointmentsController(appointmentsService, availabilityService);
 
@@ -678,35 +673,6 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
   );
 
   // =====================================================
-  // STATION DEASSIGNMENT (Floor View)
-  // =====================================================
-
-  app.patch(
-    '/:id/deassign-station',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Floor View'],
-        summary: 'Deassign station from appointment',
-        description: 'Deassign a station from an appointment. Appointment remains checked-in.',
-        params: idParamSchema,
-        response: {
-          200: successResponseSchema,
-          400: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId, sub: userId } = request.user!;
-      const { id } = request.params;
-      const result = await appointmentsService.deassignStation(tenantId, id, userId);
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  // =====================================================
   // ADD SERVICE MID-APPOINTMENT (Upsell)
   // =====================================================
 
@@ -762,168 +728,6 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       const { tenantId, sub: userId } = request.user!;
       const { id } = request.params;
       const result = await appointmentsService.updateStylists(tenantId, id, request.body, userId);
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  // =====================================================
-  // WALK-IN QUEUE
-  // =====================================================
-
-  app.post(
-    '/walk-in/queue',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Add customer to walk-in queue',
-        description: 'Add a walk-in customer to the queue with token number.',
-        body: addToQueueSchema,
-        response: {
-          201: successResponseSchema,
-          400: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId, sub: userId } = request.user!;
-      const result = await walkInQueueService.addToQueue(
-        tenantId,
-        request.body.branchId,
-        request.body,
-        userId
-      );
-      return reply.code(201).send({ success: true, data: result });
-    }
-  );
-
-  app.get(
-    '/walk-in/queue',
-    {
-      preHandler: [requirePermission('appointments:read')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Get walk-in queue',
-        description: 'Get current walk-in queue for a branch.',
-        querystring: getQueueSchema,
-        response: {
-          200: successResponseSchema,
-          401: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId } = request.user!;
-      const { branchId, date } = request.query;
-      const result = await walkInQueueService.getQueue(tenantId, branchId, date);
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  app.patch(
-    '/walk-in/queue/:id/call',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Call customer from queue',
-        description: 'Call the next customer from the walk-in queue.',
-        params: idParamSchema,
-        response: {
-          200: successResponseSchema,
-          400: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId, sub: userId } = request.user!;
-      const { id } = request.params;
-      const result = await walkInQueueService.callCustomer(tenantId, id, userId);
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  app.patch(
-    '/walk-in/queue/:id/serve',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Start serving customer from queue',
-        description: 'Assign stylist and start serving the customer.',
-        params: idParamSchema,
-        body: serveQueueBodySchema,
-        response: {
-          200: successResponseSchema,
-          400: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId, sub: userId } = request.user!;
-      const { id } = request.params;
-      const result = await walkInQueueService.startServing(
-        tenantId,
-        id,
-        request.body.stylistId,
-        userId
-      );
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  app.patch(
-    '/walk-in/queue/:id/complete',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Complete walk-in service',
-        description: 'Mark walk-in service as completed.',
-        params: idParamSchema,
-        response: {
-          200: successResponseSchema,
-          400: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId } = request.user!;
-      const { id } = request.params;
-      const result = await walkInQueueService.markComplete(tenantId, id);
-      return reply.send({ success: true, data: result });
-    }
-  );
-
-  app.patch(
-    '/walk-in/queue/:id/left',
-    {
-      preHandler: [requirePermission('appointments:write')],
-      schema: {
-        tags: ['Walk-in Queue'],
-        summary: 'Mark customer as left',
-        description: 'Mark walk-in customer as left without service.',
-        params: idParamSchema,
-        response: {
-          200: successResponseSchema,
-          400: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-        security: [{ bearerAuth: [] }],
-      },
-    },
-    async (request, reply) => {
-      const { tenantId } = request.user!;
-      const { id } = request.params;
-      const result = await walkInQueueService.markLeft(tenantId, id);
       return reply.send({ success: true, data: result });
     }
   );

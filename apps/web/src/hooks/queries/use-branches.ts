@@ -23,7 +23,7 @@ export interface Branch {
   gstin?: string;
   timezone: string;
   currency: string;
-  workingHours?: Record<string, { isOpen: boolean; open?: string | null; close?: string | null }>;
+  workingHours?: Record<string, { isOpen: boolean; openTime?: string | null; closeTime?: string | null }>;
   isActive: boolean;
 }
 
@@ -38,7 +38,7 @@ export interface UpdateBranchInput {
   gstin?: string | null;
   workingHours?: Record<
     string,
-    { isOpen: boolean; open?: string | null; close?: string | null }
+    { isOpen: boolean; openTime?: string | null; closeTime?: string | null }
   > | null;
 }
 

@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useOpenPanel } from '@/components/ux/slide-over';
 import { FloorViewTab } from './floor-view-tab';
-import { DeassignAppointmentDialog } from '@/components/ux/dialogs/deassign-appointment-dialog';
 import type { AttentionItem, CommandCenterData } from '@/types/dashboard';
 
 interface CollapsibleSectionProps {
@@ -107,9 +106,6 @@ export function OperationalDashboard({
 }: OperationalDashboardProps) {
   const { openStationAssignment, openAppointmentDetails } = useOpenPanel();
   const [activeTab, setActiveTab] = useState('timeline');
-  const [deassignDialogOpen, setDeassignDialogOpen] = useState(false);
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
-  const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
 
   // Floor view action handlers
   const handleAssign = useCallback(
@@ -118,17 +114,6 @@ export function OperationalDashboard({
     },
     [openStationAssignment]
   );
-
-  const handleDeassign = useCallback((appointmentId: string, customerName?: string) => {
-    setSelectedAppointmentId(appointmentId);
-    setSelectedCustomerName(customerName || null);
-    setDeassignDialogOpen(true);
-  }, []);
-
-  const handleDeassignSuccess = useCallback(() => {
-    setSelectedAppointmentId(null);
-    setSelectedCustomerName(null);
-  }, []);
 
   const handleCheckout = useCallback(
     (appointmentId: string) => {
@@ -196,18 +181,8 @@ export function OperationalDashboard({
         <FloorViewTab
           branchId={branchId}
           onAssign={handleAssign}
-          onDeassign={handleDeassign}
           onCheckout={handleCheckout}
         />
-        {selectedAppointmentId && (
-          <DeassignAppointmentDialog
-            open={deassignDialogOpen}
-            onOpenChange={setDeassignDialogOpen}
-            appointmentId={selectedAppointmentId}
-            customerName={selectedCustomerName || undefined}
-            onSuccess={handleDeassignSuccess}
-          />
-        )}
       </TabsContent>
     </Tabs>
   );

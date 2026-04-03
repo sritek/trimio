@@ -22,6 +22,7 @@ import { StylistColumnHeader } from './stylist-column-header';
 import { AppointmentBlock } from './appointment-block';
 import { DroppableSlot } from './droppable-slot';
 import { CurrentTimeIndicator } from './current-time-indicator';
+import { computeOverlapLayout } from './overlap-layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/common';
@@ -215,6 +216,12 @@ export function ResourceCalendar({
     return filtered;
   }, [data?.appointments, filters]);
 
+  // Pre-compute overlap layout for all appointments
+  const overlapLayout = useMemo(
+    () => computeOverlapLayout(filteredAppointments),
+    [filteredAppointments]
+  );
+
   // Scroll by one column width
   const scrollByColumn = useCallback(
     (direction: 'left' | 'right') => {
@@ -321,15 +328,25 @@ export function ResourceCalendar({
     }
   }, [data?.workingHours, timeSlotInterval, slotHeight]);
 
-  // Render appointment block
+  // Render appointment block with density based on overlap
   const renderAppointment = useCallback(
-    (appointment: CalendarAppointment, height: number) => {
+    (appointment: CalendarAppointment, height: number, totalColumns: number) => {
       const stylist = data?.stylists.find((s) => s.id === appointment.stylistId);
+
+      // Determine density based on how many columns share the space
+      let density: 'full' | 'compact' | 'chip' = 'full';
+      if (totalColumns >= 4) {
+        density = 'chip';
+      } else if (totalColumns >= 2) {
+        density = 'compact';
+      }
+
       return (
         <AppointmentBlock
           appointment={appointment}
           stylistColor={stylist?.color || '#6366f1'}
           height={height}
+          density={density}
           onClick={() => onAppointmentClick(appointment.id)}
         />
       );
@@ -682,7 +699,7 @@ export function ResourceCalendar({
                         })}
 
                         {/* Render appointments starting in this slot */}
-                        {appointmentsStartingInSlot.map((appointment, aptIndex) => {
+                        {appointmentsStartingInSlot.map((appointment) => {
                           const startMins =
                             parseInt(appointment.startTime.split(':')[0]) * 60 +
                             parseInt(appointment.startTime.split(':')[1]);
@@ -694,9 +711,14 @@ export function ResourceCalendar({
                           const offsetMins = startMins - slotMins;
                           const topOffset = (offsetMins / timeSlotInterval) * slotHeight;
 
-                          const numAppointments = appointmentsStartingInSlot.length;
-                          const widthPercent = 100 / numAppointments;
-                          const leftPercent = aptIndex * widthPercent;
+                          // Use pre-computed overlap layout
+                          const layout = overlapLayout.get(appointment.id);
+                          const totalColumns = layout?.totalColumns ?? 1;
+                          const column = layout?.column ?? 0;
+                          const span = layout?.span ?? 1;
+                          const colWidth = 100 / totalColumns;
+                          const leftPercent = column * colWidth;
+                          const widthPercent = span * colWidth;
 
                           return (
                             <div
@@ -709,7 +731,7 @@ export function ResourceCalendar({
                                 width: `calc(${widthPercent}% - 4px)`,
                               }}
                             >
-                              {renderAppointment(appointment, height)}
+                              {renderAppointment(appointment, height, totalColumns)}
                             </div>
                           );
                         })}

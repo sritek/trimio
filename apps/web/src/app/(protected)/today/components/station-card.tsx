@@ -5,7 +5,7 @@
  * Displays a single station with status, appointment info, and actions
  */
 
-import { Plus, Clock, User, Scissors, AlertTriangle, Wrench, X, AlertCircle } from 'lucide-react';
+import { Plus, Clock, User, Scissors, AlertTriangle, Wrench, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,6 @@ interface StationCardProps {
     scheduledDate?: string,
     scheduledTime?: string
   ) => void;
-  onDeassign: (appointmentId: string, customerName?: string) => void;
 }
 
 const statusConfig: Record<
@@ -48,7 +47,7 @@ const statusConfig: Record<
   },
 };
 
-export function StationCard({ station, onAssign, onCheckout, onDeassign }: StationCardProps) {
+export function StationCard({ station, onAssign, onCheckout }: StationCardProps) {
   const config = statusConfig[station.status];
   const appointment = station.appointment;
 
@@ -179,18 +178,6 @@ export function StationCard({ station, onAssign, onCheckout, onDeassign }: Stati
                   }
                 >
                   Checkout
-                </Button>
-              )}
-              {/* Only show Deassign for today's appointments, not pending ones */}
-              {!isPendingAppointment(appointment) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 text-destructive hover:text-destructive"
-                  onClick={() => onDeassign(appointment.id, appointment.customerName)}
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Deassign
                 </Button>
               )}
             </div>

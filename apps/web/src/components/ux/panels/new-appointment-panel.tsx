@@ -30,7 +30,6 @@ import {
   Plus,
   UserPlus,
   UserX,
-  ClipboardList,
   CheckCircle2,
 } from 'lucide-react';
 
@@ -64,8 +63,8 @@ import { useCreateAppointment, useStylistBusySlots } from '@/hooks/queries/use-a
 import { useCustomerSearch, useCustomerPhoneLookup } from '@/hooks/queries/use-customers';
 import { useServices } from '@/hooks/queries/use-services';
 import { useStaffList } from '@/hooks/queries/use-staff';
-import { useWaitlistCount, useWaitlistMatches } from '@/hooks/queries/use-waitlist';
 import { useBranchContext } from '@/hooks/use-branch-context';
+import { useBranch } from '@/hooks/queries/use-branches';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -132,12 +131,13 @@ export function NewAppointmentPanel({
   const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { branchId } = useBranchContext();
 
+  // Fetch branch working hours
+  const { data: branchData } = useBranch(branchId || '');
+
   // UI State
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [selectedWaitlistEntryId, setSelectedWaitlistEntryId] = useState<string | null>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
   // Fetch data
@@ -165,10 +165,6 @@ export function NewAppointmentPanel({
       tags: c.tags,
     }));
   }, [customerSearchData]);
-
-  // Waitlist queries
-  const { data: waitlistCountData } = useWaitlistCount(branchId || '');
-  const waitlistCount = waitlistCountData?.count || 0;
 
   const createMutation = useCreateAppointment();
 
@@ -207,6 +203,25 @@ export function NewAppointmentPanel({
   const watchedBookingType = watch('bookingType');
   const watchedAssignLater = watch('assignLater');
   const watchedCustomerPhone = watch('customerPhone');
+
+  // Extract working hours for the selected date from branch data
+  const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+  const branchWorkingHours = useMemo(() => {
+    if (!branchData?.workingHours || !watchedDate) return { startHour: 9, endHour: 21 };
+    const [year, month, day] = watchedDate.split('-').map(Number);
+    const dayIndex = new Date(year, month - 1, day).getDay();
+    const dayName = DAY_NAMES[dayIndex];
+    const dayHours = branchData.workingHours[dayName] as
+      | { isOpen?: boolean; openTime?: string | null; closeTime?: string | null; open?: string | null; close?: string | null }
+      | undefined;
+    if (!dayHours || !dayHours.isOpen) return { startHour: 9, endHour: 21 };
+    const openStr = dayHours.openTime || dayHours.open || '09:00';
+    const closeStr = dayHours.closeTime || dayHours.close || '21:00';
+    return {
+      startHour: parseInt(openStr.split(':')[0], 10),
+      endHour: parseInt(closeStr.split(':')[0], 10),
+    };
+  }, [branchData?.workingHours, watchedDate]);
 
   // Debounce phone number to avoid excessive API calls while typing
   const debouncedPhone = useDebounce(watchedCustomerPhone || '', 600);
@@ -307,7 +322,6 @@ export function NewAppointmentPanel({
           customerNotes: data.notes || undefined,
           bookingType: data.bookingType,
           assignLater: data.assignLater,
-          waitlistEntryId: selectedWaitlistEntryId || undefined,
         });
 
         // Toast is handled by the mutation hook
@@ -319,7 +333,7 @@ export function NewAppointmentPanel({
         // Error toast is handled by the mutation hook
       }
     },
-    [branchId, createMutation, closePanel, onSuccess, selectedWaitlistEntryId]
+    [branchId, createMutation, closePanel, onSuccess]
   );
 
   const services = servicesData?.data || [];
@@ -331,61 +345,6 @@ export function NewAppointmentPanel({
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full relative">
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
-          {/* Waitlist Indicator Banner */}
-          {waitlistCount > 0 && (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    {waitlistCount} customer{waitlistCount !== 1 ? 's' : ''} waiting
-                  </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Fill this slot from the waitlist
-                  </p>
-                </div>
-              </div>
-              <Popover open={waitlistOpen} onOpenChange={setWaitlistOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="bg-white dark:bg-background">
-                    Fill from Waitlist
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="end">
-                  <WaitlistPopover
-                    branchId={branchId || ''}
-                    date={watchedDate}
-                    time={watchedTime}
-                    onSelect={(entry) => {
-                      // Track the waitlist entry ID for conversion
-                      setSelectedWaitlistEntryId(entry.id);
-                      // Pre-fill form with waitlist entry data
-                      if (entry.customerId) {
-                        setSelectedCustomer({
-                          id: entry.customerId,
-                          name: entry.customerName,
-                          phone: entry.customerPhone || '',
-                        });
-                        setValue('customerId', entry.customerId);
-                      } else {
-                        setIsNewCustomer(true);
-                      }
-                      setValue('customerName', entry.customerName);
-                      setValue('customerPhone', entry.customerPhone || '');
-                      setSelectedServices(entry.serviceIds);
-                      setValue('serviceIds', entry.serviceIds);
-                      if (entry.preferredStylistId) {
-                        setValue('stylistId', entry.preferredStylistId);
-                      }
-                      setWaitlistOpen(false);
-                    }}
-                    onClose={() => setWaitlistOpen(false)}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
-
           {/* Customer Section */}
           <div className="space-y-3">
             <Label className="text-sm font-medium flex items-center gap-2">
@@ -624,6 +583,8 @@ export function NewAppointmentPanel({
                   value={watchedTime || ''}
                   onChange={(time) => setValue('time', time)}
                   placeholder="Select time"
+                  startHour={branchWorkingHours.startHour}
+                  endHour={branchWorkingHours.endHour}
                   hasError={!!errors.time}
                   busySlots={busySlotsData?.busySlots}
                   isLoadingBusySlots={busySlotsLoading}
@@ -696,115 +657,5 @@ export function NewAppointmentPanel({
         </Button>
       </div>
     </form>
-  );
-}
-
-// ============================================
-// Waitlist Popover Component
-// ============================================
-
-interface WaitlistEntry {
-  id: string;
-  customerId?: string;
-  customerName: string;
-  customerPhone?: string;
-  serviceIds: string[];
-  preferredStylistId?: string;
-  preferredStartDate: string;
-  preferredEndDate: string;
-  timePreferences: string[];
-  matchScore?: number;
-  matchReasons?: string[];
-}
-
-interface WaitlistPopoverProps {
-  branchId: string;
-  date: string;
-  time: string;
-  onSelect: (entry: WaitlistEntry) => void;
-  onClose: () => void;
-}
-
-function WaitlistPopover({ branchId, date, time, onSelect, onClose }: WaitlistPopoverProps) {
-  // Calculate duration (default 60 minutes for now)
-  const durationMinutes = 60;
-
-  const { data: matches, isLoading } = useWaitlistMatches(
-    { branchId, date, time, durationMinutes },
-    !!date && !!time
-  );
-
-  if (isLoading) {
-    return (
-      <div className="p-4 space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-      </div>
-    );
-  }
-
-  if (!matches || matches.length === 0) {
-    return (
-      <div className="p-4 text-center">
-        <ClipboardList className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-        <p className="text-sm font-medium">No matching entries</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {date && time
-            ? 'No waitlist entries match this time slot'
-            : 'Select a date and time to see matches'}
-        </p>
-        <Button variant="ghost" size="sm" className="mt-3" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-h-80 overflow-y-auto">
-      <div className="p-2 border-b">
-        <p className="text-xs text-muted-foreground">
-          {matches.length} matching entr{matches.length !== 1 ? 'ies' : 'y'}
-        </p>
-      </div>
-      <div className="p-2 space-y-2">
-        {matches.map((entry) => (
-          <button
-            key={entry.id}
-            onClick={() => onSelect(entry)}
-            className="w-full p-3 rounded-lg border hover:bg-muted/50 text-left transition-colors"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-medium text-sm">{entry.customerName}</p>
-                {entry.customerPhone && (
-                  <p className="text-xs text-muted-foreground">{entry.customerPhone}</p>
-                )}
-              </div>
-              {entry.matchScore !== undefined && (
-                <Badge
-                  variant={entry.matchScore >= 70 ? 'default' : 'secondary'}
-                  className="text-xs"
-                >
-                  {entry.matchScore}% match
-                </Badge>
-              )}
-            </div>
-            {entry.matchReasons && entry.matchReasons.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {entry.matchReasons.slice(0, 2).map((reason, i) => (
-                  <span
-                    key={i}
-                    className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded"
-                  >
-                    {reason}
-                  </span>
-                ))}
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }

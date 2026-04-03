@@ -24,10 +24,9 @@ interface FloorViewTabProps {
     scheduledDate?: string,
     scheduledTime?: string
   ) => void;
-  onDeassign: (appointmentId: string, customerName?: string) => void;
 }
 
-export function FloorViewTab({ branchId, onAssign, onDeassign, onCheckout }: FloorViewTabProps) {
+export function FloorViewTab({ branchId, onAssign, onCheckout }: FloorViewTabProps) {
   const { data, isLoading, refetch, isRefetching } = useFloorView(branchId, {
     refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
@@ -68,7 +67,6 @@ export function FloorViewTab({ branchId, onAssign, onDeassign, onCheckout }: Flo
             key={station.id}
             station={station}
             onAssign={onAssign}
-            onDeassign={onDeassign}
             onCheckout={onCheckout}
           />
         ))}

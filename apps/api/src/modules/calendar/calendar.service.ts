@@ -57,8 +57,11 @@ function getEndOfWeekUTC(dateStr: string): Date {
 // Day-specific working hours structure from branch settings
 interface DayWorkingHours {
   isOpen: boolean;
-  openTime: string;
-  closeTime: string;
+  // Support both field naming conventions
+  openTime?: string;
+  closeTime?: string;
+  open?: string;
+  close?: string;
 }
 
 interface BranchWorkingHours {
@@ -104,8 +107,8 @@ function extractSimpleWorkingHours(
   }
 
   return {
-    start: dayHours.openTime || DEFAULT_HOURS.start,
-    end: dayHours.closeTime || DEFAULT_HOURS.end,
+    start: dayHours.openTime || dayHours.open || DEFAULT_HOURS.start,
+    end: dayHours.closeTime || dayHours.close || DEFAULT_HOURS.end,
   };
 }
 import type {

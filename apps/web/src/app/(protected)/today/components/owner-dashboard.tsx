@@ -7,7 +7,7 @@
  * Includes Floor View tab for station management
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -29,7 +29,6 @@ import { useOwnerDashboard } from '@/hooks/queries/use-owner-dashboard';
 import { useDailyAttendance } from '@/hooks/queries/use-staff';
 import { format } from 'date-fns';
 import { useOpenPanel } from '@/components/ux/slide-over';
-import { DeassignAppointmentDialog } from '@/components/ux/dialogs/deassign-appointment-dialog';
 import { FloorViewTab } from './floor-view-tab';
 import { useUIStore } from '@/stores/ui-store';
 import { isInventoryEnabled } from '@/config/features';
@@ -80,9 +79,6 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
   const staffSummary = attendanceData?.summary;
   const { ownerDashboardView } = useUIStore();
   const { openStationAssignment, openAppointmentDetails } = useOpenPanel();
-  const [deassignDialogOpen, setDeassignDialogOpen] = useState(false);
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
-  const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
 
   // Floor view action handlers
   const handleAssign = useCallback(
@@ -91,17 +87,6 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
     },
     [openStationAssignment]
   );
-
-  const handleDeassign = useCallback((appointmentId: string, customerName?: string) => {
-    setSelectedAppointmentId(appointmentId);
-    setSelectedCustomerName(customerName || null);
-    setDeassignDialogOpen(true);
-  }, []);
-
-  const handleDeassignSuccess = useCallback(() => {
-    setSelectedAppointmentId(null);
-    setSelectedCustomerName(null);
-  }, []);
 
   const handleCheckout = useCallback(
     (appointmentId: string) => {
@@ -118,23 +103,11 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
 
   if (ownerDashboardView === 'floor') {
     return (
-      <>
-        <FloorViewTab
-          branchId={branchId}
-          onAssign={handleAssign}
-          onDeassign={handleDeassign}
-          onCheckout={handleCheckout}
-        />
-        {selectedAppointmentId && (
-          <DeassignAppointmentDialog
-            open={deassignDialogOpen}
-            onOpenChange={setDeassignDialogOpen}
-            appointmentId={selectedAppointmentId}
-            customerName={selectedCustomerName || undefined}
-            onSuccess={handleDeassignSuccess}
-          />
-        )}
-      </>
+      <FloorViewTab
+        branchId={branchId}
+        onAssign={handleAssign}
+        onCheckout={handleCheckout}
+      />
     );
   }
 

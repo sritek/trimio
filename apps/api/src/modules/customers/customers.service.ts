@@ -268,6 +268,7 @@ export class CustomersService {
           allergies: data.allergies,
           tags: ['New'],
           firstVisitBranchId: branchId,
+          source: data.source || 'manual',
         },
       }),
       // Audit log will be created after we have the customer ID

@@ -47,6 +47,7 @@ import {
 } from './components';
 
 import type { BookingStatus, AdjustLoyaltyInput, AdjustWalletInput } from '@/types/customers';
+import { CUSTOMER_SOURCE_LABELS } from '@/types/customers';
 
 // ============================================
 // Constants
@@ -207,9 +208,12 @@ export default function CustomerDetailPage() {
         <PageHeader
           title={customer.name}
           description={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant={getStatusBadgeVariant(customer.bookingStatus)}>
                 {customer.bookingStatus.charAt(0).toUpperCase() + customer.bookingStatus.slice(1)}
+              </Badge>
+              <Badge variant="outline" className="text-muted-foreground">
+                {CUSTOMER_SOURCE_LABELS[customer.source as keyof typeof CUSTOMER_SOURCE_LABELS] || 'Manual Entry'}
               </Badge>
               {customer.allergies && customer.allergies.length > 0 && (
                 <Badge variant="destructive" className="gap-1">

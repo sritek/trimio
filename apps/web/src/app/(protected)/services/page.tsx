@@ -100,9 +100,11 @@ export default function ServicesPage() {
           description={t('list.description')}
           actions={
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
-                <Link href="/services/categories">{tNav('categories')}</Link>
-              </Button>
+              {canWrite && (
+                <Button variant="outline" asChild>
+                  <Link href="/services/categories">{tNav('categories')}</Link>
+                </Button>
+              )}
               {canWrite && (
                 <Button asChild>
                   <Link href="/services/new">

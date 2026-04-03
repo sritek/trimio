@@ -275,30 +275,6 @@ export function useAssignStation(branchId?: string) {
 }
 
 /**
- * Deassign appointment from station
- */
-export function useDeassignStation(branchId?: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (appointmentId: string) =>
-      api.patch(`/appointments/${appointmentId}/deassign-station`),
-    onSuccess: (_, appointmentId) => {
-      // Invalidate appointment queries
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId as string) });
-      // Invalidate calendar queries to update the calendar view
-      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
-      // Always invalidate all floor view queries to ensure sync
-      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
-      if (branchId) {
-        queryClient.invalidateQueries({ queryKey: floorViewKeys.branch(branchId) });
-      }
-    },
-  });
-}
-
-/**
  * Add service to appointment (upsell)
  */
 export function useAddAppointmentService(branchId?: string) {

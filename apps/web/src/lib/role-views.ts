@@ -106,7 +106,6 @@ export const ROLE_CONFIGS: Record<UserRole, RoleViewConfig> = {
         href: '/appointments/new',
       },
       { id: 'new-customer', label: 'New Customer', icon: UserPlus, href: '/customers/new' },
-      { id: 'walk-in', label: 'Add Walk-in', icon: UserPlus, action: 'walk-in' },
       { id: 'view-reports', label: 'View Reports', icon: FileText, href: '/reports' },
     ],
   },
@@ -119,7 +118,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleViewConfig> = {
       { id: 'attention-items', size: 'small' },
       { id: 'live-timeline', size: 'large' },
     ],
-    sidebarItems: ['dashboard', 'appointments', 'customers', 'billing', 'walk-in'],
+    sidebarItems: ['dashboard', 'appointments', 'customers', 'billing'],
     quickActions: [
       {
         id: 'new-appointment',
@@ -127,7 +126,6 @@ export const ROLE_CONFIGS: Record<UserRole, RoleViewConfig> = {
         icon: CalendarPlus,
         href: '/appointments/new',
       },
-      { id: 'walk-in', label: 'Add Walk-in', icon: UserPlus, action: 'walk-in' },
       { id: 'quick-checkout', label: 'Quick Checkout', icon: CreditCard, action: 'checkout' },
       { id: 'check-in', label: 'Check In', icon: UserCheck, action: 'check-in' },
     ],

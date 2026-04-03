@@ -21,6 +21,8 @@ interface AppointmentBlockProps {
   height: number;
   isDragging?: boolean;
   onClick?: () => void;
+  /** Display density: full (default), compact (narrow), or chip (very narrow) */
+  density?: 'full' | 'compact' | 'chip';
 }
 
 // Beautiful status color mapping with solid backgrounds
@@ -175,6 +177,7 @@ export function AppointmentBlock({
   height,
   isDragging = false,
   onClick,
+  density = 'full',
 }: AppointmentBlockProps) {
   // Check if this is an optimistic (pending) appointment
   const isOptimistic = appointment.isOptimistic === true;
@@ -211,10 +214,18 @@ export function AppointmentBlock({
     !isOptimistic && appointment.hasConflict && appointment.conflictInfo
       ? CONFLICT_STYLES[appointment.conflictInfo.severity]
       : null;
-  const isCompact = height < 40;
-  // const showServices = height >= 50;
-  const showServices = true;
+  const isCompact = density === 'compact' || height < 40;
+  const isChip = density === 'chip';
+  const showServices = density === 'full' && height >= 40;
   const services = appointment.services || [];
+
+  // Get customer initials for chip mode
+  const customerInitials = (appointment.customerName || 'U')
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   // Handle click on the appointment body (not drag handle)
   const handleClick = useCallback(
@@ -259,48 +270,78 @@ export function AppointmentBlock({
           'border-2 border-dashed border-orange-400 dark:border-orange-500'
       )}
     >
-      {/* Drag Handle - only for movable appointments */}
-      {canMove && <DragHandle listeners={listeners} attributes={attributes} disabled={!canMove} />}
+      {/* Drag Handle - only for movable appointments (hidden in chip mode) */}
+      {canMove && density !== 'chip' && (
+        <DragHandle listeners={listeners} attributes={attributes} disabled={!canMove} />
+      )}
 
       {/* Left accent bar using stylist color */}
       <div
-        className={cn('absolute top-0 bottom-0 w-1 rounded-l-lg', canMove ? 'left-5' : 'left-0')}
+        className={cn(
+          'absolute top-0 bottom-0 rounded-l-lg',
+          isChip ? 'w-1 left-0' : 'w-1',
+          !isChip && (canMove ? 'left-5' : 'left-0')
+        )}
         style={{ backgroundColor: stylistColor }}
       />
 
-      {/* Content - shifted right to make room for drag handle */}
-      <div className={cn('pr-2 py-1 h-full flex flex-col', canMove ? 'pl-7' : 'pl-2.5')}>
-        {/* Customer Name */}
-        <div
-          className={cn(
-            'font-semibold truncate leading-tight',
-            statusStyle.text,
-            isCompact ? 'text-xs' : 'text-sm'
+      {/* Content — adapts to density */}
+      {isChip ? (
+        /* Chip mode: initials + status dot, minimal footprint */
+        <div className="px-1 py-0.5 h-full flex items-center gap-1 pl-2">
+          <span
+            className={cn('text-[10px] font-bold leading-none truncate', statusStyle.text)}
+          >
+            {customerInitials}
+          </span>
+          {height >= 30 && (
+            <span className={cn('text-[9px] truncate opacity-70 leading-none', statusStyle.text)}>
+              {appointment.startTime}
+            </span>
           )}
-        >
-          {appointment.customerName || 'Unknown Customer'}
         </div>
-
-        {/* Services */}
-        {showServices && services.length > 0 && (
-          <div className={cn('text-xs truncate opacity-75', statusStyle.text)}>
-            {services.join(', ')}
+      ) : (
+        /* Full / Compact mode */
+        <div className={cn('pr-2 py-1 h-full flex flex-col', canMove ? 'pl-7' : 'pl-2.5')}>
+          {/* Customer Name */}
+          <div
+            className={cn(
+              'font-semibold truncate leading-tight',
+              statusStyle.text,
+              isCompact ? 'text-[11px]' : 'text-sm'
+            )}
+          >
+            {appointment.customerName || 'Unknown Customer'}
           </div>
-        )}
 
-        {/* Time (only if enough space) */}
-        {height >= 60 && (
-          <div className={cn('text-xs mt-auto opacity-60', statusStyle.text)}>
-            {appointment.startTime} - {appointment.endTime}
-          </div>
-        )}
-      </div>
+          {/* Services — only in full mode with enough height */}
+          {showServices && services.length > 0 && (
+            <div className={cn('text-xs truncate opacity-75', statusStyle.text)}>
+              {services.join(', ')}
+            </div>
+          )}
+
+          {/* Time — shown in compact as single line, in full when tall enough */}
+          {isCompact && height >= 30 ? (
+            <div className={cn('text-[10px] opacity-60 truncate', statusStyle.text)}>
+              {appointment.startTime} - {appointment.endTime}
+            </div>
+          ) : (
+            !isCompact &&
+            height >= 60 && (
+              <div className={cn('text-xs mt-auto opacity-60', statusStyle.text)}>
+                {appointment.startTime} - {appointment.endTime}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* Status indicator dot */}
       <div className={cn('absolute top-1.5 right-1.5 w-2 h-2 rounded-full', statusStyle.accent)} />
 
-      {/* Booking type indicator */}
-      {appointment.bookingType === 'walk_in' && (
+      {/* Booking type indicator — hide in chip mode */}
+      {!isChip && appointment.bookingType === 'walk_in' && (
         <span className="absolute bottom-1 right-1 text-[10px] font-medium bg-amber-500 text-white px-1 rounded">
           W
         </span>
@@ -310,18 +351,21 @@ export function AppointmentBlock({
       {appointment.hasConflict && appointment.conflictInfo && (
         <span
           className={cn(
-            'absolute top-1 right-4 text-xs text-white px-1 rounded font-bold',
+            'absolute top-1 text-white px-1 rounded font-bold',
+            isChip ? 'right-1 text-[9px]' : 'right-4 text-xs',
             conflictStyle?.badge || 'bg-red-500'
           )}
         >
-          {appointment.conflictInfo.conflictingAppointmentIds.length > 1
-            ? `${appointment.conflictInfo.conflictingAppointmentIds.length}!`
-            : '!'}
+          {isChip
+            ? '!'
+            : appointment.conflictInfo.conflictingAppointmentIds.length > 1
+              ? `${appointment.conflictInfo.conflictingAppointmentIds.length}!`
+              : '!'}
         </span>
       )}
 
-      {/* Unassigned indicator */}
-      {!isOptimistic && !appointment.stylistId && (
+      {/* Unassigned indicator — hide in chip mode */}
+      {!isChip && !isOptimistic && !appointment.stylistId && (
         <span className="absolute top-1 right-4 text-[10px] font-medium bg-orange-500 text-white px-1 rounded">
           Unassigned
         </span>

@@ -46,6 +46,9 @@ export const createCustomerBodySchema = z.object({
   marketingConsent: z.boolean().default(true),
   preferences: z.record(z.unknown()).default({}),
   allergies: z.array(z.string()).default([]),
+  source: z
+    .enum(['manual', 'walk_in', 'online_booking', 'phone', 'import'])
+    .default('manual'),
 });
 
 export const updateCustomerBodySchema = z.object({

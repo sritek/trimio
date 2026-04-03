@@ -59,8 +59,6 @@ const ROLE_NAV_ITEMS: Record<UserRole, NavItem[]> = {
   ],
   stylist: [
     { id: 'home', label: 'Today', icon: Command, href: '/today' },
-    { id: 'calendar', label: 'Calendar', icon: Calendar, href: '/appointments' },
-    { id: 'customers', label: 'Customers', icon: Users, href: '/customers' },
   ],
   accountant: [
     { id: 'home', label: 'Today', icon: Command, href: '/today' },

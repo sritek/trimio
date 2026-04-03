@@ -60,7 +60,7 @@ interface BranchEditPanelProps {
 // Convert API working hours format to editor format
 function toEditorFormat(
   apiHours:
-    | Record<string, { isOpen: boolean; open?: string | null; close?: string | null }>
+    | Record<string, { isOpen: boolean; open?: string | null; close?: string | null; openTime?: string | null; closeTime?: string | null }>
     | undefined
 ): WeeklyWorkingHours {
   if (!apiHours) return DEFAULT_WORKING_HOURS;
@@ -81,8 +81,8 @@ function toEditorFormat(
     if (dayData) {
       result[day] = {
         isOpen: dayData.isOpen ?? true,
-        openTime: dayData.open || '09:00',
-        closeTime: dayData.close || '21:00',
+        openTime: dayData.openTime || dayData.open || '09:00',
+        closeTime: dayData.closeTime || dayData.close || '21:00',
       };
     }
   }
@@ -93,8 +93,8 @@ function toEditorFormat(
 // Convert editor format to API format
 function toApiFormat(
   editorHours: WeeklyWorkingHours
-): Record<string, { isOpen: boolean; open: string | null; close: string | null }> {
-  const result: Record<string, { isOpen: boolean; open: string | null; close: string | null }> = {};
+): Record<string, { isOpen: boolean; openTime: string | null; closeTime: string | null }> {
+  const result: Record<string, { isOpen: boolean; openTime: string | null; closeTime: string | null }> = {};
   const days = [
     'monday',
     'tuesday',
@@ -109,8 +109,8 @@ function toApiFormat(
     const dayData = editorHours[day];
     result[day] = {
       isOpen: dayData.isOpen,
-      open: dayData.isOpen ? dayData.openTime : null,
-      close: dayData.isOpen ? dayData.closeTime : null,
+      openTime: dayData.isOpen ? dayData.openTime : null,
+      closeTime: dayData.isOpen ? dayData.closeTime : null,
     };
   }
 

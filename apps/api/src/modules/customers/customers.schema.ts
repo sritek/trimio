@@ -48,6 +48,7 @@ export const createCustomerBodySchema = z.object({
   allergies: z.array(z.string()).default([]),
   source: z
     .enum(['manual', 'walk_in', 'online_booking', 'phone', 'import'])
+    .optional()
     .default('manual'),
 });
 
@@ -162,7 +163,7 @@ export const walletQuerySchema = z.object({
 // Type Exports
 // ============================================
 
-export type CreateCustomerBody = z.infer<typeof createCustomerBodySchema>;
+export type CreateCustomerBody = z.input<typeof createCustomerBodySchema>;
 export type UpdateCustomerBody = z.infer<typeof updateCustomerBodySchema>;
 export type UpdateCustomerPhoneBody = z.infer<typeof updateCustomerPhoneBodySchema>;
 export type CustomerQuery = z.infer<typeof customerQuerySchema>;

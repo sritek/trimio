@@ -13,11 +13,20 @@ export class StationTypesService {
   /**
    * Get all station types for a tenant
    */
-  async getStationTypes(tenantId: string): Promise<StationType[]> {
+  async getStationTypes(tenantId: string, branchId?: string): Promise<StationType[]> {
     return prisma.stationType.findMany({
       where: { tenantId },
+      include: {
+        _count: {
+          select: {
+            stations: branchId
+              ? { where: { branchId, deletedAt: null } }
+              : { where: { deletedAt: null } },
+          },
+        },
+      },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-    });
+    }) as unknown as StationType[];
   }
 
   /**

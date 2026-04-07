@@ -90,8 +90,8 @@ export function BulkCreatePanel({ branchId, open, onClose }: BulkCreatePanelProp
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader>
+      <SheetContent className="sm:max-w-md p-6">
+        <SheetHeader className="mb-4">
           <SheetTitle>Bulk Create Stations</SheetTitle>
           <SheetDescription>
             Quickly create multiple stations by type. Names will be auto-generated.
@@ -99,7 +99,7 @@ export function BulkCreatePanel({ branchId, open, onClose }: BulkCreatePanelProp
         </SheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {fields.map((field, index) => (
               <div key={field.id} className="flex items-end gap-2">
                 <FormField

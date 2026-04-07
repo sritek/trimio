@@ -293,6 +293,7 @@ export const listInvoicesQuerySchema = z.object({
   status: z.enum(['draft', 'finalized', 'cancelled', 'refunded']).optional(),
   paymentStatus: z.enum(['pending', 'partial', 'paid', 'refunded']).optional(),
   customerId: z.string().uuid().optional(),
+  stylistId: z.string().uuid().optional(),
   dateFrom: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

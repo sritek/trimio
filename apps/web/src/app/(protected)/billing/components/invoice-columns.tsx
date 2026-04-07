@@ -99,9 +99,19 @@ export function getInvoiceColumns({ onQuickView }: GetColumnsOptions): ColumnDef
       ),
     },
     {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      id: 'commission',
+      header: () => <div className="text-right">Commission</div>,
+      cell: ({ row }) => {
+        const total = (row.original.items || []).reduce(
+          (sum, item) => sum + (item.commissionAmount || 0),
+          0
+        );
+        return (
+          <div className="text-right text-sm">
+            {total > 0 ? formatCurrency(total) : <span className="text-muted-foreground">-</span>}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'paymentStatus',

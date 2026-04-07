@@ -755,9 +755,17 @@ export const dashboardService = {
 
     // Calculate percentage changes
     const percentChangeVsYesterday =
-      yesterdayRevenue > 0 ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0;
+      yesterdayRevenue > 0
+        ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100
+        : todayRevenue > 0
+          ? 100
+          : 0;
     const percentChangeVsLastWeek =
-      lastWeekRevenue > 0 ? ((todayRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0;
+      lastWeekRevenue > 0
+        ? ((todayRevenue - lastWeekRevenue) / lastWeekRevenue) * 100
+        : todayRevenue > 0
+          ? 100
+          : 0;
 
     // Calculate appointment stats
     const appointmentStats = {

@@ -36,11 +36,6 @@ export function getStationTypeColumns({
       ),
     },
     {
-      accessorKey: 'displayOrder',
-      header: 'Order',
-      cell: ({ row }) => row.original.displayOrder,
-    },
-    {
       accessorKey: '_count.stations',
       header: 'Stations',
       cell: ({ row }) => row.original._count?.stations ?? 0,

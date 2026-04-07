@@ -53,10 +53,13 @@ export const floorViewKeys = {
 /**
  * Get all station types for tenant
  */
-export function useStationTypes() {
+export function useStationTypes(branchId?: string) {
   return useQuery({
-    queryKey: stationTypeKeys.list(),
-    queryFn: () => api.get<StationType[]>('/station-types'),
+    queryKey: [...stationTypeKeys.list(), branchId] as const,
+    queryFn: () => {
+      const params = branchId ? `?branchId=${branchId}` : '';
+      return api.get<StationType[]>(`/station-types${params}`);
+    },
   });
 }
 

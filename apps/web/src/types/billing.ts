@@ -239,6 +239,7 @@ export interface ListInvoicesQuery {
   status?: InvoiceStatus;
   paymentStatus?: PaymentStatus;
   customerId?: string;
+  stylistId?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;

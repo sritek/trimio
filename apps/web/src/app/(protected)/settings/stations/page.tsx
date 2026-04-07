@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { DataTable, EmptyState, ConfirmDialog } from '@/components/common';
 import { useStationTypes, useDeleteStationType } from '@/hooks/queries/use-stations';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import { getStationTypeColumns } from './components/station-type-columns';
 import { StationTypeFormPanel } from './components/station-type-form-panel';
 import { BranchStations } from './components/branch-stations';
@@ -26,8 +27,9 @@ export default function StationsPage() {
   const canManageStations = ['super_owner', 'regional_manager', 'branch_manager'].includes(
     role || ''
   );
+  const { branchId } = useBranchContext();
 
-  const { data: stationTypes, isLoading } = useStationTypes();
+  const { data: stationTypes, isLoading } = useStationTypes(branchId || undefined);
   const deleteMutation = useDeleteStationType();
 
   const [editingType, setEditingType] = useState<StationType | null>(null);

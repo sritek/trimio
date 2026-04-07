@@ -46,6 +46,7 @@ export default function BillingPage() {
     dateTo: '',
     statuses: [],
     paymentStatuses: [],
+    stylistIds: [],
   });
 
   // Build query params
@@ -59,6 +60,7 @@ export default function BillingPage() {
           : undefined,
       dateFrom: filters.dateFrom || undefined,
       dateTo: filters.dateTo || undefined,
+      stylistId: filters.stylistIds.length === 1 ? filters.stylistIds[0] : undefined,
       page,
       limit,
       sortBy: 'createdAt' as const,
@@ -77,7 +79,8 @@ export default function BillingPage() {
     filters.statuses.length +
     filters.paymentStatuses.length +
     (filters.dateFrom ? 1 : 0) +
-    (filters.dateTo ? 1 : 0);
+    (filters.dateTo ? 1 : 0) +
+    (filters.stylistIds.length > 0 ? 1 : 0);
 
   const hasFilters = activeFilterCount > 0 || !!search;
 

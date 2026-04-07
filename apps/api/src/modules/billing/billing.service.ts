@@ -622,6 +622,7 @@ export const billingService = {
       status,
       paymentStatus,
       customerId,
+      stylistId,
       dateFrom,
       dateTo,
       search,
@@ -638,6 +639,7 @@ export const billingService = {
       ...(status && { status }),
       ...(paymentStatus && { paymentStatus }),
       ...(customerId && { customerId }),
+      ...(stylistId && { items: { some: { stylistId } } }),
       ...(dateFrom && { invoiceDate: { gte: new Date(dateFrom) } }),
       ...(dateTo && { invoiceDate: { lte: new Date(dateTo) } }),
       ...(search && {
@@ -653,7 +655,7 @@ export const billingService = {
       prisma.invoice.findMany({
         where,
         include: {
-          items: { select: { id: true, name: true, netAmount: true, stylistName: true } },
+          items: { select: { id: true, name: true, netAmount: true, stylistId: true, stylistName: true, commissionAmount: true } },
           payments: { select: { id: true, paymentMethod: true, amount: true } },
         },
         orderBy: { [sortBy]: sortOrder },

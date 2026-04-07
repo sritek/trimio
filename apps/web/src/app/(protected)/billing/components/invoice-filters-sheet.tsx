@@ -15,6 +15,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { DatePicker } from '@/components/common';
+import { useStaffList } from '@/hooks/queries/use-staff';
+import { useBranchContext } from '@/hooks/use-branch-context';
 import { useTranslations } from 'next-intl';
 
 // ============================================
@@ -26,6 +28,7 @@ export interface InvoiceFiltersState {
   dateTo: string;
   statuses: string[];
   paymentStatuses: string[];
+  stylistIds: string[];
 }
 
 interface InvoiceFiltersSheetProps {
@@ -132,6 +135,7 @@ export function InvoiceFiltersSheet({
       dateTo: '',
       statuses: [],
       paymentStatuses: [],
+      stylistIds: [],
     };
     setLocalFilters(resetFilters);
     onFiltersChange(resetFilters);
@@ -147,7 +151,8 @@ export function InvoiceFiltersSheet({
     localFilters.statuses.length +
     localFilters.paymentStatuses.length +
     (localFilters.dateFrom ? 1 : 0) +
-    (localFilters.dateTo ? 1 : 0);
+    (localFilters.dateTo ? 1 : 0) +
+    (localFilters.stylistIds.length > 0 ? 1 : 0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -249,6 +254,22 @@ export function InvoiceFiltersSheet({
               ))}
             </div>
           </div>
+
+          {/* Staff Filter */}
+          <div>
+            <Label className="text-sm font-medium mb-3 block">
+              Staff
+              {localFilters.stylistIds.length > 0 && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({localFilters.stylistIds.length} selected)
+                </span>
+              )}
+            </Label>
+            <StaffCheckboxList
+              selected={localFilters.stylistIds}
+              onChange={(ids) => setLocalFilters({ ...localFilters, stylistIds: ids })}
+            />
+          </div>
         </div>
 
         {/* Footer with Apply/Reset buttons */}
@@ -263,5 +284,39 @@ export function InvoiceFiltersSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Inline staff checkbox list for the filter sheet
+function StaffCheckboxList({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
+  const { branchId } = useBranchContext();
+  const { data } = useStaffList({ branchId: branchId || '', role: 'stylist' });
+  const stylists = data?.data || [];
+
+  const toggle = (id: string) => {
+    onChange(
+      selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]
+    );
+  };
+
+  if (stylists.length === 0) {
+    return <p className="text-sm text-muted-foreground">No staff found</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {stylists.map((s) => (
+        <div key={s.userId} className="flex items-center space-x-2">
+          <Checkbox
+            id={`staff-${s.userId}`}
+            checked={selected.includes(s.userId)}
+            onCheckedChange={() => toggle(s.userId)}
+          />
+          <Label htmlFor={`staff-${s.userId}`} className="cursor-pointer">
+            {s.user?.name || 'Unknown'}
+          </Label>
+        </div>
+      ))}
+    </div>
   );
 }

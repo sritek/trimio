@@ -44,11 +44,6 @@ export function getStationColumns({
       ),
     },
     {
-      accessorKey: 'displayOrder',
-      header: 'Order',
-      cell: ({ row }) => row.original.displayOrder,
-    },
-    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (

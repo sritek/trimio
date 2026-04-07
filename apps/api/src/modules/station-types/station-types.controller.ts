@@ -14,10 +14,11 @@ export class StationTypesController {
   /**
    * Get all station types
    */
-  async getStationTypes(request: FastifyRequest, reply: FastifyReply) {
+  async getStationTypes(request: FastifyRequest<{ Querystring: { branchId?: string } }>, reply: FastifyReply) {
     const { tenantId } = request.user!;
+    const { branchId } = request.query;
 
-    const stationTypes = await stationTypesService.getStationTypes(tenantId);
+    const stationTypes = await stationTypesService.getStationTypes(tenantId, branchId);
 
     return reply.send(successResponse(stationTypes));
   }

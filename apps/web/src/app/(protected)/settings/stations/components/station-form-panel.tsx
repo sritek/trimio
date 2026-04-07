@@ -122,8 +122,8 @@ export function StationFormPanel({ branchId, station, open, onClose }: StationFo
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader>
+      <SheetContent className="sm:max-w-md p-6">
+        <SheetHeader className="mb-4">
           <SheetTitle>{isEditing ? 'Edit Station' : 'New Station'}</SheetTitle>
           <SheetDescription>
             {isEditing ? 'Update station details' : 'Add a new workstation to this branch'}
@@ -131,7 +131,7 @@ export function StationFormPanel({ branchId, station, open, onClose }: StationFo
         </SheetHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -172,20 +172,6 @@ export function StationFormPanel({ branchId, station, open, onClose }: StationFo
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="displayOrder"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Display Order</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={0} {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

@@ -5,11 +5,10 @@
  * Display and edit tenant information
  */
 
-import { Building2, Mail, Phone, CreditCard, Users, GitBranch } from 'lucide-react';
+import { Building2, Mail, Phone, CreditCard } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import { useTenant } from '@/hooks/queries/use-tenant';
 import { useAuthStore } from '@/stores/auth-store';
 import { ProfileForm } from './components/profile-form';
@@ -31,9 +30,6 @@ export default function ProfilePage() {
       </div>
     );
   }
-
-  const branchUsagePercent = (tenant.usage.branches.current / tenant.usage.branches.max) * 100;
-  const userUsagePercent = (tenant.usage.users.current / tenant.usage.users.max) * 100;
 
   return (
     <div className="space-y-6">
@@ -87,9 +83,9 @@ export default function ProfilePage() {
             <CreditCard className="h-5 w-5" />
             Subscription
           </CardTitle>
-          <CardDescription>Your current plan and usage</CardDescription>
+          <CardDescription>Your current plan</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Current Plan</p>
@@ -109,35 +105,6 @@ export default function ProfilePage() {
               <p className="text-sm">{format(new Date(tenant.trialEndsAt), 'PPP')}</p>
             </div>
           )}
-
-          {/* Usage Statistics */}
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Branches</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {tenant.usage.branches.current} / {tenant.usage.branches.max}
-                </span>
-              </div>
-              <Progress value={branchUsagePercent} className="h-2" />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Users</span>
-                </div>
-                <span className="text-sm text-muted-foreground">
-                  {tenant.usage.users.current} / {tenant.usage.users.max}
-                </span>
-              </div>
-              <Progress value={userUsagePercent} className="h-2" />
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

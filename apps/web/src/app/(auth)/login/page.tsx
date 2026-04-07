@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Scissors } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -94,11 +94,8 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="space-y-1">
-        <div className="flex justify-center mb-2">
-          <div className="flex items-center gap-2">
-            <Scissors className="size-6" />
-            <span className="text-2xl font-bold">trimio</span>
-          </div>
+        <div className="flex justify-center mb-4">
+          <span className="text-4xl font-bold tracking-tight">trimio.</span>
         </div>
         <CardDescription className="text-center">
           Sign in to your account to continue

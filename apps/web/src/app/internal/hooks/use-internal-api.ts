@@ -85,13 +85,15 @@ export function useInternalApi() {
       }
 
       const formData = new FormData();
-      formData.append('file', file, file.name);
 
+      // Append fields before file — Fastify multipart needs fields available when file is parsed
       if (additionalFields) {
         Object.entries(additionalFields).forEach(([key, value]) => {
           formData.append(key, value);
         });
       }
+
+      formData.append('file', file, file.name);
 
       const response = await fetch(`${API_URL}/internal${endpoint}`, {
         method: 'POST',

@@ -541,7 +541,7 @@ export function MobileNav() {
         <SheetHeader className="border-b px-4 py-4">
           <SheetTitle asChild>
             <Link href="/today" className="flex items-center gap-2 text-xl font-bold">
-              <span className="text-primary">trimio</span>
+              <span className="tracking-tight">trimio.</span>
               {tenant?.logoUrl && (
                 <>
                   <span className="text-muted-foreground text-sm">×</span>

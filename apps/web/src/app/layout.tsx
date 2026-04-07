@@ -15,8 +15,15 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'trimio',
+  title: 'trimio.',
   description: 'Salon Management Platform',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/favicon.png',
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

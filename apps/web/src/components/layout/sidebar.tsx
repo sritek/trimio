@@ -756,20 +756,10 @@ export function Sidebar({ className }: SidebarProps) {
         >
           <Link href="/today" className="flex items-center gap-2 font-bold text-lg">
             {sidebarCollapsed ? (
-              tenant?.logoUrl ? (
-                <Image
-                  src={tenant.logoUrl}
-                  alt={tenant.name}
-                  width={32}
-                  height={32}
-                  className="rounded object-contain"
-                />
-              ) : (
-                <span className="text-primary">T</span>
-              )
+              <span className="text-lg font-bold">t.</span>
             ) : (
               <>
-                <span>trimio</span>
+                <span className="text-lg font-bold tracking-tight">trimio.</span>
                 {tenant?.logoUrl && (
                   <>
                     <span className="text-muted-foreground text-sm">×</span>

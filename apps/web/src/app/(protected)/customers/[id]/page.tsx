@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, Pencil, User, X } from 'lucide-react';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import {
   useCustomer,
@@ -213,7 +213,8 @@ export default function CustomerDetailPage() {
                 {customer.bookingStatus.charAt(0).toUpperCase() + customer.bookingStatus.slice(1)}
               </Badge>
               <Badge variant="outline" className="text-muted-foreground">
-                {CUSTOMER_SOURCE_LABELS[customer.source as keyof typeof CUSTOMER_SOURCE_LABELS] || 'Manual Entry'}
+                {CUSTOMER_SOURCE_LABELS[customer.source as keyof typeof CUSTOMER_SOURCE_LABELS] ||
+                  'Manual Entry'}
               </Badge>
               {customer.allergies && customer.allergies.length > 0 && (
                 <Badge variant="destructive" className="gap-1">

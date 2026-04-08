@@ -1,5 +1,5 @@
 {
-  "name": "@salon-ops/shared",
+  "name": "@trimio/shared",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -44,7 +44,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@salon-ops/config": "workspace:*",
+    "@trimio/config": "workspace:*",
     "tsup": "^8.0.2",
     "typescript": "^5.4.0"
   }

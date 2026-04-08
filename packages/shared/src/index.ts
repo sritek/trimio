@@ -1,6 +1,6 @@
 /**
- * @salon-ops/shared
- * Shared types, utilities, constants, and schemas for Salon Ops
+ * @trimio/shared
+ * Shared types, utilities, constants, and schemas for Trimio
  */
 
 // Types

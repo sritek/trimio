@@ -1,5 +1,5 @@
 {
-  "name": "@salon-ops/api",
+  "name": "@trimio/api",
   "version": "0.1.0",
   "private": true,
   "main": "dist/server.js",
@@ -35,7 +35,7 @@
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^3.0.0",
     "@prisma/client": "^5.22.0",
-    "@salon-ops/shared": "workspace:*",
+    "@trimio/shared": "workspace:*",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.4.2",
     "date-fns": "^3.6.0",
@@ -49,7 +49,7 @@
     "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
-    "@salon-ops/config": "workspace:*",
+    "@trimio/config": "workspace:*",
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",

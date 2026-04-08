@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, List, Plus, UserX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import {
   useAppointments,

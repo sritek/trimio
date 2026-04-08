@@ -1,6 +1,6 @@
 /**
- * @salon-ops/config
- * Shared configuration files for the Salon Ops monorepo
+ * @trimio/config
+ * Shared configuration files for the Trimio monorepo
  */
 module.exports = {
   eslintPreset: require('./eslint-preset'),

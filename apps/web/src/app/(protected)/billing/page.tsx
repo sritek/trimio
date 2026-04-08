@@ -9,7 +9,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import { useInvoices } from '@/hooks/queries/use-invoices';
 import { usePermissions } from '@/hooks/use-permissions';

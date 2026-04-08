@@ -51,15 +51,15 @@ This guide provides step-by-step instructions for setting up the Salon Managemen
 
 ```bash
 # Clone the monorepo
-git clone https://github.com/your-org/salon-ops.git
-cd salon-ops
+git clone https://github.com/your-org/trimio.git
+cd trimio
 
 # View project structure
 ls -la
 # Expected:
-# salon-ops-backend/    - Fastify API
-# salon-ops-web/        - Next.js dashboard
-# salon-ops-booking/    - Public booking page (optional)
+# trimio-backend/    - Fastify API
+# trimio-web/        - Next.js dashboard
+# trimio-booking/    - Public booking page (optional)
 # infrastructure/       - Docker, Terraform configs
 # .cursor/              - Cursor rules and docs
 ```
@@ -68,11 +68,11 @@ ls -la
 
 ```bash
 # Install backend dependencies
-cd salon-ops-backend
+cd trimio-backend
 npm install
 
 # Install frontend dependencies
-cd ../salon-ops-web
+cd ../trimio-web
 npm install
 
 # Return to root
@@ -89,14 +89,14 @@ docker-compose up -d postgres redis
 docker-compose ps
 # Expected output:
 # NAME                  STATUS
-# salon-ops-postgres    running (healthy)
-# salon-ops-redis       running (healthy)
+# trimio-postgres    running (healthy)
+# trimio-redis       running (healthy)
 
 # Check PostgreSQL connection
-docker exec -it salon-ops-postgres psql -U postgres -c "SELECT version();"
+docker exec -it trimio-postgres psql -U postgres -c "SELECT version();"
 
 # Check Redis connection
-docker exec -it salon-ops-redis redis-cli ping
+docker exec -it trimio-redis redis-cli ping
 # Expected: PONG
 ```
 
@@ -104,7 +104,7 @@ docker exec -it salon-ops-redis redis-cli ping
 
 ```bash
 # Backend environment
-cd salon-ops-backend
+cd trimio-backend
 cp .env.example .env
 
 # Edit .env with your settings
@@ -114,7 +114,7 @@ cp .env.example .env
 **Backend .env file:**
 
 ```bash
-# salon-ops-backend/.env
+# trimio-backend/.env
 
 # Application
 NODE_ENV=development
@@ -123,7 +123,7 @@ API_URL=http://localhost:3000
 APP_URL=http://localhost:3001
 
 # Database (Docker defaults)
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/salon_ops
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/trimio
 
 # Redis (Docker defaults)
 REDIS_URL=redis://localhost:6379
@@ -137,7 +137,7 @@ JWT_REFRESH_EXPIRY=7d
 AWS_REGION=ap-south-1
 AWS_ACCESS_KEY_ID=local-dev-key
 AWS_SECRET_ACCESS_KEY=local-dev-secret
-S3_BUCKET_NAME=salon-ops-local
+S3_BUCKET_NAME=trimio-local
 
 # Monitoring (optional for local)
 # SENTRY_DSN=
@@ -151,7 +151,7 @@ ENABLE_MARKETING=true
 **Frontend .env file:**
 
 ```bash
-# salon-ops-web/.env.local
+# trimio-web/.env.local
 
 NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
 NEXT_PUBLIC_APP_URL=http://localhost:3001
@@ -160,7 +160,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3001
 ### Step 5: Setup Database
 
 ```bash
-cd salon-ops-backend
+cd trimio-backend
 
 # Generate Prisma Client
 npx prisma generate
@@ -181,7 +181,7 @@ npx prisma studio
 **Terminal 1 - Backend API:**
 
 ```bash
-cd salon-ops-backend
+cd trimio-backend
 npm run dev
 
 # Expected output:
@@ -192,7 +192,7 @@ npm run dev
 **Terminal 2 - Frontend Dashboard:**
 
 ```bash
-cd salon-ops-web
+cd trimio-web
 npm run dev
 
 # Expected output:
@@ -202,7 +202,7 @@ npm run dev
 **Terminal 3 - Background Workers (Optional):**
 
 ```bash
-cd salon-ops-backend
+cd trimio-backend
 npm run dev:worker
 
 # Expected output:
@@ -233,7 +233,7 @@ open http://localhost:3001
 
 ## 3. Project Scripts
 
-### Backend Scripts (salon-ops-backend)
+### Backend Scripts (trimio-backend)
 
 ```bash
 # Development
@@ -266,7 +266,7 @@ npm run format           # Format with Prettier
 npm run type-check       # TypeScript type checking
 ```
 
-### Frontend Scripts (salon-ops-web)
+### Frontend Scripts (trimio-web)
 
 ```bash
 # Development
@@ -321,19 +321,19 @@ docker-compose build --no-cache
 git pull origin develop
 
 # 2. Update dependencies (if package.json changed)
-cd salon-ops-backend && npm install
-cd ../salon-ops-web && npm install
+cd trimio-backend && npm install
+cd ../trimio-web && npm install
 
 # 3. Run database migrations (if schema changed)
-cd salon-ops-backend
+cd trimio-backend
 npx prisma migrate dev
 
 # 4. Start services
 docker-compose up -d postgres redis
 
 # 5. Start dev servers (in separate terminals)
-# Terminal 1: cd salon-ops-backend && npm run dev
-# Terminal 2: cd salon-ops-web && npm run dev
+# Terminal 1: cd trimio-backend && npm run dev
+# Terminal 2: cd trimio-web && npm run dev
 
 # 6. Work on features...
 
@@ -403,7 +403,7 @@ npx ts-node prisma/seeds/customers.seed.ts
 
 ```bash
 # Connect to PostgreSQL
-docker exec -it salon-ops-postgres psql -U postgres -d salon_ops
+docker exec -it trimio-postgres psql -U postgres -d trimio
 
 # Common queries
 \dt                          # List tables
@@ -540,7 +540,7 @@ export const useExampleStore = create<ExampleState>((set) => ({
 
 ```bash
 # Backend tests
-cd salon-ops-backend
+cd trimio-backend
 npm run test              # All tests
 npm run test:unit         # Unit tests only
 npm run test:integration  # Integration tests only
@@ -548,7 +548,7 @@ npm run test:watch        # Watch mode
 npm run test:coverage     # With coverage report
 
 # Frontend tests
-cd salon-ops-web
+cd trimio-web
 npm run test              # Unit tests
 npm run test:e2e          # E2E tests (Playwright)
 ```
@@ -593,7 +593,7 @@ open coverage/index.html
       "name": "Debug Backend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "${workspaceFolder}/salon-ops-backend",
+      "cwd": "${workspaceFolder}/trimio-backend",
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**"]
     }
@@ -615,7 +615,7 @@ open coverage/index.html
 DEBUG=prisma:query
 
 # View slow queries
-docker exec -it salon-ops-postgres psql -U postgres -d salon_ops \
+docker exec -it trimio-postgres psql -U postgres -d trimio \
   -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
 ```
 
@@ -623,10 +623,10 @@ docker exec -it salon-ops-postgres psql -U postgres -d salon_ops \
 
 ```bash
 # Monitor Redis commands in real-time
-docker exec -it salon-ops-redis redis-cli monitor
+docker exec -it trimio-redis redis-cli monitor
 
 # Check Redis memory
-docker exec -it salon-ops-redis redis-cli info memory
+docker exec -it trimio-redis redis-cli info memory
 ```
 
 ---
@@ -660,7 +660,7 @@ docker-compose logs postgres
 docker-compose restart postgres
 
 # Verify connection string in .env
-# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/salon_ops
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/trimio
 ```
 
 #### Prisma Client Issues
@@ -685,7 +685,7 @@ docker-compose ps redis
 docker-compose restart redis
 
 # Test connection
-docker exec -it salon-ops-redis redis-cli ping
+docker exec -it trimio-redis redis-cli ping
 ```
 
 #### Migration Failed
@@ -780,12 +780,12 @@ git push -u origin <branch>       # Push branch
 ### Aliases (Add to ~/.bashrc or ~/.zshrc)
 
 ```bash
-# Salon Ops aliases
+# Trimio aliases
 alias so-up="docker-compose up -d postgres redis"
 alias so-down="docker-compose down"
 alias so-logs="docker-compose logs -f"
-alias so-api="cd ~/salon-ops/salon-ops-backend && npm run dev"
-alias so-web="cd ~/salon-ops/salon-ops-web && npm run dev"
+alias so-api="cd ~/trimio/trimio-backend && npm run dev"
+alias so-web="cd ~/trimio/trimio-web && npm run dev"
 alias so-db="npx prisma studio"
 alias so-migrate="npx prisma migrate dev"
 alias so-seed="npx prisma db seed"

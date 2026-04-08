@@ -10,7 +10,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { ROLE_PERMISSIONS } from '@salon-ops/shared';
+import { ROLE_PERMISSIONS } from '@trimio/shared';
 
 import { prisma } from '../../lib/prisma';
 import { successResponse } from '../../lib/response';

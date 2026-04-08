@@ -15,7 +15,7 @@ This document provides implementation patterns and setup guides for the Next.js 
 ## 1. Project Structure
 
 ```
-salon-ops-web/
+trimio-web/
 ├── app/                          # Next.js App Router
 │   ├── (auth)/                   # Auth route group (no layout)
 │   │   ├── login/
@@ -359,7 +359,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Salon Ops',
+  title: 'Trimio',
   description: 'Salon Management Platform',
 };
 
@@ -1414,7 +1414,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
-            Sign in to Salon Ops
+            Sign in to Trimio
           </CardTitle>
           <CardDescription className="text-center">
             Enter your email and password to access your account
@@ -1739,7 +1739,7 @@ export function Sidebar({ className }: { className?: string }) {
     <aside className={cn('w-64 border-r bg-card', className)}>
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="text-xl font-bold">
-          Salon Ops
+          Trimio
         </Link>
       </div>
       <nav className="flex flex-col gap-1 p-4">

@@ -6,7 +6,7 @@ inclusion: manual
 
 ## Overview
 
-Comprehensive end-to-end testing of Salon Ops SaaS platform.
+Comprehensive end-to-end testing of Trimio SaaS platform.
 Started: March 18, 2026
 
 ## Testing Approach

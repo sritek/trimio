@@ -1,5 +1,5 @@
 /**
- * Shared ESLint configuration for Salon Ops
+ * Shared ESLint configuration for Trimio
  * Based on: .cursor/rules/18-coding-standards.mdc lines 758-804
  */
 module.exports = {

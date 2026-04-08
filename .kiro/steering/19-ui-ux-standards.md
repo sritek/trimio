@@ -1,12 +1,12 @@
 ---
-# App-wide UI/UX standards and design principles for Salon Ops
+# App-wide UI/UX standards and design principles for Trimio
 inclusion: fileMatch
 fileMatchPattern: '["apps/web/**/*.tsx", "apps/web/**/*.ts", "apps/web/**/*.css"]'
 ---
 
 # UI/UX Standards
 
-This document defines the app-wide UI/UX standards that govern all frontend development in Salon Ops. These standards ensure a consistent, modern, and intuitive experience for non-technical salon operators.
+This document defines the app-wide UI/UX standards that govern all frontend development in Trimio. These standards ensure a consistent, modern, and intuitive experience for non-technical salon operators.
 
 ## Design Principles
 

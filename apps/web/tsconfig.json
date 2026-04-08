@@ -1,5 +1,5 @@
 {
-  "extends": "@salon-ops/config/tsconfig.next.json",
+  "extends": "@trimio/config/tsconfig.next.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {

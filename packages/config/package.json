@@ -1,5 +1,5 @@
 {
-  "name": "@salon-ops/config",
+  "name": "@trimio/config",
   "version": "0.1.0",
   "private": true,
   "main": "index.js",

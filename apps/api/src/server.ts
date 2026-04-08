@@ -120,8 +120,8 @@ async function registerPlugins() {
   await fastify.register(swagger, {
     openapi: {
       info: {
-        title: 'Salon Ops API',
-        description: 'API documentation for Salon Management Platform',
+        title: 'Trimio API',
+        description: 'API documentation for Trimio - Salon Management Platform',
         version: '1.0.0',
       },
       servers: [

@@ -1,4 +1,4 @@
-// Prisma Schema for Salon Ops
+// Prisma Schema for Trimio
 // Based on: .cursor/rules/00-architecture.mdc and .cursor/rules/13-backend-implementation.mdc
 
 generator client {

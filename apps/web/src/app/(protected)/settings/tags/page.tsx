@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Tag } from 'lucide-react';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import { useCustomTags, useCreateTag, useDeleteTag } from '@/hooks/queries/use-customers';
 import { usePermissions } from '@/hooks/use-permissions';

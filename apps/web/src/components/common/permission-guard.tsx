@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react';
 
-import type { UserRole } from '@salon-ops/shared';
+import type { UserRole } from '@trimio/shared';
 
 import { usePermissions } from '@/hooks/use-permissions';
 
@@ -68,13 +68,8 @@ export function PermissionGuard({
   fallback = null,
   children,
 }: PermissionGuardProps) {
-  const {
-    hasPermission,
-    hasAnyPermission,
-    hasAllPermissions,
-    hasRole,
-    hasAnyRole,
-  } = usePermissions();
+  const { hasPermission, hasAnyPermission, hasAllPermissions, hasRole, hasAnyRole } =
+    usePermissions();
 
   let hasAccess = true;
 
@@ -82,9 +77,7 @@ export function PermissionGuard({
   if (permission) {
     hasAccess = hasPermission(permission);
   } else if (permissions && permissions.length > 0) {
-    hasAccess = requireAll
-      ? hasAllPermissions(permissions)
-      : hasAnyPermission(permissions);
+    hasAccess = requireAll ? hasAllPermissions(permissions) : hasAnyPermission(permissions);
   }
 
   // Check role(s)

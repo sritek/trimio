@@ -5,7 +5,7 @@
 
 import bcrypt from 'bcrypt';
 
-import { ROLE_PERMISSIONS, type UserRole } from '@salon-ops/shared';
+import { ROLE_PERMISSIONS, type UserRole } from '@trimio/shared';
 
 import { prisma } from '../../lib/prisma';
 import { BadRequestError } from '../../lib/errors';

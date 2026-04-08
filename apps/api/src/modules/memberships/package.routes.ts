@@ -7,7 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 import { authenticate, requirePermission, requireBranchAccess } from '../../middleware';
 import * as controller from './package.controller';
 import {

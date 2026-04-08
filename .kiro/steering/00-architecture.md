@@ -1,5 +1,5 @@
 ---
-# Core architecture patterns, multi-tenancy, auth, project structure, and coding standards for Salon Ops
+# Core architecture patterns, multi-tenancy, auth, project structure, and coding standards for Trimio
 inclusion: always
 ---
 

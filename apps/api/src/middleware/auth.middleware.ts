@@ -5,7 +5,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import type { UserRole } from '@salon-ops/shared';
+import type { UserRole } from '@trimio/shared';
 
 import { UnauthorizedError } from '../lib/errors';
 
@@ -42,10 +42,7 @@ declare module '@fastify/jwt' {
  * }, handler);
  * ```
  */
-export async function authenticate(
-  request: FastifyRequest,
-  _reply: FastifyReply
-): Promise<void> {
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   try {
     await request.jwtVerify();
   } catch (err) {

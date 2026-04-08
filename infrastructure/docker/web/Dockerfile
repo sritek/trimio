@@ -41,8 +41,8 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Build packages and web
-RUN pnpm --filter @salon-ops/shared build
-RUN pnpm --filter @salon-ops/web build
+RUN pnpm --filter @trimio/shared build
+RUN pnpm --filter @trimio/web build
 
 # ============================================
 # Stage 3: Runner

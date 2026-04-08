@@ -1,7 +1,7 @@
 {
   "build": {
     "builder": "railpack",
-    "buildCommand": "pnpm install --frozen-lockfile && cd apps/api && pnpm prisma generate && cd ../.. && pnpm turbo run build --filter=@salon-ops/shared && pnpm turbo run build --filter=@salon-ops/api"
+    "buildCommand": "pnpm install --frozen-lockfile && cd apps/api && pnpm prisma generate && cd ../.. && pnpm turbo run build --filter=@trimio/shared && pnpm turbo run build --filter=@trimio/api"
   },
   "deploy": {
     "startCommand": "cd apps/api && node dist/server.js",

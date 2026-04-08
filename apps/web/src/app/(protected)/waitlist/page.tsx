@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import { useWaitlist, useDeleteWaitlistEntry } from '@/hooks/queries/use-waitlist';
 import { usePermissions } from '@/hooks/use-permissions';

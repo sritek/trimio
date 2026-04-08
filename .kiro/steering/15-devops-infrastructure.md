@@ -215,11 +215,11 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: salon-ops-postgres
+    container_name: trimio-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: salon_ops
+      POSTGRES_DB: trimio
     ports:
       - "5432:5432"
     volumes:
@@ -234,7 +234,7 @@ services:
   # Redis
   redis:
     image: redis:7-alpine
-    container_name: salon-ops-redis
+    container_name: trimio-redis
     ports:
       - "6379:6379"
     volumes:
@@ -248,14 +248,14 @@ services:
   # API Service
   api:
     build:
-      context: ./salon-ops-backend
+      context: ./trimio-backend
       dockerfile: ../infrastructure/docker/api/Dockerfile
-    container_name: salon-ops-api
+    container_name: trimio-api
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/salon_ops
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/trimio
       REDIS_URL: redis://redis:6379
       JWT_SECRET: development-secret-key-min-32-chars
     depends_on:
@@ -264,15 +264,15 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./salon-ops-backend/src:/app/src:ro
+      - ./trimio-backend/src:/app/src:ro
     command: npm run dev
 
   # Web Frontend
   web:
     build:
-      context: ./salon-ops-web
+      context: ./trimio-web
       dockerfile: ../infrastructure/docker/web/Dockerfile
-    container_name: salon-ops-web
+    container_name: trimio-web
     ports:
       - "3001:3000"
     environment:
@@ -280,18 +280,18 @@ services:
     depends_on:
       - api
     volumes:
-      - ./salon-ops-web/app:/app/app:ro
-      - ./salon-ops-web/components:/app/components:ro
+      - ./trimio-web/app:/app/app:ro
+      - ./trimio-web/components:/app/components:ro
 
   # BullMQ Worker
   worker:
     build:
-      context: ./salon-ops-backend
+      context: ./trimio-backend
       dockerfile: ../infrastructure/docker/worker/Dockerfile
-    container_name: salon-ops-worker
+    container_name: trimio-worker
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/salon_ops
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/trimio
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -302,7 +302,7 @@ services:
   # BullMQ Dashboard (Development only)
   bull-board:
     image: deadly0/bull-board
-    container_name: salon-ops-bull-board
+    container_name: trimio-bull-board
     ports:
       - "3002:3000"
     environment:
@@ -429,7 +429,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: salon_ops_test
+          POSTGRES_DB: trimio_test
         ports:
           - 5432:5432
         options: >-
@@ -465,12 +465,12 @@ jobs:
       - name: Run migrations
         run: npx prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/salon_ops_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trimio_test
 
       - name: Run integration tests
         run: npm run test:integration
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/salon_ops_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trimio_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-key-min-32-characters
 
@@ -513,7 +513,7 @@ jobs:
       - name: Build and push API image
         uses: docker/build-push-action@v5
         with:
-          context: ./salon-ops-backend
+          context: ./trimio-backend
           file: ./infrastructure/docker/api/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-api:${{ github.sha }}
@@ -524,7 +524,7 @@ jobs:
       - name: Build and push Web image
         uses: docker/build-push-action@v5
         with:
-          context: ./salon-ops-web
+          context: ./trimio-web
           file: ./infrastructure/docker/web/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web:${{ github.sha }}
@@ -537,7 +537,7 @@ jobs:
       - name: Build and push Worker image
         uses: docker/build-push-action@v5
         with:
-          context: ./salon-ops-backend
+          context: ./trimio-backend
           file: ./infrastructure/docker/worker/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:${{ github.sha }}
@@ -567,17 +567,17 @@ jobs:
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
-            --cluster salon-ops-staging \
+            --cluster trimio-staging \
             --service api \
             --force-new-deployment
 
           aws ecs update-service \
-            --cluster salon-ops-staging \
+            --cluster trimio-staging \
             --service web \
             --force-new-deployment
 
           aws ecs update-service \
-            --cluster salon-ops-staging \
+            --cluster trimio-staging \
             --service worker \
             --force-new-deployment
 
@@ -605,32 +605,32 @@ jobs:
         run: |
           # Run migrations via ECS task
           aws ecs run-task \
-            --cluster salon-ops-production \
-            --task-definition salon-ops-migrate \
+            --cluster trimio-production \
+            --task-definition trimio-migrate \
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PRIVATE_SUBNET_IDS }}],securityGroups=[${{ secrets.SECURITY_GROUP_ID }}]}"
 
       - name: Deploy to ECS
         run: |
           aws ecs update-service \
-            --cluster salon-ops-production \
+            --cluster trimio-production \
             --service api \
             --force-new-deployment
 
           aws ecs update-service \
-            --cluster salon-ops-production \
+            --cluster trimio-production \
             --service web \
             --force-new-deployment
 
           aws ecs update-service \
-            --cluster salon-ops-production \
+            --cluster trimio-production \
             --service worker \
             --force-new-deployment
 
       - name: Wait for deployment
         run: |
           aws ecs wait services-stable \
-            --cluster salon-ops-production \
+            --cluster trimio-production \
             --services api web worker
 ```
 
@@ -680,7 +680,7 @@ jobs:
         id: secrets
         run: |
           DATABASE_URL=$(aws secretsmanager get-secret-value \
-            --secret-id salon-ops/${{ inputs.environment }}/database \
+            --secret-id trimio/${{ inputs.environment }}/database \
             --query SecretString --output text | jq -r .DATABASE_URL)
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> $GITHUB_ENV
@@ -750,7 +750,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "salon-ops-${var.environment}-vpc"
+    Name        = "trimio-${var.environment}-vpc"
     Environment = var.environment
   }
 }
@@ -760,7 +760,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "salon-ops-${var.environment}-igw"
+    Name        = "trimio-${var.environment}-igw"
     Environment = var.environment
   }
 }
@@ -774,7 +774,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "salon-ops-${var.environment}-public-${count.index + 1}"
+    Name        = "trimio-${var.environment}-public-${count.index + 1}"
     Environment = var.environment
     Type        = "public"
   }
@@ -788,7 +788,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name        = "salon-ops-${var.environment}-private-${count.index + 1}"
+    Name        = "trimio-${var.environment}-private-${count.index + 1}"
     Environment = var.environment
     Type        = "private"
   }
@@ -799,7 +799,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name        = "salon-ops-${var.environment}-nat-eip"
+    Name        = "trimio-${var.environment}-nat-eip"
     Environment = var.environment
   }
 }
@@ -809,7 +809,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name        = "salon-ops-${var.environment}-nat"
+    Name        = "trimio-${var.environment}-nat"
     Environment = var.environment
   }
 
@@ -826,7 +826,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "salon-ops-${var.environment}-public-rt"
+    Name        = "trimio-${var.environment}-public-rt"
     Environment = var.environment
   }
 }
@@ -840,7 +840,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name        = "salon-ops-${var.environment}-private-rt"
+    Name        = "trimio-${var.environment}-private-rt"
     Environment = var.environment
   }
 }
@@ -907,7 +907,7 @@ variable "worker_image" {
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "salon-ops-${var.environment}"
+  name = "trimio-${var.environment}"
 
   setting {
     name  = "containerInsights"
@@ -921,7 +921,7 @@ resource "aws_ecs_cluster" "main" {
 
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_execution" {
-  name = "salon-ops-${var.environment}-ecs-execution"
+  name = "trimio-${var.environment}-ecs-execution"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -944,7 +944,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
 
 # ECS Task Role
 resource "aws_iam_role" "ecs_task" {
-  name = "salon-ops-${var.environment}-ecs-task"
+  name = "trimio-${var.environment}-ecs-task"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -962,7 +962,7 @@ resource "aws_iam_role" "ecs_task" {
 
 # Task role policies (S3, Secrets Manager, etc.)
 resource "aws_iam_role_policy" "ecs_task" {
-  name = "salon-ops-${var.environment}-ecs-task-policy"
+  name = "trimio-${var.environment}-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
@@ -975,14 +975,14 @@ resource "aws_iam_role_policy" "ecs_task" {
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Resource = "arn:aws:s3:::salon-ops-${var.environment}/*"
+        Resource = "arn:aws:s3:::trimio-${var.environment}/*"
       },
       {
         Effect = "Allow"
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = "arn:aws:secretsmanager:ap-south-1:*:secret:salon-ops/${var.environment}/*"
+        Resource = "arn:aws:secretsmanager:ap-south-1:*:secret:trimio/${var.environment}/*"
       }
     ]
   })
@@ -990,7 +990,7 @@ resource "aws_iam_role_policy" "ecs_task" {
 
 # Security Group for ECS Tasks
 resource "aws_security_group" "ecs_tasks" {
-  name        = "salon-ops-${var.environment}-ecs-tasks"
+  name        = "trimio-${var.environment}-ecs-tasks"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
 
@@ -1009,14 +1009,14 @@ resource "aws_security_group" "ecs_tasks" {
   }
 
   tags = {
-    Name        = "salon-ops-${var.environment}-ecs-tasks"
+    Name        = "trimio-${var.environment}-ecs-tasks"
     Environment = var.environment
   }
 }
 
 # API Task Definition
 resource "aws_ecs_task_definition" "api" {
-  family                   = "salon-ops-${var.environment}-api"
+  family                   = "trimio-${var.environment}-api"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = 512
@@ -1041,21 +1041,21 @@ resource "aws_ecs_task_definition" "api" {
       secrets = [
         {
           name      = "DATABASE_URL"
-          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:salon-ops/${var.environment}/database:DATABASE_URL::"
+          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:trimio/${var.environment}/database:DATABASE_URL::"
         },
         {
           name      = "REDIS_URL"
-          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:salon-ops/${var.environment}/redis:REDIS_URL::"
+          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:trimio/${var.environment}/redis:REDIS_URL::"
         },
         {
           name      = "JWT_SECRET"
-          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:salon-ops/${var.environment}/app:JWT_SECRET::"
+          valueFrom = "arn:aws:secretsmanager:ap-south-1:${data.aws_caller_identity.current.account_id}:secret:trimio/${var.environment}/app:JWT_SECRET::"
         }
       ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/salon-ops-${var.environment}-api"
+          "awslogs-group"         = "/ecs/trimio-${var.environment}-api"
           "awslogs-region"        = "ap-south-1"
           "awslogs-stream-prefix" = "ecs"
         }
@@ -1107,7 +1107,7 @@ resource "aws_ecs_service" "api" {
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/salon-ops-${var.environment}-api"
+  name              = "/ecs/trimio-${var.environment}-api"
   retention_in_days = var.environment == "production" ? 30 : 7
 
   tags = {
@@ -1125,7 +1125,7 @@ resource "aws_appautoscaling_target" "api" {
 }
 
 resource "aws_appautoscaling_policy" "api_cpu" {
-  name               = "salon-ops-${var.environment}-api-cpu"
+  name               = "trimio-${var.environment}-api-cpu"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.api.resource_id
   scalable_dimension = aws_appautoscaling_target.api.scalable_dimension
@@ -1168,18 +1168,18 @@ variable "instance_class" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "salon-ops-${var.environment}"
+  name       = "trimio-${var.environment}"
   subnet_ids = var.private_subnet_ids
 
   tags = {
-    Name        = "salon-ops-${var.environment}-db-subnet"
+    Name        = "trimio-${var.environment}-db-subnet"
     Environment = var.environment
   }
 }
 
 # Security Group
 resource "aws_security_group" "rds" {
-  name        = "salon-ops-${var.environment}-rds"
+  name        = "trimio-${var.environment}-rds"
   description = "Security group for RDS"
   vpc_id      = var.vpc_id
 
@@ -1191,14 +1191,14 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "salon-ops-${var.environment}-rds"
+    Name        = "trimio-${var.environment}-rds"
     Environment = var.environment
   }
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "salon-ops-${var.environment}"
+  identifier = "trimio-${var.environment}"
 
   engine         = "postgres"
   engine_version = "15.4"
@@ -1209,7 +1209,7 @@ resource "aws_db_instance" "main" {
   storage_type          = "gp3"
   storage_encrypted     = true
 
-  db_name  = "salon_ops"
+  db_name  = "trimio"
   username = "postgres"
   password = random_password.db_password.result
 
@@ -1220,7 +1220,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible    = false
   deletion_protection    = var.environment == "production"
   skip_final_snapshot    = var.environment != "production"
-  final_snapshot_identifier = var.environment == "production" ? "salon-ops-${var.environment}-final" : null
+  final_snapshot_identifier = var.environment == "production" ? "trimio-${var.environment}-final" : null
 
   backup_retention_period = var.environment == "production" ? 7 : 1
   backup_window           = "03:00-04:00"
@@ -1229,7 +1229,7 @@ resource "aws_db_instance" "main" {
   performance_insights_enabled = var.environment == "production"
 
   tags = {
-    Name        = "salon-ops-${var.environment}"
+    Name        = "trimio-${var.environment}"
     Environment = var.environment
   }
 }
@@ -1242,7 +1242,7 @@ resource "random_password" "db_password" {
 
 # Store in Secrets Manager
 resource "aws_secretsmanager_secret" "db" {
-  name = "salon-ops/${var.environment}/database"
+  name = "trimio/${var.environment}/database"
 
   tags = {
     Environment = var.environment
@@ -1279,11 +1279,11 @@ terraform {
   required_version = ">= 1.0"
 
   backend "s3" {
-    bucket         = "salon-ops-terraform-state"
+    bucket         = "trimio-terraform-state"
     key            = "production/terraform.tfstate"
     region         = "ap-south-1"
     encrypt        = true
-    dynamodb_table = "salon-ops-terraform-locks"
+    dynamodb_table = "trimio-terraform-locks"
   }
 
   required_providers {
@@ -1299,7 +1299,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "salon-ops"
+      Project     = "trimio"
       Environment = "production"
       ManagedBy   = "terraform"
     }
@@ -1377,7 +1377,7 @@ module "ecs" {
 ### AWS Secrets Manager Structure
 
 ```
-salon-ops/
+trimio/
 ├── production/
 │   ├── database        # DATABASE_URL, DB_HOST, DB_PASSWORD
 │   ├── redis           # REDIS_URL
@@ -1400,8 +1400,8 @@ salon-ops/
 # API Service
 NODE_ENV=production
 PORT=3000
-API_URL=https://api.salonops.com
-APP_URL=https://app.salonops.com
+API_URL=https://api.trimio.com
+APP_URL=https://app.trimio.com
 
 # From Secrets Manager
 DATABASE_URL=
@@ -1410,15 +1410,15 @@ JWT_SECRET=
 
 # AWS (from IAM role or explicit)
 AWS_REGION=ap-south-1
-S3_BUCKET_NAME=salon-ops-production
+S3_BUCKET_NAME=trimio-production
 
 # Monitoring
 SENTRY_DSN=https://xxx@sentry.io/xxx
 LOG_LEVEL=info
 
 # Web Service
-NEXT_PUBLIC_API_URL=https://api.salonops.com/api/v1
-NEXT_PUBLIC_APP_URL=https://app.salonops.com
+NEXT_PUBLIC_API_URL=https://api.trimio.com/api/v1
+NEXT_PUBLIC_APP_URL=https://app.trimio.com
 
 # Worker Service
 # Same as API (DATABASE_URL, REDIS_URL, etc.)
@@ -1433,12 +1433,12 @@ NEXT_PUBLIC_APP_URL=https://app.salonops.com
 ```hcl
 # Request certificate for all domains
 resource "aws_acm_certificate" "main" {
-  domain_name               = "salonops.com"
+  domain_name               = "trimio.com"
   subject_alternative_names = [
-    "*.salonops.com",
-    "api.salonops.com",
-    "app.salonops.com",
-    "book.salonops.com"
+    "*.trimio.com",
+    "api.trimio.com",
+    "app.trimio.com",
+    "book.trimio.com"
   ]
   validation_method = "DNS"
 
@@ -1484,13 +1484,13 @@ resource "aws_acm_certificate_validation" "main" {
 # infrastructure/terraform/modules/dns/main.tf
 
 data "aws_route53_zone" "main" {
-  name = "salonops.com"
+  name = "trimio.com"
 }
 
 # API subdomain
 resource "aws_route53_record" "api" {
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = "api.salonops.com"
+  name    = "api.trimio.com"
   type    = "A"
 
   alias {
@@ -1503,7 +1503,7 @@ resource "aws_route53_record" "api" {
 # App subdomain
 resource "aws_route53_record" "app" {
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = "app.salonops.com"
+  name    = "app.trimio.com"
   type    = "A"
 
   alias {
@@ -1516,7 +1516,7 @@ resource "aws_route53_record" "app" {
 # Booking subdomain (CloudFront)
 resource "aws_route53_record" "book" {
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = "book.salonops.com"
+  name    = "book.trimio.com"
   type    = "A"
 
   alias {
@@ -1529,7 +1529,7 @@ resource "aws_route53_record" "book" {
 # CDN subdomain
 resource "aws_route53_record" "cdn" {
   zone_id = data.aws_route53_zone.main.zone_id
-  name    = "cdn.salonops.com"
+  name    = "cdn.trimio.com"
   type    = "A"
 
   alias {
@@ -1563,7 +1563,7 @@ copy_tags_to_snapshot = true
 
 ENVIRONMENT=${1:-production}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-DB_IDENTIFIER="salon-ops-${ENVIRONMENT}"
+DB_IDENTIFIER="trimio-${ENVIRONMENT}"
 SNAPSHOT_ID="${DB_IDENTIFIER}-manual-${TIMESTAMP}"
 
 echo "Creating snapshot: ${SNAPSHOT_ID}"
@@ -1620,18 +1620,18 @@ resource "aws_s3_bucket_replication_configuration" "main" {
 1. Identify latest snapshot:
    ```bash
    aws rds describe-db-snapshots \
-     --db-instance-identifier salon-ops-production \
+     --db-instance-identifier trimio-production \
      --query 'DBSnapshots | sort_by(@, &SnapshotCreateTime) | [-1]'
    ```
 
 2. Restore from snapshot:
    ```bash
    aws rds restore-db-instance-from-db-snapshot \
-     --db-instance-identifier salon-ops-production-restored \
+     --db-instance-identifier trimio-production-restored \
      --db-snapshot-identifier <snapshot-id> \
      --db-instance-class db.t3.small \
      --vpc-security-group-ids <security-group-id> \
-     --db-subnet-group-name salon-ops-production
+     --db-subnet-group-name trimio-production
    ```
 
 3. Update DNS/secrets to point to new instance
@@ -1647,7 +1647,7 @@ resource "aws_s3_bucket_replication_configuration" "main" {
 2. Force new deployment if needed:
    ```bash
    aws ecs update-service \
-     --cluster salon-ops-production \
+     --cluster trimio-production \
      --service api \
      --force-new-deployment
    ```
@@ -1662,7 +1662,7 @@ resource "aws_s3_bucket_replication_configuration" "main" {
 ```hcl
 # API High CPU
 resource "aws_cloudwatch_metric_alarm" "api_cpu_high" {
-  alarm_name          = "salon-ops-${var.environment}-api-cpu-high"
+  alarm_name          = "trimio-${var.environment}-api-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -1683,7 +1683,7 @@ resource "aws_cloudwatch_metric_alarm" "api_cpu_high" {
 
 # RDS High CPU
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
-  alarm_name          = "salon-ops-${var.environment}-rds-cpu-high"
+  alarm_name          = "trimio-${var.environment}-rds-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -1702,7 +1702,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
 
 # RDS Low Storage
 resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
-  alarm_name          = "salon-ops-${var.environment}-rds-storage-low"
+  alarm_name          = "trimio-${var.environment}-rds-storage-low"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 1
   metric_name         = "FreeStorageSpace"
@@ -1721,7 +1721,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
 
 # API 5XX Errors
 resource "aws_cloudwatch_metric_alarm" "api_5xx" {
-  alarm_name          = "salon-ops-${var.environment}-api-5xx"
+  alarm_name          = "trimio-${var.environment}-api-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "HTTPCode_Target_5XX_Count"
@@ -1744,7 +1744,7 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
 
 ```hcl
 resource "aws_sns_topic" "alerts" {
-  name = "salon-ops-${var.environment}-alerts"
+  name = "trimio-${var.environment}-alerts"
 }
 
 resource "aws_sns_topic_subscription" "email" {

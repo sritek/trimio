@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import { useStaffList, useDeactivateStaff } from '@/hooks/queries/use-staff';
 import { usePermissions } from '@/hooks/use-permissions';

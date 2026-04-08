@@ -1663,7 +1663,7 @@ API_URL=http://localhost:3000
 APP_URL=http://localhost:3001
 
 # Database
-DATABASE_URL=postgresql://postgres:password@localhost:5432/salon_ops?schema=public
+DATABASE_URL=postgresql://postgres:password@localhost:5432/trimio?schema=public
 DATABASE_POOL_MIN=2
 DATABASE_POOL_MAX=10
 
@@ -1679,8 +1679,8 @@ JWT_REFRESH_EXPIRY=7d
 AWS_REGION=ap-south-1
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
-S3_BUCKET_NAME=salon-ops-dev
-CDN_URL=https://cdn.salonops.com
+S3_BUCKET_NAME=trimio-dev
+CDN_URL=https://cdn.trimio.com
 
 # Payment Gateways (for testing)
 RAZORPAY_KEY_ID=rzp_test_xxx

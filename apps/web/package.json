@@ -1,5 +1,5 @@
 {
-  "name": "@salon-ops/web",
+  "name": "@trimio/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -33,7 +33,7 @@
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@salon-ops/shared": "workspace:*",
+    "@trimio/shared": "workspace:*",
     "@tanstack/react-query": "^5.28.4",
     "@tanstack/react-query-devtools": "^5.28.4",
     "@tanstack/react-table": "^8.16.0",
@@ -58,7 +58,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@salon-ops/config": "workspace:*",
+    "@trimio/config": "workspace:*",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^22.0.0",
     "@types/react": "^18.2.67",

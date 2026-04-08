@@ -27,7 +27,7 @@ This document provides comprehensive testing patterns, setup guides, and best pr
 ### Directory Structure
 
 ```
-salon-ops-backend/
+trimio-backend/
 ├── src/
 ├── tests/
 │   ├── unit/                    # Unit tests
@@ -209,7 +209,7 @@ let prisma: PrismaClient;
 export async function setupTestDatabase() {
   // Use test database URL
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL 
-    || 'postgresql://postgres:postgres@localhost:5432/salon_ops_test';
+    || 'postgresql://postgres:postgres@localhost:5432/trimio_test';
 
   // Run migrations
   execSync('npx prisma migrate deploy', {
@@ -1606,7 +1606,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: salon_ops_test
+          POSTGRES_DB: trimio_test
         ports:
           - 5432:5432
         options: >-
@@ -1638,12 +1638,12 @@ jobs:
       - name: Run migrations
         run: npx prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/salon_ops_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trimio_test
 
       - name: Run tests
         run: npm run test:ci
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/salon_ops_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trimio_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret-key-min-32-characters
 

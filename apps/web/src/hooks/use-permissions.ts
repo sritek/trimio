@@ -7,7 +7,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { hasPermission as checkPermission, type UserRole } from '@salon-ops/shared';
+import { hasPermission as checkPermission, type UserRole } from '@trimio/shared';
 
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -115,4 +115,4 @@ export function usePermissions() {
 }
 
 // Re-export PERMISSIONS for convenience
-export { PERMISSIONS } from '@salon-ops/shared';
+export { PERMISSIONS } from '@trimio/shared';

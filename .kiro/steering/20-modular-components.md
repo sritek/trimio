@@ -384,7 +384,7 @@ components/tables/columns/
 // ✅ GOOD - Page as pure composition (~50-80 lines)
 'use client';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 import {
   AccessDenied,
   PageContainer,

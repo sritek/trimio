@@ -5,58 +5,58 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: salon-ops-postgres
+    container_name: trimio-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: salon_ops
+      POSTGRES_DB: trimio
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - salon-ops-network
+      - trimio-network
 
   # Redis
-  redis:
-    image: redis:7-alpine
-    container_name: salon-ops-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - salon-ops-network
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: trimio-redis
+  #   ports:
+  #     - '6379:6379'
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ['CMD', 'redis-cli', 'ping']
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - trimio-network
 
   # BullMQ Dashboard (Development only)
-  bull-board:
-    image: venatum/bull-board:latest
-    container_name: salon-ops-bull-board
-    ports:
-      - "3002:3000"
-    environment:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - salon-ops-network
+  # bull-board:
+    # image: venatum/bull-board:latest
+    # container_name: trimio-bull-board
+    # ports:
+    #   - '3002:3000'
+    # environment:
+    #   REDIS_HOST: redis
+    #   REDIS_PORT: 6379
+    # depends_on:
+    #   redis:
+    #     condition: service_healthy
+    # networks:
+    #   - trimio-network
 
 networks:
-  salon-ops-network:
+  trimio-network:
     driver: bridge
 
 volumes:
   postgres_data:
-  redis_data:
+  # redis_data:

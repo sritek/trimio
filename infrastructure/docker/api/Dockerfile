@@ -39,8 +39,8 @@ COPY . .
 RUN cd apps/api && npx prisma generate
 
 # Build packages and API
-RUN pnpm --filter @salon-ops/shared build
-RUN pnpm --filter @salon-ops/api build
+RUN pnpm --filter @trimio/shared build
+RUN pnpm --filter @trimio/api build
 
 # ============================================
 # Stage 3: Runner

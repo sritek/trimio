@@ -5,7 +5,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import type { UserRole } from '@salon-ops/shared';
+import type { UserRole } from '@trimio/shared';
 
 import { ForbiddenError } from '../lib/errors';
 
@@ -41,10 +41,7 @@ export function requireBranchAccess(branchIdParam = 'branchId') {
     const body = request.body as Record<string, unknown> | undefined;
     const query = request.query as Record<string, string>;
 
-    const branchId =
-      params[branchIdParam] ||
-      body?.[branchIdParam] ||
-      query[branchIdParam];
+    const branchId = params[branchIdParam] || body?.[branchIdParam] || query[branchIdParam];
 
     if (!branchId) {
       // No branch ID specified - this is allowed for tenant-wide operations
@@ -116,10 +113,7 @@ export function requireOwnResource(userIdField = 'userId') {
     const body = request.body as Record<string, unknown> | undefined;
     const query = request.query as Record<string, string>;
 
-    const resourceUserId =
-      params[userIdField] ||
-      body?.[userIdField] ||
-      query[userIdField];
+    const resourceUserId = params[userIdField] || body?.[userIdField] || query[userIdField];
 
     if (resourceUserId && resourceUserId !== userId) {
       throw new ForbiddenError('You can only access your own resources');

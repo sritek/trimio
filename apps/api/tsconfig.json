@@ -1,5 +1,5 @@
 {
-  "extends": "@salon-ops/config/tsconfig.node.json",
+  "extends": "@trimio/config/tsconfig.node.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",

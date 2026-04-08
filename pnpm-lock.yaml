@@ -47,7 +47,7 @@ importers:
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
-      '@salon-ops/shared':
+      '@trimio/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       bcrypt:
@@ -84,7 +84,7 @@ importers:
         specifier: ^3.25.1
         version: 3.25.1(zod@3.25.76)
     devDependencies:
-      '@salon-ops/config':
+      '@trimio/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/bcrypt':
@@ -189,9 +189,6 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@salon-ops/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       '@tanstack/react-query':
         specifier: ^5.28.4
         version: 5.90.21(react@18.3.1)
@@ -201,6 +198,9 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.16.0
         version: 8.21.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@trimio/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -259,7 +259,7 @@ importers:
         specifier: ^4.5.2
         version: 4.5.7(@types/react@18.3.28)(react@18.3.1)
     devDependencies:
-      '@salon-ops/config':
+      '@trimio/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/js-cookie':
@@ -323,7 +323,7 @@ importers:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
-      '@salon-ops/config':
+      '@trimio/config':
         specifier: workspace:*
         version: link:../config
       tsup:

@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import {
   useCreateAppointment,
@@ -192,7 +192,8 @@ export default function NewAppointmentPage() {
       const aptStartMinutes =
         parseInt(apt.scheduledTime.split(':')[0]) * 60 + parseInt(apt.scheduledTime.split(':')[1]);
       const aptEndMinutes =
-        parseInt(apt.scheduledEndTime.split(':')[0]) * 60 + parseInt(apt.scheduledEndTime.split(':')[1]);
+        parseInt(apt.scheduledEndTime.split(':')[0]) * 60 +
+        parseInt(apt.scheduledEndTime.split(':')[1]);
 
       // Check for overlap
       return selectedStartMinutes < aptEndMinutes && selectedEndMinutes > aptStartMinutes;

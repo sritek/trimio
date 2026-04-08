@@ -1,4 +1,4 @@
-# Salon Ops
+# Trimio
 
 A multi-tenant SaaS platform for salon management. Built with Next.js, Fastify, Prisma, and PostgreSQL.
 
@@ -75,7 +75,7 @@ choco install memurai-developer
 psql -U postgres
 
 # In psql prompt, create the database
-CREATE DATABASE salon_ops;
+CREATE DATABASE trimio;
 \q
 ```
 
@@ -90,16 +90,16 @@ Docker is the easiest way to run PostgreSQL and Redis on any platform.
 ```bash
 # Start PostgreSQL
 docker run -d \
-  --name salon-postgres \
+  --name trimio-postgres \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=salon_ops \
+  -e POSTGRES_DB=trimio \
   -p 5432:5432 \
   postgres:15
 
 # Start Redis
 docker run -d \
-  --name salon-redis \
+  --name trimio-redis \
   -p 6379:6379 \
   redis:7
 ```
@@ -114,7 +114,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: salon_ops
+      POSTGRES_DB: trimio
     ports:
       - '5432:5432'
     volumes:
@@ -141,7 +141,7 @@ docker-compose up -d
 
 ```bash
 git clone <repository-url>
-cd salon-ops
+cd trimio
 pnpm install
 ```
 
@@ -156,7 +156,7 @@ cp apps/api/.env.example apps/api/.env
 Edit `apps/api/.env` with your database credentials:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/salon_ops
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/trimio
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-secret-key-at-least-32-characters-long
 ```
@@ -198,7 +198,7 @@ Password: demo123
 ## Project Structure
 
 ```
-salon-ops/
+trimio/
 ├── apps/
 │   ├── api/                 # Fastify backend
 │   │   ├── prisma/          # Database schema & migrations

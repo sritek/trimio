@@ -4,7 +4,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@salon-ops/shared'],
+  transpilePackages: ['@trimio/shared'],
   images: {
     remotePatterns: [
       {

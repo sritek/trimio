@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Star } from 'lucide-react';
 
-import { PERMISSIONS } from '@salon-ops/shared';
+import { PERMISSIONS } from '@trimio/shared';
 
 import { useLoyaltyConfig, useUpdateLoyaltyConfig } from '@/hooks/queries/use-customers';
 import { usePermissions } from '@/hooks/use-permissions';

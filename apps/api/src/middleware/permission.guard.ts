@@ -5,7 +5,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-import { hasPermission, PERMISSIONS, type UserRole } from '@salon-ops/shared';
+import { hasPermission, PERMISSIONS, type UserRole } from '@trimio/shared';
 
 import { ForbiddenError } from '../lib/errors';
 
@@ -44,9 +44,7 @@ export function requireAnyPermission(permissions: string[]) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const { role } = request.user;
 
-    const hasAny = permissions.some((permission) =>
-      hasPermission(role as UserRole, permission)
-    );
+    const hasAny = permissions.some((permission) => hasPermission(role as UserRole, permission));
 
     if (!hasAny) {
       throw new ForbiddenError(
@@ -70,9 +68,7 @@ export function requireAllPermissions(permissions: string[]) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const { role } = request.user;
 
-    const hasAll = permissions.every((permission) =>
-      hasPermission(role as UserRole, permission)
-    );
+    const hasAll = permissions.every((permission) => hasPermission(role as UserRole, permission));
 
     if (!hasAll) {
       throw new ForbiddenError(
@@ -98,9 +94,7 @@ export function requireRole(allowedRoles: UserRole[]) {
     const { role } = request.user;
 
     if (!allowedRoles.includes(role as UserRole)) {
-      throw new ForbiddenError(
-        `Access denied: role must be one of [${allowedRoles.join(', ')}]`
-      );
+      throw new ForbiddenError(`Access denied: role must be one of [${allowedRoles.join(', ')}]`);
     }
   };
 }
@@ -165,4 +159,4 @@ export const requireTenantManage = requirePermission(PERMISSIONS.TENANT_MANAGE);
 export const requireSettingsManage = requirePermission(PERMISSIONS.SETTINGS_MANAGE);
 
 // Re-export PERMISSIONS for convenience
-export { PERMISSIONS } from '@salon-ops/shared';
+export { PERMISSIONS } from '@trimio/shared';

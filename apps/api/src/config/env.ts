@@ -49,6 +49,9 @@ const envSchema = z
     SENTRY_DSN: z.string().url().optional(),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
+    // Development
+    API_DELAY_MS: z.coerce.number().default(0), // Artificial delay for testing (ms)
+
     // Feature Flags
     ENABLE_REDIS: booleanSchema.default(false),
 

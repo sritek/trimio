@@ -115,6 +115,14 @@ async function registerPlugins() {
     });
   });
 
+  // Artificial delay for development testing (simulates real network latency)
+  if (env.NODE_ENV === 'development' && env.API_DELAY_MS > 0) {
+    fastify.addHook('preHandler', async () => {
+      await new Promise((resolve) => setTimeout(resolve, env.API_DELAY_MS));
+    });
+    logger.info(`API delay enabled: ${env.API_DELAY_MS}ms per request`);
+  }
+
   // Swagger documentation with Zod schema transform
   // Note: jsonSchemaTransform will be enabled after all routes are refactored to use Zod schemas
   await fastify.register(swagger, {

@@ -23,7 +23,11 @@ import {
   updateBranchBodySchema,
   updateSuperOwnerBodySchema,
   updateLoyaltyConfigBodySchema,
+  createSubscriptionBodySchema,
+  cancelSubscriptionBodySchema,
+  reactivateSubscriptionBodySchema,
 } from './internal.schema';
+import { subscriptionsService } from '../subscriptions/subscriptions.service';
 
 export default async function internalRoutes(fastify: FastifyInstance) {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -252,6 +256,112 @@ export default async function internalRoutes(fastify: FastifyInstance) {
         const { tenantId } = request.params as { tenantId: string };
         const config = await internalService.updateLoyaltyConfig(tenantId, request.body);
         return reply.send(successResponse(config));
+      }
+    );
+
+    // ============================================
+    // SUBSCRIPTION MANAGEMENT ROUTES
+    // ============================================
+
+    // GET /internal/subscriptions/plans - List all subscription plans
+    protectedApp.get(
+      '/subscriptions/plans',
+      {
+        schema: {
+          description: 'List all subscription plans',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      async (_request, reply) => {
+        const plans = await subscriptionsService.listPlans({ isActive: true });
+        return reply.send(successResponse(plans));
+      }
+    );
+
+    // GET /internal/subscriptions/tenants/:tenantId/billing - Get billing overview for tenant
+    protectedApp.get(
+      '/subscriptions/tenants/:tenantId/billing',
+      {
+        schema: {
+          description: 'Get billing overview for a tenant',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      async (request, reply) => {
+        const { tenantId } = request.params as { tenantId: string };
+        const overview = await subscriptionsService.getBillingOverview(tenantId);
+        return reply.send(successResponse(overview));
+      }
+    );
+
+    // POST /internal/subscriptions/tenants/:tenantId/subscriptions - Create subscription for branch
+    protectedApp.post(
+      '/subscriptions/tenants/:tenantId/subscriptions',
+      {
+        schema: {
+          description: 'Create a subscription for a branch',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+          body: createSubscriptionBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { tenantId } = request.params as { tenantId: string };
+        // Use 'internal-admin' as the userId for audit purposes
+        const subscription = await subscriptionsService.createSubscription(
+          tenantId,
+          request.body,
+          'internal-admin'
+        );
+        return reply.status(201).send(successResponse(subscription));
+      }
+    );
+
+    // POST /internal/subscriptions/tenants/:tenantId/branches/:branchId/cancel - Cancel subscription
+    protectedApp.post(
+      '/subscriptions/tenants/:tenantId/branches/:branchId/cancel',
+      {
+        schema: {
+          description: 'Cancel a branch subscription',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+          body: cancelSubscriptionBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { tenantId, branchId } = request.params as { tenantId: string; branchId: string };
+        const subscription = await subscriptionsService.cancelSubscription(
+          tenantId,
+          branchId,
+          request.body,
+          'internal-admin'
+        );
+        return reply.send(successResponse(subscription));
+      }
+    );
+
+    // POST /internal/subscriptions/tenants/:tenantId/branches/:branchId/reactivate - Reactivate subscription
+    protectedApp.post(
+      '/subscriptions/tenants/:tenantId/branches/:branchId/reactivate',
+      {
+        schema: {
+          description: 'Reactivate a cancelled or suspended subscription',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+          body: reactivateSubscriptionBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { tenantId, branchId } = request.params as { tenantId: string; branchId: string };
+        const subscription = await subscriptionsService.reactivateSubscription(
+          tenantId,
+          branchId,
+          request.body,
+          'internal-admin'
+        );
+        return reply.send(successResponse(subscription));
       }
     );
 

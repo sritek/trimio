@@ -52,6 +52,7 @@ import { stationTypesRoutes } from './modules/station-types';
 import { stationsRoutes } from './modules/stations';
 import { floorViewRoutes } from './modules/floor-view';
 import { internalRoutes } from './modules/internal';
+import { subscriptionsRoutes } from './modules/subscriptions';
 
 // Create Fastify instance with Zod type provider
 const fastify = Fastify({
@@ -243,6 +244,9 @@ async function registerRoutes() {
 
   // Internal Admin Portal routes (company-only)
   fastify.register(internalRoutes, { prefix: '/api/v1/internal' });
+
+  // Subscriptions routes
+  fastify.register(subscriptionsRoutes, { prefix: '/api/v1/subscriptions' });
 }
 
 // Start server

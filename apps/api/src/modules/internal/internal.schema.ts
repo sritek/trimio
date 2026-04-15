@@ -34,8 +34,6 @@ export const createTenantBodySchema = z.object({
   email: z.string().email('Invalid email format'),
   phone: z.string().regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9').optional(),
   logoUrl: z.string().url().optional(),
-  subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).default('trial'),
-  trialDays: z.number().int().min(0).max(90).default(14),
   // Loyalty configuration
   loyaltyEnabled: z.boolean().default(true),
   loyaltyPointsPerUnit: z.number().min(0).max(1).default(0.01), // Points earned per ₹1 spent
@@ -97,8 +95,6 @@ export const updateTenantBodySchema = z.object({
     .optional()
     .nullable(),
   logoUrl: z.string().url().optional().nullable(),
-  subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).optional(),
-  subscriptionStatus: z.enum(['active', 'inactive', 'suspended', 'cancelled']).optional(),
 });
 
 export type UpdateTenantBody = z.infer<typeof updateTenantBodySchema>;
@@ -157,9 +153,6 @@ export const tenantResponseSchema = z.object({
   legalName: z.string().nullable(),
   email: z.string(),
   phone: z.string().nullable(),
-  subscriptionPlan: z.string(),
-  subscriptionStatus: z.string(),
-  trialEndsAt: z.string().nullable(),
   createdAt: z.string(),
 });
 
@@ -189,3 +182,35 @@ export const userResponseSchema = z.object({
   isActive: z.boolean(),
   createdAt: z.string(),
 });
+
+// ============================================
+// SUBSCRIPTION SCHEMAS (Internal Admin)
+// ============================================
+
+// Create subscription for a branch
+export const createSubscriptionBodySchema = z.object({
+  branchId: z.string().uuid(),
+  planId: z.string().uuid(),
+  billingCycle: z.enum(['monthly', 'annual']),
+  startTrial: z.boolean().default(true),
+  discountPercentage: z.number().min(0).max(100).default(0),
+  discountReason: z.string().max(255).optional(),
+});
+
+export type CreateSubscriptionBody = z.infer<typeof createSubscriptionBodySchema>;
+
+// Cancel subscription
+export const cancelSubscriptionBodySchema = z.object({
+  reason: z.string().min(10, 'Reason must be at least 10 characters').max(500),
+  cancelImmediately: z.boolean().default(false),
+});
+
+export type CancelSubscriptionBody = z.infer<typeof cancelSubscriptionBodySchema>;
+
+// Reactivate subscription
+export const reactivateSubscriptionBodySchema = z.object({
+  planId: z.string().uuid().optional(),
+  billingCycle: z.enum(['monthly', 'annual']).optional(),
+});
+
+export type ReactivateSubscriptionBody = z.infer<typeof reactivateSubscriptionBodySchema>;

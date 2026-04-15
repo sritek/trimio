@@ -110,9 +110,6 @@ export class AuthService {
           slug: this.generateSlug(businessName),
           email,
           phone,
-          subscriptionPlan: 'trial',
-          subscriptionStatus: 'active',
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
         },
       });
 

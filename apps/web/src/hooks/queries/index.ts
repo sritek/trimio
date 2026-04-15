@@ -12,3 +12,4 @@ export * from './use-invoices';
 export * from './use-staff';
 export * from './use-inventory';
 export * from './use-memberships';
+export * from './use-subscriptions';

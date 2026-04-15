@@ -13,11 +13,10 @@ import { api } from '@/lib/api/client';
 export interface TenantUsage {
   branches: {
     current: number;
-    max: number;
+    active: number;
   };
   users: {
     current: number;
-    max: number;
   };
 }
 
@@ -29,9 +28,12 @@ export interface Tenant {
   email: string;
   phone: string | null;
   logoUrl: string | null;
-  subscriptionPlan: string;
-  subscriptionStatus: string;
-  trialEndsAt: string | null;
+  billingEmail: string | null;
+  billingAddress: string | null;
+  gstin: string | null;
+  volumeDiscountEnabled: boolean;
+  volumeDiscountPercentage: number;
+  volumeDiscountMinBranches: number;
   usage: TenantUsage;
 }
 

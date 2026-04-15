@@ -19,6 +19,10 @@ import type {
   Owner,
   TenantsResponse,
   LoyaltyConfig,
+  SubscriptionPlan,
+  BranchSubscription,
+  CreateSubscriptionFormData,
+  SubscriptionBillingOverview,
 } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -168,8 +172,6 @@ export function useInternalApi() {
           legalName: data.legalName || undefined,
           email: data.email,
           phone: data.phone || undefined,
-          subscriptionPlan: data.subscriptionPlan,
-          trialDays: data.trialDays,
         }),
       });
     },
@@ -186,8 +188,6 @@ export function useInternalApi() {
           email: data.email,
           phone: data.phone || null,
           logoUrl: data.logoUrl || null,
-          subscriptionPlan: data.subscriptionPlan,
-          subscriptionStatus: data.subscriptionStatus,
         }),
       });
     },
@@ -314,6 +314,72 @@ export function useInternalApi() {
     [uploadFile]
   );
 
+  // ============================================
+  // SUBSCRIPTION OPERATIONS
+  // ============================================
+
+  const listPlans = useCallback(async (): Promise<SubscriptionPlan[]> => {
+    return apiFetch<SubscriptionPlan[]>('/subscriptions/plans');
+  }, [apiFetch]);
+
+  const getBillingOverview = useCallback(
+    async (tenantId: string): Promise<SubscriptionBillingOverview> => {
+      return apiFetch<SubscriptionBillingOverview>(`/subscriptions/tenants/${tenantId}/billing`);
+    },
+    [apiFetch]
+  );
+
+  const createSubscription = useCallback(
+    async (tenantId: string, data: CreateSubscriptionFormData): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(`/subscriptions/tenants/${tenantId}/subscriptions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          branchId: data.branchId,
+          planId: data.planId,
+          billingCycle: data.billingCycle,
+          startTrial: data.startTrial,
+          discountPercentage: data.discountPercentage || 0,
+          discountReason: data.discountReason || undefined,
+        }),
+      });
+    },
+    [apiFetch]
+  );
+
+  const cancelSubscription = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data: { reason: string; cancelImmediately: boolean }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const reactivateSubscription = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data?: { planId?: string; billingCycle?: 'monthly' | 'annual' }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/reactivate`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data || {}),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
   // Memoize the returned object to prevent infinite loops when used in useEffect dependencies
   return useMemo(
     () => ({
@@ -333,6 +399,12 @@ export function useInternalApi() {
       updateLoyaltyConfig,
       // Upload
       uploadLogo,
+      // Subscriptions
+      listPlans,
+      getBillingOverview,
+      createSubscription,
+      cancelSubscription,
+      reactivateSubscription,
     }),
     [
       listTenants,
@@ -346,6 +418,11 @@ export function useInternalApi() {
       getLoyaltyConfig,
       updateLoyaltyConfig,
       uploadLogo,
+      listPlans,
+      getBillingOverview,
+      createSubscription,
+      cancelSubscription,
+      reactivateSubscription,
     ]
   );
 }

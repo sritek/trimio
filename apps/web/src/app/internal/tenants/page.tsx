@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAdminStore } from '@/stores/admin-store';
 
-import { PlanBadge } from '../components';
 import { useInternalApi } from '../hooks';
 import type { Tenant } from '../types';
 
@@ -175,7 +174,6 @@ export default function TenantsPage() {
                         <p className="text-sm text-slate-500">{tenant.email}</p>
                       </div>
                     </div>
-                    <PlanBadge plan={tenant.subscriptionPlan} />
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -189,11 +187,6 @@ export default function TenantsPage() {
                       <span>{tenant._count.users} users</span>
                     </div>
                   </div>
-                  {tenant.trialEndsAt && (
-                    <p className="text-xs text-primary mt-2">
-                      Trial ends: {format(new Date(tenant.trialEndsAt), 'MMM d, yyyy')}
-                    </p>
-                  )}
                   <p className="text-xs text-slate-400 mt-2">
                     Created: {format(new Date(tenant.createdAt), 'MMM d, yyyy')}
                   </p>

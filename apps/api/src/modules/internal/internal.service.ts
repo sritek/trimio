@@ -45,12 +45,6 @@ export class InternalService {
           email: data.email,
           phone: data.phone,
           logoUrl: data.logoUrl,
-          subscriptionPlan: data.subscriptionPlan,
-          subscriptionStatus: 'active',
-          trialEndsAt:
-            data.subscriptionPlan === 'trial'
-              ? new Date(Date.now() + data.trialDays * 24 * 60 * 60 * 1000)
-              : null,
         },
       });
 
@@ -334,8 +328,6 @@ export class InternalService {
         email: data.email,
         phone: data.phone,
         logoUrl: data.logoUrl,
-        subscriptionPlan: data.subscriptionPlan,
-        subscriptionStatus: data.subscriptionStatus,
       },
     });
 

@@ -6,13 +6,11 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { Users, Plus, AlertTriangle } from 'lucide-react';
+import { Users, Plus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DataTable, EmptyState, SearchInput, ConfirmDialog } from '@/components/common';
 import { useUsers, useDeleteUser, type User } from '@/hooks/queries/use-users';
-import { useTenant } from '@/hooks/queries/use-tenant';
 import { toast } from 'sonner';
 import { getUserColumns } from './components/user-columns';
 import { UserPanel } from './components/user-panel';
@@ -26,7 +24,6 @@ export default function TeamPage() {
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   const { data: usersData, isLoading } = useUsers({ page, limit, search });
-  const { data: tenant } = useTenant();
   const deleteUser = useDeleteUser();
 
   const handleEdit = useCallback((user: User) => {
@@ -64,15 +61,13 @@ export default function TeamPage() {
     setPage(1);
   }, []);
 
-  const isAtUserLimit = tenant && tenant.usage.users.current >= tenant.usage.users.max;
-
   const emptyState = (
     <EmptyState
       icon={Users}
       title="No team members"
       description={search ? 'No users match your search.' : 'Add your first team member.'}
       action={
-        !search && !isAtUserLimit ? (
+        !search ? (
           <Button onClick={() => setIsCreating(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add User
@@ -84,17 +79,6 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      {/* User Limit Warning */}
-      {isAtUserLimit && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            You have reached your user limit ({tenant?.usage.users.max} users). Please upgrade your
-            plan to add more team members.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -105,7 +89,7 @@ export default function TeamPage() {
               </CardTitle>
               <CardDescription>Manage your team and their access permissions</CardDescription>
             </div>
-            <Button onClick={() => setIsCreating(true)} disabled={isAtUserLimit}>
+            <Button onClick={() => setIsCreating(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>

@@ -30,7 +30,13 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useAdminStore } from '@/stores/admin-store';
 
-import { PlanBadge, FormDialog, BranchForm, OwnerForm, TenantForm } from '../../components';
+import {
+  FormDialog,
+  BranchForm,
+  OwnerForm,
+  TenantForm,
+  SubscriptionSection,
+} from '../../components';
 import {
   useInternalApi,
   validateBranchForm,
@@ -47,8 +53,6 @@ import type {
   BranchFormData,
   OwnerFormData,
   FormErrors,
-  SubscriptionPlan,
-  SubscriptionStatus,
   LoyaltyConfig,
 } from '../../types';
 
@@ -70,9 +74,6 @@ export default function TenantDetailPage() {
     legalName: '',
     email: '',
     phone: '',
-    subscriptionPlan: 'trial',
-    subscriptionStatus: 'active',
-    trialDays: 14,
     logoUrl: '',
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -198,9 +199,6 @@ export default function TenantDetailPage() {
         legalName: tenant.legalName || '',
         email: tenant.email,
         phone: tenant.phone || '',
-        subscriptionPlan: tenant.subscriptionPlan as SubscriptionPlan,
-        subscriptionStatus: tenant.subscriptionStatus as SubscriptionStatus,
-        trialDays: 14,
         logoUrl: tenant.logoUrl || '',
       });
       setLogoPreview(tenant.logoUrl);
@@ -445,7 +443,6 @@ export default function TenantDetailPage() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-slate-900">{tenant.name}</h1>
-              <PlanBadge plan={tenant.subscriptionPlan} />
             </div>
             <p className="text-slate-500">{tenant.slug}</p>
           </div>
@@ -500,14 +497,6 @@ export default function TenantDetailPage() {
                 {format(new Date(tenant.createdAt), 'MMM d, yyyy')}
               </p>
             </div>
-            {tenant.trialEndsAt && (
-              <div>
-                <p className="text-xs text-slate-500 uppercase">Trial Ends</p>
-                <p className="text-primary font-medium">
-                  {format(new Date(tenant.trialEndsAt), 'MMM d, yyyy')}
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -630,6 +619,13 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Subscriptions */}
+      <SubscriptionSection
+        tenantId={tenant.id}
+        branches={tenant.branches}
+        onRefresh={fetchTenant}
+      />
 
       {/* Loyalty Program Configuration */}
       <Card className="bg-white border-slate-200 shadow-sm mt-6">
@@ -774,8 +770,6 @@ export default function TenantDetailPage() {
           logoPreview={logoPreview}
           onLogoSelect={handleLogoSelect}
           onLogoRemove={handleLogoRemove}
-          showStatus={true}
-          showTrialDays={false}
         />
       </FormDialog>
 

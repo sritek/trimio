@@ -272,8 +272,6 @@ export default function NewTenantPage() {
                 onLogoSelect={handleLogoSelect}
                 onLogoRemove={handleLogoRemove}
                 logoUploading={logo.uploading}
-                showStatus={false}
-                showTrialDays={true}
               />
 
               <div className="flex justify-end pt-4">

@@ -7,16 +7,8 @@
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { LogoUpload } from './logo-upload';
-import { SUBSCRIPTION_PLANS, SUBSCRIPTION_STATUSES } from '../constants';
-import type { TenantFormData, FormErrors, SubscriptionPlan, SubscriptionStatus } from '../types';
+import type { TenantFormData, FormErrors } from '../types';
 
 interface TenantFormProps {
   data: TenantFormData;
@@ -31,10 +23,6 @@ interface TenantFormProps {
   onLogoRemove: () => void;
   /** Whether logo is currently uploading */
   logoUploading?: boolean;
-  /** If true, shows status field (for edit mode) */
-  showStatus?: boolean;
-  /** If true, shows trial days field when plan is trial */
-  showTrialDays?: boolean;
 }
 
 export function TenantForm({
@@ -46,8 +34,6 @@ export function TenantForm({
   onLogoSelect,
   onLogoRemove,
   logoUploading = false,
-  showStatus = false,
-  showTrialDays = true,
 }: TenantFormProps) {
   const handleChange = (field: keyof TenantFormData, value: string | number | boolean) => {
     onChange({ ...data, [field]: value });
@@ -123,69 +109,6 @@ export function TenantForm({
           </div>
           {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-slate-700">Subscription Plan</Label>
-          <Select
-            value={data.subscriptionPlan}
-            onValueChange={(v) => handleChange('subscriptionPlan', v as SubscriptionPlan)}
-          >
-            <SelectTrigger className="border-slate-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SUBSCRIPTION_PLANS.map((plan) => (
-                <SelectItem key={plan.value} value={plan.value}>
-                  {plan.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {showStatus && (
-          <div className="space-y-2">
-            <Label className="text-slate-700">Status</Label>
-            <Select
-              value={data.subscriptionStatus}
-              onValueChange={(v) => handleChange('subscriptionStatus', v as SubscriptionStatus)}
-            >
-              <SelectTrigger className="border-slate-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SUBSCRIPTION_STATUSES.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>
-                    {status.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {showTrialDays && data.subscriptionPlan === 'trial' && !showStatus && (
-          <div className="space-y-2">
-            <Label className="text-slate-700">Trial Days</Label>
-            <Input
-              type="number"
-              value={data.trialDays || ''}
-              onChange={(e) =>
-                handleChange('trialDays', e.target.value ? parseInt(e.target.value) : 0)
-              }
-              onBlur={(e) => {
-                if (!e.target.value || parseInt(e.target.value) <= 0) {
-                  handleChange('trialDays', 14);
-                }
-              }}
-              min={1}
-              max={90}
-              className="border-slate-300"
-            />
-          </div>
-        )}
       </div>
     </>
   );

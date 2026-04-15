@@ -7,7 +7,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Armchair, Building2, KeyRound } from 'lucide-react';
+import { Armchair, Building2, CreditCard, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -33,6 +33,13 @@ const settingsTabs: SettingsTab[] = [
     href: '/settings/branches',
     icon: Building2,
     requiredRoles: ['super_owner', 'regional_manager'],
+  },
+  {
+    id: 'subscription',
+    label: 'Subscription',
+    href: '/settings/subscription',
+    icon: CreditCard,
+    requiredRoles: ['super_owner'],
   },
   {
     id: 'stations',

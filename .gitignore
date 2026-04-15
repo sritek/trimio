@@ -69,3 +69,9 @@ next-env.d.ts
 
 # Kiro Specs
 .kiro/specs
+
+# In apps/api/.gitignore or root .gitignore
+prisma/seed.js
+prisma/seed.js.map
+prisma/seed.d.ts
+prisma/seed.d.ts.map

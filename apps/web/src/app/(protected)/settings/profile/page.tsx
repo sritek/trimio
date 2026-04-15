@@ -7,12 +7,10 @@
 
 import { Building2, Mail, Phone, CreditCard } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTenant } from '@/hooks/queries/use-tenant';
 import { useAuthStore } from '@/stores/auth-store';
 import { ProfileForm } from './components/profile-form';
-import { format } from 'date-fns';
 
 export default function ProfilePage() {
   const { data: tenant, isLoading, error } = useTenant();
@@ -76,35 +74,30 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Subscription Information */}
+      {/* Usage Information */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
-            Subscription
+            Usage
           </CardTitle>
-          <CardDescription>Your current plan</CardDescription>
+          <CardDescription>Your current usage statistics</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Current Plan</p>
-              <p className="text-lg font-semibold capitalize">{tenant.subscriptionPlan}</p>
+              <p className="text-sm font-medium text-muted-foreground">Total Branches</p>
+              <p className="text-lg font-semibold">{tenant.usage.branches.current}</p>
             </div>
-            <Badge
-              variant={tenant.subscriptionStatus === 'active' ? 'default' : 'secondary'}
-              className="capitalize"
-            >
-              {tenant.subscriptionStatus}
-            </Badge>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Active Subscriptions</p>
+              <p className="text-lg font-semibold">{tenant.usage.branches.active}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Total Users</p>
+              <p className="text-lg font-semibold">{tenant.usage.users.current}</p>
+            </div>
           </div>
-
-          {tenant.trialEndsAt && (
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Trial Ends</p>
-              <p className="text-sm">{format(new Date(tenant.trialEndsAt), 'PPP')}</p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

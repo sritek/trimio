@@ -7,14 +7,6 @@ import { prisma } from '../../lib/prisma';
 import { NotFoundError } from '../../lib/errors';
 import type { UpdateTenantBody } from './tenant.schema';
 
-// Subscription plan limits
-const PLAN_LIMITS: Record<string, { branches: number; users: number }> = {
-  trial: { branches: 1, users: 5 },
-  starter: { branches: 2, users: 10 },
-  professional: { branches: 5, users: 25 },
-  enterprise: { branches: 999, users: 999 },
-};
-
 export class TenantService {
   /**
    * Get tenant details with usage statistics
@@ -33,9 +25,12 @@ export class TenantService {
         email: true,
         phone: true,
         logoUrl: true,
-        subscriptionPlan: true,
-        subscriptionStatus: true,
-        trialEndsAt: true,
+        billingEmail: true,
+        billingAddress: true,
+        gstin: true,
+        volumeDiscountEnabled: true,
+        volumeDiscountPercentage: true,
+        volumeDiscountMinBranches: true,
       },
     });
 
@@ -44,7 +39,7 @@ export class TenantService {
     }
 
     // Get usage statistics
-    const [branchCount, userCount] = await Promise.all([
+    const [branchCount, userCount, activeBranchSubscriptions] = await Promise.all([
       prisma.branch.count({
         where: {
           tenantId,
@@ -57,21 +52,24 @@ export class TenantService {
           deletedAt: null,
         },
       }),
+      prisma.branchSubscription.count({
+        where: {
+          tenantId,
+          status: { in: ['active', 'trial'] },
+        },
+      }),
     ]);
-
-    const limits = PLAN_LIMITS[tenant.subscriptionPlan] || PLAN_LIMITS.trial;
 
     return {
       ...tenant,
-      trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
+      volumeDiscountPercentage: Number(tenant.volumeDiscountPercentage),
       usage: {
         branches: {
           current: branchCount,
-          max: limits.branches,
+          active: activeBranchSubscriptions,
         },
         users: {
           current: userCount,
-          max: limits.users,
         },
       },
     };
@@ -108,14 +106,17 @@ export class TenantService {
         email: true,
         phone: true,
         logoUrl: true,
-        subscriptionPlan: true,
-        subscriptionStatus: true,
-        trialEndsAt: true,
+        billingEmail: true,
+        billingAddress: true,
+        gstin: true,
+        volumeDiscountEnabled: true,
+        volumeDiscountPercentage: true,
+        volumeDiscountMinBranches: true,
       },
     });
 
     // Get usage statistics for response
-    const [branchCount, userCount] = await Promise.all([
+    const [branchCount, userCount, activeBranchSubscriptions] = await Promise.all([
       prisma.branch.count({
         where: {
           tenantId,
@@ -128,31 +129,27 @@ export class TenantService {
           deletedAt: null,
         },
       }),
+      prisma.branchSubscription.count({
+        where: {
+          tenantId,
+          status: { in: ['active', 'trial'] },
+        },
+      }),
     ]);
-
-    const limits = PLAN_LIMITS[updated.subscriptionPlan] || PLAN_LIMITS.trial;
 
     return {
       ...updated,
-      trialEndsAt: updated.trialEndsAt?.toISOString() ?? null,
+      volumeDiscountPercentage: Number(updated.volumeDiscountPercentage),
       usage: {
         branches: {
           current: branchCount,
-          max: limits.branches,
+          active: activeBranchSubscriptions,
         },
         users: {
           current: userCount,
-          max: limits.users,
         },
       },
     };
-  }
-
-  /**
-   * Get plan limits for a subscription plan
-   */
-  getPlanLimits(plan: string) {
-    return PLAN_LIMITS[plan] || PLAN_LIMITS.trial;
   }
 }
 

@@ -6,6 +6,53 @@
 // ENTITY TYPES
 // ============================================
 
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  code: string;
+  tier: 'basic' | 'professional' | 'enterprise';
+  description: string | null;
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+  maxUsers: number;
+  maxAppointmentsPerDay: number;
+  maxServices: number;
+  maxProducts: number;
+  features: Record<string, unknown>;
+  trialDays: number;
+  gracePeriodDays: number;
+  isActive: boolean;
+  isPublic: boolean;
+}
+
+export interface BranchSubscription {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  planId: string;
+  billingCycle: 'monthly' | 'annual';
+  status: 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled' | 'expired';
+  trialStartDate: string | null;
+  trialEndDate: string | null;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  pricePerPeriod: number;
+  currency: string;
+  discountPercentage: number;
+  discountReason: string | null;
+  autoRenew: boolean;
+  cancelAtPeriodEnd: boolean;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  gracePeriodEndDate: string | null;
+  suspendedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  plan: SubscriptionPlan;
+  branchName?: string;
+}
+
 export interface Branch {
   id: string;
   name: string;
@@ -18,6 +65,7 @@ export interface Branch {
   email: string | null;
   gstin: string | null;
   isActive: boolean;
+  subscriptionStatus: string | null;
   createdAt: string;
 }
 
@@ -38,9 +86,6 @@ export interface Tenant {
   email: string;
   phone: string | null;
   logoUrl: string | null;
-  subscriptionPlan: SubscriptionPlan;
-  subscriptionStatus: SubscriptionStatus;
-  trialEndsAt: string | null;
   createdAt: string;
   _count: {
     branches: number;
@@ -50,6 +95,9 @@ export interface Tenant {
 
 export interface TenantDetail extends Tenant {
   legalName: string | null;
+  billingEmail: string | null;
+  billingAddress: string | null;
+  gstin: string | null;
   branches: Branch[];
   users: Owner[];
 }
@@ -74,9 +122,6 @@ export interface TenantFormData {
   legalName: string;
   email: string;
   phone: string;
-  subscriptionPlan: SubscriptionPlan;
-  subscriptionStatus: SubscriptionStatus;
-  trialDays: number;
   logoUrl: string;
 }
 
@@ -102,13 +147,6 @@ export interface OwnerFormData {
 export interface FormErrors {
   [key: string]: string | null;
 }
-
-// ============================================
-// ENUMS / CONSTANTS
-// ============================================
-
-export type SubscriptionPlan = 'trial' | 'basic' | 'professional' | 'enterprise';
-export type SubscriptionStatus = 'active' | 'inactive' | 'suspended' | 'cancelled';
 
 // ============================================
 // API RESPONSE TYPES
@@ -144,4 +182,29 @@ export interface CreatedEntities {
   tenant: { id: string; name: string; slug: string } | null;
   branch: { id: string; name: string } | null;
   owner: { id: string; name: string; email: string | null } | null;
+}
+
+// ============================================
+// SUBSCRIPTION FORM TYPES
+// ============================================
+
+export interface CreateSubscriptionFormData {
+  branchId: string;
+  planId: string;
+  billingCycle: 'monthly' | 'annual';
+  startTrial: boolean;
+  discountPercentage: number;
+  discountReason: string;
+}
+
+export interface SubscriptionBillingOverview {
+  subscriptions: BranchSubscription[];
+  summary: {
+    totalBranches: number;
+    activeSubscriptions: number;
+    trialSubscriptions: number;
+    pastDueSubscriptions: number;
+    suspendedSubscriptions: number;
+    monthlyRecurring: number;
+  };
 }

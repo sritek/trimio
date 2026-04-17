@@ -2,92 +2,23 @@
 
 /**
  * Subscription Settings Page
- * View and manage branch subscriptions (super_owner only)
+ * View subscription details (super_owner only)
+ * Plan changes and cancellations are handled by contacting support
  */
 
-import { useState, useCallback } from 'react';
 import { CreditCard, Building2, TrendingUp, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  useBillingOverview,
-  useSubscriptionPlans,
-  useCancelSubscription,
-  useReactivateSubscription,
-  useChangePlan,
-  type BranchSubscription,
-  type CancelSubscriptionInput,
-  type ReactivateSubscriptionInput,
-  type ChangePlanInput,
-} from '@/hooks/queries/use-subscriptions';
+import { useBillingOverview, useSubscriptionPlans } from '@/hooks/queries/use-subscriptions';
 
 import { SubscriptionCard } from './components/subscription-card';
 import { PlanComparisonCard } from './components/plan-comparison-card';
-import { CancelDialog } from './components/cancel-dialog';
-import { ReactivateDialog } from './components/reactivate-dialog';
-import { ChangePlanDialog } from './components/change-plan-dialog';
+import { CurrentPlanCard } from './components/current-plan-card';
 
 export default function SubscriptionPage() {
   const { data: billingOverview, isLoading: isLoadingBilling } = useBillingOverview();
   const { data: plans, isLoading: isLoadingPlans } = useSubscriptionPlans();
-
-  const cancelMutation = useCancelSubscription();
-  const reactivateMutation = useReactivateSubscription();
-  const changePlanMutation = useChangePlan();
-
-  // Dialog states
-  const [cancelSubscription, setCancelSubscription] = useState<BranchSubscription | null>(null);
-  const [reactivateSubscription, setReactivateSubscription] = useState<BranchSubscription | null>(
-    null
-  );
-  const [changePlanSubscription, setChangePlanSubscription] = useState<BranchSubscription | null>(
-    null
-  );
-
-  // Handlers
-  const handleCancel = useCallback(
-    async (data: CancelSubscriptionInput) => {
-      if (!cancelSubscription) return;
-      try {
-        await cancelMutation.mutateAsync({ branchId: cancelSubscription.branchId, data });
-        toast.success('Subscription cancelled');
-        setCancelSubscription(null);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to cancel subscription');
-      }
-    },
-    [cancelSubscription, cancelMutation]
-  );
-
-  const handleReactivate = useCallback(
-    async (data: ReactivateSubscriptionInput) => {
-      if (!reactivateSubscription) return;
-      try {
-        await reactivateMutation.mutateAsync({ branchId: reactivateSubscription.branchId, data });
-        toast.success('Subscription reactivated');
-        setReactivateSubscription(null);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to reactivate subscription');
-      }
-    },
-    [reactivateSubscription, reactivateMutation]
-  );
-
-  const handleChangePlan = useCallback(
-    async (data: ChangePlanInput) => {
-      if (!changePlanSubscription) return;
-      try {
-        await changePlanMutation.mutateAsync({ branchId: changePlanSubscription.branchId, data });
-        toast.success('Plan changed successfully');
-        setChangePlanSubscription(null);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to change plan');
-      }
-    },
-    [changePlanSubscription, changePlanMutation]
-  );
 
   const isLoading = isLoadingBilling || isLoadingPlans;
 
@@ -100,6 +31,9 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-6">
+      {/* Current Plan Card - Shows feature access for current branch */}
+      <CurrentPlanCard />
+
       {/* Summary Cards */}
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -167,7 +101,7 @@ export default function SubscriptionPage() {
             <CreditCard className="h-5 w-5" />
             Branch Subscriptions
           </CardTitle>
-          <CardDescription>Manage subscriptions for each of your branches</CardDescription>
+          <CardDescription>View subscriptions for each of your branches</CardDescription>
         </CardHeader>
         <CardContent>
           {subscriptions.length === 0 ? (
@@ -181,13 +115,7 @@ export default function SubscriptionPage() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {subscriptions.map((subscription) => (
-                <SubscriptionCard
-                  key={subscription.id}
-                  subscription={subscription}
-                  onCancel={() => setCancelSubscription(subscription)}
-                  onReactivate={() => setReactivateSubscription(subscription)}
-                  onChangePlan={() => setChangePlanSubscription(subscription)}
-                />
+                <SubscriptionCard key={subscription.id} subscription={subscription} />
               ))}
             </div>
           )}
@@ -206,35 +134,6 @@ export default function SubscriptionPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Cancel Dialog */}
-      <CancelDialog
-        open={!!cancelSubscription}
-        onOpenChange={(open) => !open && setCancelSubscription(null)}
-        branchName={cancelSubscription?.branchName || ''}
-        onConfirm={handleCancel}
-        isLoading={cancelMutation.isPending}
-      />
-
-      {/* Reactivate Dialog */}
-      <ReactivateDialog
-        open={!!reactivateSubscription}
-        onOpenChange={(open) => !open && setReactivateSubscription(null)}
-        subscription={reactivateSubscription}
-        plans={plans || []}
-        onConfirm={handleReactivate}
-        isLoading={reactivateMutation.isPending}
-      />
-
-      {/* Change Plan Dialog */}
-      <ChangePlanDialog
-        open={!!changePlanSubscription}
-        onOpenChange={(open) => !open && setChangePlanSubscription(null)}
-        subscription={changePlanSubscription}
-        plans={plans || []}
-        onConfirm={handleChangePlan}
-        isLoading={changePlanMutation.isPending}
-      />
     </div>
   );
 }
@@ -242,6 +141,15 @@ export default function SubscriptionPage() {
 function SubscriptionSkeleton() {
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-32 w-full" />
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <Card key={i}>

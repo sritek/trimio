@@ -26,6 +26,9 @@ import {
   createSubscriptionBodySchema,
   cancelSubscriptionBodySchema,
   reactivateSubscriptionBodySchema,
+  createPlanBodySchema,
+  updatePlanBodySchema,
+  listPlansQuerySchema,
 } from './internal.schema';
 import { subscriptionsService } from '../subscriptions/subscriptions.service';
 
@@ -271,11 +274,64 @@ export default async function internalRoutes(fastify: FastifyInstance) {
           description: 'List all subscription plans',
           tags: ['Internal Admin - Subscriptions'],
           security: [{ bearerAuth: [] }],
+          querystring: listPlansQuerySchema,
         },
       },
-      async (_request, reply) => {
-        const plans = await subscriptionsService.listPlans({ isActive: true });
+      async (request, reply) => {
+        const plans = await subscriptionsService.listPlans(request.query);
         return reply.send(successResponse(plans));
+      }
+    );
+
+    // GET /internal/subscriptions/plans/:id - Get a subscription plan by ID
+    protectedApp.get(
+      '/subscriptions/plans/:id',
+      {
+        schema: {
+          description: 'Get a subscription plan by ID',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+        },
+      },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const plan = await subscriptionsService.getPlanById(id);
+        return reply.send(successResponse(plan));
+      }
+    );
+
+    // POST /internal/subscriptions/plans - Create a new subscription plan
+    protectedApp.post(
+      '/subscriptions/plans',
+      {
+        schema: {
+          description: 'Create a new subscription plan',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+          body: createPlanBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const plan = await subscriptionsService.createPlan(request.body);
+        return reply.status(201).send(successResponse(plan));
+      }
+    );
+
+    // PATCH /internal/subscriptions/plans/:id - Update a subscription plan
+    protectedApp.patch(
+      '/subscriptions/plans/:id',
+      {
+        schema: {
+          description: 'Update a subscription plan',
+          tags: ['Internal Admin - Subscriptions'],
+          security: [{ bearerAuth: [] }],
+          body: updatePlanBodySchema,
+        },
+      },
+      async (request, reply) => {
+        const { id } = request.params as { id: string };
+        const plan = await subscriptionsService.updatePlan(id, request.body);
+        return reply.send(successResponse(plan));
       }
     );
 

@@ -214,3 +214,48 @@ export const reactivateSubscriptionBodySchema = z.object({
 });
 
 export type ReactivateSubscriptionBody = z.infer<typeof reactivateSubscriptionBodySchema>;
+
+// ============================================
+// SUBSCRIPTION PLAN MANAGEMENT SCHEMAS
+// ============================================
+
+// Create subscription plan
+export const createPlanBodySchema = z.object({
+  name: z.string().min(2).max(100),
+  code: z
+    .string()
+    .min(2)
+    .max(50)
+    .regex(/^[a-z0-9_]+$/, 'Code must be lowercase alphanumeric with underscores'),
+  tier: z.enum(['basic', 'professional', 'enterprise']),
+  description: z.string().max(1000).optional(),
+  monthlyPrice: z.number().min(0),
+  annualPrice: z.number().min(0),
+  currency: z.string().length(3).default('INR'),
+  maxUsers: z.number().int(), // -1 for unlimited
+  maxAppointmentsPerDay: z.number().int(),
+  maxServices: z.number().int(),
+  maxProducts: z.number().int(),
+  features: z.record(z.unknown()).default({}),
+  trialDays: z.number().int().min(0).default(14),
+  gracePeriodDays: z.number().int().min(0).default(7),
+  displayOrder: z.number().int().min(0).default(0),
+  isActive: z.boolean().default(true),
+  isPublic: z.boolean().default(true),
+});
+
+export type CreatePlanBody = z.infer<typeof createPlanBodySchema>;
+
+// Update subscription plan
+export const updatePlanBodySchema = createPlanBodySchema.partial().omit({ code: true });
+
+export type UpdatePlanBody = z.infer<typeof updatePlanBodySchema>;
+
+// List plans query
+export const listPlansQuerySchema = z.object({
+  isActive: z.coerce.boolean().optional(),
+  isPublic: z.coerce.boolean().optional(),
+  tier: z.enum(['basic', 'professional', 'enterprise']).optional(),
+});
+
+export type ListPlansQuery = z.infer<typeof listPlansQuerySchema>;

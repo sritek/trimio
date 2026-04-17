@@ -5,15 +5,7 @@
  */
 
 import { format } from 'date-fns';
-import {
-  Building2,
-  Calendar,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  XCircle,
-  ArrowUpRight,
-} from 'lucide-react';
+import { Building2, Calendar, AlertCircle, CheckCircle, Clock, XCircle, Mail } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,9 +13,9 @@ import type { BranchSubscription } from '@/hooks/queries/use-subscriptions';
 
 interface SubscriptionCardProps {
   subscription: BranchSubscription;
-  onCancel: () => void;
-  onReactivate: () => void;
-  onChangePlan: () => void;
+  onCancel?: () => void;
+  onReactivate?: () => void;
+  onChangePlan?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -65,18 +57,18 @@ const tierColors: Record<string, string> = {
   enterprise: 'bg-purple-100 text-purple-700',
 };
 
-export function SubscriptionCard({
-  subscription,
-  onCancel,
-  onReactivate,
-  onChangePlan,
-}: SubscriptionCardProps) {
+export function SubscriptionCard({ subscription }: SubscriptionCardProps) {
   const config = statusConfig[subscription.status] || statusConfig.active;
   const StatusIcon = config.icon;
 
-  const canCancel = ['trial', 'active', 'past_due'].includes(subscription.status);
-  const canReactivate = ['suspended', 'cancelled', 'expired'].includes(subscription.status);
-  const canChangePlan = ['trial', 'active'].includes(subscription.status);
+  const handleContactSupport = () => {
+    // Open email client with pre-filled subject
+    const subject = encodeURIComponent(`Subscription Inquiry - ${subscription.branchName}`);
+    const body = encodeURIComponent(
+      `Hi,\n\nI would like to inquire about my subscription for ${subscription.branchName}.\n\nCurrent Plan: ${subscription.plan.name}\nBilling Cycle: ${subscription.billingCycle}\n\nPlease let me know the available options.\n\nThank you.`
+    );
+    window.location.href = `mailto:${process.env.TRIMIO_SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+  };
 
   return (
     <div className="border rounded-lg p-4 bg-card">
@@ -157,33 +149,19 @@ export function SubscriptionCard({
       {subscription.status === 'past_due' && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
           <AlertCircle className="h-4 w-4 inline mr-2" />
-          Payment is overdue. Please update your payment method to avoid service interruption.
+          Payment is overdue. Please contact support to avoid service interruption.
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2 pt-2 border-t">
-        {canChangePlan && (
-          <Button variant="outline" size="sm" onClick={onChangePlan}>
-            <ArrowUpRight className="h-4 w-4 mr-1" />
-            Change Plan
-          </Button>
-        )}
-        {canCancel && !subscription.cancelAtPeriodEnd && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            Cancel
-          </Button>
-        )}
-        {canReactivate && (
-          <Button size="sm" onClick={onReactivate}>
-            Reactivate
-          </Button>
-        )}
+      {/* Contact Support */}
+      <div className="pt-2 border-t">
+        <p className="text-xs text-muted-foreground mb-2">
+          Need to change your plan or have questions?
+        </p>
+        <Button variant="outline" size="sm" onClick={handleContactSupport}>
+          <Mail className="h-4 w-4 mr-1" />
+          Contact Support
+        </Button>
       </div>
     </div>
   );

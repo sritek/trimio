@@ -57,9 +57,8 @@ export default function LoginPage() {
     }
 
     try {
-      const payload = loginMode === 'phone'
-        ? { phone: identifier, password }
-        : { email: identifier, password };
+      const payload =
+        loginMode === 'phone' ? { phone: identifier, password } : { email: identifier, password };
 
       const response = await api.post<LoginResponse>('/auth/login', payload);
 
@@ -79,9 +78,7 @@ export default function LoginPage() {
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(
-          loginMode === 'phone'
-            ? 'Invalid phone number or password'
-            : 'Invalid email or password'
+          loginMode === 'phone' ? 'Invalid phone number or password' : 'Invalid email or password'
         );
       } else {
         toast.error('Unable to connect. Please check your internet connection and try again.');
@@ -131,9 +128,7 @@ export default function LoginPage() {
                 required
                 ref={identifierRef}
               />
-              {phoneError && (
-                <p className="text-sm text-destructive">{phoneError}</p>
-              )}
+              {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
             </div>
           ) : (
             <div className="space-y-2">
@@ -176,7 +171,10 @@ export default function LoginPage() {
 
         <div className="mt-6 text-center text-sm text-muted-foreground">
           Need help?{' '}
-          <a href="mailto:support@trimio.in" className="text-primary hover:underline">
+          <a
+            href={`mailto:${process.env.TRIMIO_SUPPORT_EMAIL}`}
+            className="text-primary hover:underline"
+          >
             Contact support
           </a>
         </div>

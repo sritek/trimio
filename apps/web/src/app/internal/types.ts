@@ -22,6 +22,7 @@ export interface SubscriptionPlan {
   features: Record<string, unknown>;
   trialDays: number;
   gracePeriodDays: number;
+  displayOrder: number;
   isActive: boolean;
   isPublic: boolean;
 }
@@ -37,6 +38,9 @@ export interface BranchSubscription {
   trialEndDate: string | null;
   currentPeriodStart: string;
   currentPeriodEnd: string;
+  // Locked plan terms at subscription creation
+  trialDaysGranted: number;
+  gracePeriodDaysGranted: number;
   pricePerPeriod: number;
   currency: string;
   discountPercentage: number;
@@ -208,3 +212,29 @@ export interface SubscriptionBillingOverview {
     monthlyRecurring: number;
   };
 }
+
+// ============================================
+// PLAN MANAGEMENT TYPES
+// ============================================
+
+export interface CreatePlanFormData {
+  name: string;
+  code: string;
+  tier: 'basic' | 'professional' | 'enterprise';
+  description: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+  maxUsers: number;
+  maxAppointmentsPerDay: number;
+  maxServices: number;
+  maxProducts: number;
+  features: Record<string, unknown>;
+  trialDays: number;
+  gracePeriodDays: number;
+  displayOrder: number;
+  isActive: boolean;
+  isPublic: boolean;
+}
+
+export interface UpdatePlanFormData extends Partial<Omit<CreatePlanFormData, 'code'>> {}

@@ -20,6 +20,8 @@ import {
   cancelSubscription,
   reactivateSubscription,
   getSubscriptionHistory,
+  // Feature Access
+  getAccess,
   // Invoices
   listInvoices,
   getInvoice,
@@ -28,6 +30,8 @@ import {
   getBillingOverview,
   getBillingSettings,
   updateBillingSettings,
+  // Limits
+  getLimitCounts,
 } from './subscriptions.controller';
 
 export async function subscriptionsRoutes(fastify: FastifyInstance) {
@@ -138,6 +142,15 @@ export async function subscriptionsRoutes(fastify: FastifyInstance) {
       getSubscriptionHistory
     );
 
+    // Get subscription access (features and limits)
+    protectedRoutes.get(
+      '/branches/:branchId/access',
+      {
+        preHandler: requirePermission(PERMISSIONS.BRANCH_READ),
+      },
+      getAccess
+    );
+
     // ============================================
     // Subscription Invoices
     // ============================================
@@ -199,5 +212,12 @@ export async function subscriptionsRoutes(fastify: FastifyInstance) {
       },
       updateBillingSettings
     );
+
+    // ============================================
+    // Limit Counts
+    // ============================================
+
+    // Get current counts for limited resources
+    protectedRoutes.get('/limits/counts', getLimitCounts);
   });
 }

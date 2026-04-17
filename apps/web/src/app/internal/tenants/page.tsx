@@ -7,7 +7,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Plus, Building2, Users, LogOut, RefreshCw } from 'lucide-react';
+import { Plus, Building2, Users, LogOut, RefreshCw, CreditCard } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
@@ -74,14 +74,24 @@ export default function TenantsPage() {
               <p className="text-sm text-slate-500">Tenant Management Portal</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/internal/subscriptions')}
+              className="text-slate-600"
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Plans
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

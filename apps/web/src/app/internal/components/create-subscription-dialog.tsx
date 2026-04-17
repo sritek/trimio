@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -55,16 +55,18 @@ export function CreateSubscriptionDialog({
     discountReason: '',
   });
 
-  // Filter branches that don't have subscriptions
-  const availableBranches = branches.filter(
-    (b) => !b.subscriptionStatus || b.subscriptionStatus === 'none'
+  // Filter branches that don't have subscriptions - memoize to prevent infinite loop
+  const availableBranches = useMemo(
+    () => branches.filter((b) => !b.subscriptionStatus || b.subscriptionStatus === 'none'),
+    [branches]
   );
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens - only depend on `open`
   useEffect(() => {
     if (open) {
       setFormData({
-        branchId: availableBranches[0]?.id || '',
+        branchId:
+          branches.find((b) => !b.subscriptionStatus || b.subscriptionStatus === 'none')?.id || '',
         planId: plans[0]?.id || '',
         billingCycle: 'monthly',
         startTrial: true,
@@ -72,14 +74,16 @@ export function CreateSubscriptionDialog({
         discountReason: '',
       });
     }
-  }, [open, availableBranches, plans]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const selectedPlan = plans.find((p) => p.id === formData.planId);
   const basePrice =
     formData.billingCycle === 'monthly'
       ? selectedPlan?.monthlyPrice || 0
       : selectedPlan?.annualPrice || 0;
-  const discountAmount = (basePrice * formData.discountPercentage) / 100;
+  // Round discount and final price to nearest rupee for clean billing
+  const discountAmount = Math.round((basePrice * formData.discountPercentage) / 100);
   const finalPrice = basePrice - discountAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,13 +185,22 @@ export function CreateSubscriptionDialog({
                 type="number"
                 min={0}
                 max={100}
-                value={formData.discountPercentage}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    discountPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
-                  })
-                }
+                value={formData.discountPercentage === 0 ? '' : formData.discountPercentage}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') {
+                    setFormData({ ...formData, discountPercentage: 0 });
+                  } else {
+                    const numValue = parseInt(value, 10);
+                    if (!isNaN(numValue)) {
+                      setFormData({
+                        ...formData,
+                        discountPercentage: Math.min(100, Math.max(0, numValue)),
+                      });
+                    }
+                  }
+                }}
+                placeholder="0"
               />
             </div>
             <div className="space-y-2">

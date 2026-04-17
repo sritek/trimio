@@ -35,6 +35,7 @@ import {
   Building2,
   Check,
   LogOut,
+  Lock,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -62,6 +63,7 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useBranches } from '@/hooks/queries/use-branches';
 import { type FeatureFlags, isFeatureEnabled } from '@/config/features';
+import { useSubscriptionAccess, type FeatureKey } from '@/hooks/use-feature-access';
 import { useLocale } from 'next-intl';
 import { locales, localeNames, type Locale } from '@/i18n/config';
 
@@ -71,6 +73,7 @@ interface NavItem {
   icon: React.ElementType;
   permission?: string;
   featureFlag?: Partial<FeatureFlags>;
+  subscriptionFeature?: FeatureKey;
   children?: NavItem[];
 }
 
@@ -121,6 +124,7 @@ const mainNavItems: NavItem[] = [
     icon: Package,
     permission: PERMISSIONS.INVENTORY_READ,
     featureFlag: 'inventory',
+    subscriptionFeature: 'inventory',
     children: [
       {
         titleKey: 'stock',
@@ -184,6 +188,7 @@ const mainNavItems: NavItem[] = [
     icon: Crown,
     permission: PERMISSIONS.SERVICES_READ,
     featureFlag: 'memberships',
+    subscriptionFeature: 'memberships',
     children: [
       {
         titleKey: 'membershipPlans',
@@ -392,11 +397,13 @@ function MobileNavLink({
   t,
   onNavigate,
   isChildItem = false,
+  isLocked = false,
 }: {
   item: NavItem;
   t: (key: string) => string;
   onNavigate?: (href: string) => void;
   isChildItem?: boolean;
+  isLocked?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -414,11 +421,13 @@ function MobileNavLink({
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
         isActive
           ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        isLocked && 'opacity-60'
       )}
     >
       <item.icon className="h-5 w-5" />
-      {t(item.titleKey)}
+      <span className="flex-1">{t(item.titleKey)}</span>
+      {isLocked && <Lock className="h-3.5 w-3.5 text-amber-500" />}
     </Link>
   );
 }
@@ -428,11 +437,13 @@ function MobileNavGroup({
   t,
   onNavigate,
   hasPermission,
+  isLocked = false,
 }: {
   item: NavItem;
   t: (key: string) => string;
   onNavigate?: (href: string) => void;
   hasPermission: (permission: string) => boolean;
+  isLocked?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -480,11 +491,13 @@ function MobileNavGroup({
           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
           isActive
             ? 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          isLocked && 'opacity-60'
         )}
       >
         <item.icon className="h-5 w-5" />
         <span className="flex-1 text-left">{t(item.titleKey)}</span>
+        {isLocked && <Lock className="h-3.5 w-3.5 text-amber-500" />}
         <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
       </button>
       {isOpen && (
@@ -507,6 +520,7 @@ export function MobileNav() {
   const { tenant } = useAuthStore();
   const resetAppointmentsToToday = useAppointmentsUIStore((state) => state.resetToToday);
   const { hasPermission } = usePermissions();
+  const { access: subscriptionAccess } = useSubscriptionAccess();
 
   // Close on route change
   useEffect(() => {
@@ -521,6 +535,17 @@ export function MobileNav() {
       }
     },
     [resetAppointmentsToToday]
+  );
+
+  // Check if user has subscription access to a feature
+  const hasSubscriptionAccess = useCallback(
+    (feature: FeatureKey | undefined): boolean => {
+      if (!feature) return true;
+      if (!subscriptionAccess.hasActiveSubscription) return false;
+      const featureValue = subscriptionAccess.features[feature];
+      return typeof featureValue === 'boolean' ? featureValue : !!featureValue;
+    },
+    [subscriptionAccess]
   );
 
   // Filter nav items based on user permissions and feature flags
@@ -565,20 +590,29 @@ export function MobileNav() {
         <ScrollArea className="flex-1">
           <nav className="p-4">
             <div className="space-y-1">
-              {visibleMainNavItems.map((item) => (
-                <div key={item.href}>
-                  {item.children ? (
-                    <MobileNavGroup
-                      item={item}
-                      t={t}
-                      onNavigate={handleNavigate}
-                      hasPermission={hasPermission}
-                    />
-                  ) : (
-                    <MobileNavLink item={item} t={t} onNavigate={handleNavigate} />
-                  )}
-                </div>
-              ))}
+              {visibleMainNavItems.map((item) => {
+                const isLocked = !hasSubscriptionAccess(item.subscriptionFeature);
+                return (
+                  <div key={item.href}>
+                    {item.children ? (
+                      <MobileNavGroup
+                        item={item}
+                        t={t}
+                        onNavigate={handleNavigate}
+                        hasPermission={hasPermission}
+                        isLocked={isLocked}
+                      />
+                    ) : (
+                      <MobileNavLink
+                        item={item}
+                        t={t}
+                        onNavigate={handleNavigate}
+                        isLocked={isLocked}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Divider */}

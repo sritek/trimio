@@ -25,7 +25,6 @@ export default function EditStaffPage() {
   const params = useParams();
   const router = useRouter();
   const t = useTranslations('staff.form');
-  const tCommon = useTranslations('common');
   const { branchId } = useBranchContext();
 
   const staffId = params.id as string;
@@ -66,12 +65,7 @@ export default function EditStaffPage() {
         <PageHeader
           title={t('editTitle')}
           description={`${t('editDescription')} - ${staff.user?.name}`}
-          actions={
-            <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              {tCommon('actions.back')}
-            </Button>
-          }
+          backHref="/staff"
         />
         <PageContent>
           <StaffForm staff={staff} branchId={branchId || ''} />

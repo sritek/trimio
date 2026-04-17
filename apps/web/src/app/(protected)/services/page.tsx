@@ -10,11 +10,13 @@ import { PERMISSIONS } from '@trimio/shared';
 
 import { useDeleteService, useServices } from '@/hooks/queries/use-services';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useServiceLimitStatus } from '@/hooks/use-limit-status';
 
 import {
   AccessDenied,
   ConfirmDialog,
   FilterButton,
+  LimitBanner,
   PageContainer,
   PageContent,
   PageHeader,
@@ -22,6 +24,7 @@ import {
   SearchInput,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { ServiceTable } from './components/service-table';
 import { ServicesFilterSheet, type ServicesFiltersState } from './components/services-filter-sheet';
@@ -59,6 +62,12 @@ export default function ServicesPage() {
   const deleteService = useDeleteService();
 
   const canWrite = hasPermission(PERMISSIONS.SERVICES_WRITE);
+  const {
+    current: serviceCount,
+    limit: serviceLimit,
+    isAtLimit,
+    isNearLimit,
+  } = useServiceLimitStatus();
 
   const hasFilters = !!search || filters.categoryId !== 'all' || filters.isActive !== 'all';
   const activeFilterCount =
@@ -106,18 +115,47 @@ export default function ServicesPage() {
                 </Button>
               )}
               {canWrite && (
-                <Button asChild>
-                  <Link href="/services/new">
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('list.addService')}
-                  </Link>
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button asChild={!isAtLimit} disabled={isAtLimit}>
+                          {isAtLimit ? (
+                            <>
+                              <Plus className="mr-2 h-4 w-4" />
+                              {t('list.addService')}
+                            </>
+                          ) : (
+                            <Link href="/services/new">
+                              <Plus className="mr-2 h-4 w-4" />
+                              {t('list.addService')}
+                            </Link>
+                          )}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isAtLimit && (
+                      <TooltipContent>
+                        <p>Service limit reached. Upgrade your plan to add more services.</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           }
         />
 
         <PageContent>
+          {/* Limit Banner */}
+          {(isAtLimit || isNearLimit) && (
+            <LimitBanner
+              type="services"
+              current={serviceCount}
+              limit={serviceLimit}
+              className="mb-4"
+            />
+          )}
           {/* Search and Filter */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
             <SearchInput

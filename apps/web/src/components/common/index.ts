@@ -58,6 +58,10 @@ export type { NoticeSeverity } from './notice';
 // Access control components
 export { PermissionGuard } from './permission-guard';
 export { AccessDenied } from './access-denied';
+export { FeatureGate } from './feature-gate';
+export { UpgradePrompt } from './upgrade-prompt';
+export { LimitBanner, isLimitReached } from './limit-banner';
+export type { LimitType } from './limit-banner';
 
 // i18n components
 export { LanguageSwitcher, LanguageSwitcherCompact } from './language-switcher';

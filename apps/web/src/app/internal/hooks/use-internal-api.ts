@@ -23,6 +23,8 @@ import type {
   BranchSubscription,
   CreateSubscriptionFormData,
   SubscriptionBillingOverview,
+  CreatePlanFormData,
+  UpdatePlanFormData,
 } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -318,9 +320,51 @@ export function useInternalApi() {
   // SUBSCRIPTION OPERATIONS
   // ============================================
 
-  const listPlans = useCallback(async (): Promise<SubscriptionPlan[]> => {
-    return apiFetch<SubscriptionPlan[]>('/subscriptions/plans');
-  }, [apiFetch]);
+  const listPlans = useCallback(
+    async (query?: {
+      isActive?: boolean;
+      isPublic?: boolean;
+      tier?: string;
+    }): Promise<SubscriptionPlan[]> => {
+      const params = new URLSearchParams();
+      if (query?.isActive !== undefined) params.set('isActive', String(query.isActive));
+      if (query?.isPublic !== undefined) params.set('isPublic', String(query.isPublic));
+      if (query?.tier) params.set('tier', query.tier);
+
+      const queryString = params.toString();
+      return apiFetch<SubscriptionPlan[]>(
+        `/subscriptions/plans${queryString ? `?${queryString}` : ''}`
+      );
+    },
+    [apiFetch]
+  );
+
+  const getPlan = useCallback(
+    async (planId: string): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>(`/subscriptions/plans/${planId}`);
+    },
+    [apiFetch]
+  );
+
+  const createPlan = useCallback(
+    async (data: CreatePlanFormData): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>('/subscriptions/plans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    [apiFetch]
+  );
+
+  const updatePlan = useCallback(
+    async (planId: string, data: UpdatePlanFormData): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>(`/subscriptions/plans/${planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    [apiFetch]
+  );
 
   const getBillingOverview = useCallback(
     async (tenantId: string): Promise<SubscriptionBillingOverview> => {
@@ -399,8 +443,12 @@ export function useInternalApi() {
       updateLoyaltyConfig,
       // Upload
       uploadLogo,
-      // Subscriptions
+      // Subscription Plans
       listPlans,
+      getPlan,
+      createPlan,
+      updatePlan,
+      // Subscriptions
       getBillingOverview,
       createSubscription,
       cancelSubscription,
@@ -419,6 +467,9 @@ export function useInternalApi() {
       updateLoyaltyConfig,
       uploadLogo,
       listPlans,
+      getPlan,
+      createPlan,
+      updatePlan,
       getBillingOverview,
       createSubscription,
       cancelSubscription,

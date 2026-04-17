@@ -203,12 +203,12 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
     throw new NotFoundError('PLAN_NOT_FOUND', 'Subscription plan not found or inactive');
   }
 
-  // Calculate pricing
+  // Calculate pricing - round to nearest rupee for clean billing
   const basePrice = data.billingCycle === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
   const discountAmount = basePrice.mul(data.discountPercentage).div(100);
-  const pricePerPeriod = basePrice.sub(discountAmount);
+  const pricePerPeriod = new Prisma.Decimal(Math.round(basePrice.sub(discountAmount).toNumber()));
 
-  // Calculate dates
+  // Calculate dates using the plan's trial days (will be locked in subscription)
   const today = startOfDay(new Date());
   let trialStartDate: Date | null = null;
   let trialEndDate: Date | null = null;
@@ -216,10 +216,14 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
   let currentPeriodEnd: Date;
   let status: 'trial' | 'active';
 
+  // Lock the plan terms at subscription creation
+  const trialDaysGranted = data.startTrial ? plan.trialDays : 0;
+  const gracePeriodDaysGranted = plan.gracePeriodDays;
+
   if (data.startTrial && plan.trialDays > 0) {
-    // Start with trial
+    // Start with trial - use the granted trial days
     trialStartDate = today;
-    trialEndDate = addDays(today, plan.trialDays);
+    trialEndDate = addDays(today, trialDaysGranted);
     currentPeriodStart = today;
     currentPeriodEnd = trialEndDate;
     status = 'trial';
@@ -232,7 +236,7 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
 
   // Create subscription with transaction
   const subscription = await prisma.$transaction(async (tx) => {
-    // Create the subscription
+    // Create the subscription with locked plan terms
     const newSubscription = await tx.branchSubscription.create({
       data: {
         tenantId,
@@ -244,6 +248,9 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
         trialEndDate,
         currentPeriodStart,
         currentPeriodEnd,
+        // Locked plan terms
+        trialDaysGranted,
+        gracePeriodDaysGranted,
         pricePerPeriod,
         currency: plan.currency,
         discountPercentage: data.discountPercentage,
@@ -266,7 +273,7 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
       },
     });
 
-    // Create history entry
+    // Create history entry with locked plan terms
     await tx.subscriptionHistory.create({
       data: {
         tenantId,
@@ -278,6 +285,10 @@ async function createSubscription(tenantId: string, data: CreateSubscriptionInpu
           billingCycle: data.billingCycle,
           startTrial: data.startTrial,
           discountPercentage: data.discountPercentage,
+          // Record the locked plan terms for audit
+          trialDaysGranted,
+          gracePeriodDaysGranted,
+          pricePerPeriod: pricePerPeriod.toNumber(),
         },
         performedBy: userId,
       },
@@ -372,7 +383,8 @@ async function changePlan(
   const billingCycle = data.billingCycle || subscription.billingCycle;
   const basePrice = billingCycle === 'monthly' ? newPlan.monthlyPrice : newPlan.annualPrice;
   const discountAmount = basePrice.mul(subscription.discountPercentage).div(100);
-  const pricePerPeriod = basePrice.sub(discountAmount);
+  // Round to nearest rupee for clean billing
+  const pricePerPeriod = new Prisma.Decimal(Math.round(basePrice.sub(discountAmount).toNumber()));
 
   // Determine if upgrade or downgrade
   const tierOrder = { basic: 1, professional: 2, enterprise: 3 };
@@ -559,7 +571,8 @@ async function reactivateSubscription(
   const today = startOfDay(new Date());
   const basePrice = billingCycle === 'monthly' ? plan.monthlyPrice : plan.annualPrice;
   const discountAmount = basePrice.mul(subscription.discountPercentage).div(100);
-  const pricePerPeriod = basePrice.sub(discountAmount);
+  // Round to nearest rupee for clean billing
+  const pricePerPeriod = new Prisma.Decimal(Math.round(basePrice.sub(discountAmount).toNumber()));
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedSubscription = await tx.branchSubscription.update({
@@ -813,7 +826,27 @@ async function getBillingOverview(tenantId: string, branchId?: string) {
   const subscriptions = await prisma.branchSubscription.findMany({
     where,
     include: {
-      plan: { select: { name: true, code: true, tier: true } },
+      plan: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          tier: true,
+          description: true,
+          monthlyPrice: true,
+          annualPrice: true,
+          currency: true,
+          maxUsers: true,
+          maxAppointmentsPerDay: true,
+          maxServices: true,
+          maxProducts: true,
+          features: true,
+          trialDays: true,
+          gracePeriodDays: true,
+          isActive: true,
+          isPublic: true,
+        },
+      },
     },
   });
 
@@ -943,6 +976,35 @@ async function getSubscriptionHistory(tenantId: string, branchId: string) {
 }
 
 // ============================================
+// Limit Counts
+// ============================================
+
+/**
+ * Get current counts for limited resources
+ * Note: User count excludes super_owner as they don't count against the limit
+ */
+async function getLimitCounts(tenantId: string) {
+  const [users, services, products] = await Promise.all([
+    // Exclude super_owner from user count - they don't count against the limit
+    prisma.user.count({
+      where: {
+        tenantId,
+        deletedAt: null,
+        role: { not: 'super_owner' },
+      },
+    }),
+    prisma.service.count({
+      where: { tenantId, deletedAt: null },
+    }),
+    prisma.product.count({
+      where: { tenantId, deletedAt: null },
+    }),
+  ]);
+
+  return { users, services, products };
+}
+
+// ============================================
 // Export Service
 // ============================================
 
@@ -970,4 +1032,6 @@ export const subscriptionsService = {
   updateBillingSettings,
   // History
   getSubscriptionHistory,
+  // Limits
+  getLimitCounts,
 };

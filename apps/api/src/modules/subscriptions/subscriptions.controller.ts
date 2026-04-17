@@ -6,6 +6,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
 import { successResponse, paginatedResponse } from '../../lib/response';
+import { getSubscriptionAccess } from '../../lib/feature-access';
 import { subscriptionsService } from './subscriptions.service';
 import type {
   CreatePlanInput,
@@ -221,4 +222,28 @@ export async function updateBillingSettings(request: FastifyRequest, reply: Fast
   const body = request.body as UpdateBillingSettingsInput;
   const settings = await subscriptionsService.updateBillingSettings(tenantId, body, userId);
   return reply.send(successResponse(settings));
+}
+
+// ============================================
+// Feature Access
+// ============================================
+
+/**
+ * Get subscription access info for a branch
+ * Returns features and limits based on the branch's subscription plan
+ */
+export async function getAccess(request: FastifyRequest, reply: FastifyReply) {
+  const { branchId } = request.params as { branchId: string };
+  const access = await getSubscriptionAccess(branchId);
+  return reply.send(successResponse(access));
+}
+
+/**
+ * Get current counts for limited resources
+ * Returns counts of users, services, and products for the tenant
+ */
+export async function getLimitCounts(request: FastifyRequest, reply: FastifyReply) {
+  const { tenantId } = request.user!;
+  const counts = await subscriptionsService.getLimitCounts(tenantId);
+  return reply.send(successResponse(counts));
 }

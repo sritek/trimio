@@ -43,3 +43,21 @@ export { useOfflineSupport, useOfflineData } from './use-offline-support';
 
 // Reduced motion hooks
 export { useReducedMotion, usePrefersReducedMotion } from './use-reduced-motion';
+
+// Feature access hooks
+export {
+  useSubscriptionAccess,
+  useFeatureAccess,
+  useAdvancedReports,
+  useWithinLimit,
+  FEATURE_DISPLAY_NAMES,
+  FEATURE_REQUIRED_PLANS,
+} from './use-feature-access';
+export type { FeatureKey, LimitKey, SubscriptionAccess } from './use-feature-access';
+
+// Limit status hooks
+export {
+  useUserLimitStatus,
+  useServiceLimitStatus,
+  useProductLimitStatus,
+} from './use-limit-status';

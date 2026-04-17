@@ -165,14 +165,19 @@ export class UsersService {
     }
 
     if (maxUsers !== -1) {
+      // Count users excluding super_owner (they don't count against the limit)
       const currentUserCount = await prisma.user.count({
-        where: { tenantId, deletedAt: null },
+        where: {
+          tenantId,
+          deletedAt: null,
+          role: { not: 'super_owner' },
+        },
       });
 
       if (currentUserCount >= maxUsers) {
         throw new ForbiddenError(
           'USER_LIMIT_REACHED',
-          'User limit reached. Please upgrade your plan or add more branch subscriptions.'
+          `User limit reached (${currentUserCount}/${maxUsers}). Please upgrade your plan to add more staff.`
         );
       }
     }

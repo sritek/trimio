@@ -12,9 +12,11 @@ import {
   useUpdateProduct,
   useDeleteProduct,
 } from '@/hooks/queries/use-inventory';
+import { useProductLimitStatus } from '@/hooks/use-limit-status';
 
 import {
   ConfirmDialog,
+  LimitBanner,
   PageContainer,
   PageContent,
   PageHeader,
@@ -40,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { ProductTable } from './components/product-table';
 
@@ -79,6 +82,12 @@ export default function ProductsPage() {
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
+  const {
+    current: productCount,
+    limit: productLimit,
+    isAtLimit,
+    isNearLimit,
+  } = useProductLimitStatus();
 
   const hasFilters =
     !!search || categoryId !== 'all' || productType !== 'all' || isActiveFilter !== 'all';
@@ -163,15 +172,37 @@ export default function ProductsPage() {
             <Button variant="outline" asChild>
               <Link href="/inventory/vendors">Vendors</Link>
             </Button>
-            <Button onClick={handleOpenCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Product
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button onClick={handleOpenCreate} disabled={isAtLimit}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Product
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isAtLimit && (
+                  <TooltipContent>
+                    <p>Product limit reached. Upgrade your plan to add more products.</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         }
       />
 
       <PageContent>
+        {/* Limit Banner */}
+        {(isAtLimit || isNearLimit) && (
+          <LimitBanner
+            type="products"
+            current={productCount}
+            limit={productLimit}
+            className="mb-4"
+          />
+        )}
         {/* Filters */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
           <SearchInput

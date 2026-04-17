@@ -87,12 +87,18 @@ export function SubscriptionItem({ subscription, onCancel, onReactivate }: Subsc
           </p>
         </div>
         {subscription.status === 'trial' && subscription.trialEndDate && (
-          <div className="col-span-2">
-            <p className="text-slate-500">Trial Ends</p>
-            <p className="text-slate-900">
-              {format(new Date(subscription.trialEndDate), 'MMM d, yyyy')}
-            </p>
-          </div>
+          <>
+            <div>
+              <p className="text-slate-500">Trial Period</p>
+              <p className="text-slate-900">{subscription.trialDaysGranted} days</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Trial Ends</p>
+              <p className="text-slate-900">
+                {format(new Date(subscription.trialEndDate), 'MMM d, yyyy')}
+              </p>
+            </div>
+          </>
         )}
         {subscription.status !== 'trial' && (
           <div className="col-span-2">
@@ -103,6 +109,10 @@ export function SubscriptionItem({ subscription, onCancel, onReactivate }: Subsc
             </p>
           </div>
         )}
+        <div>
+          <p className="text-slate-500">Grace Period</p>
+          <p className="text-slate-900">{subscription.gracePeriodDaysGranted} days</p>
+        </div>
       </div>
 
       {subscription.cancelAtPeriodEnd && (

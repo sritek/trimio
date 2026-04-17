@@ -2776,6 +2776,10 @@ model BranchSubscription {
   // Grace period tracking
   gracePeriodEndDate DateTime? @map("grace_period_end_date") @db.Date
 
+  // Locked plan terms at subscription creation (won't change if plan is edited)
+  trialDaysGranted       Int @map("trial_days_granted")
+  gracePeriodDaysGranted Int @map("grace_period_days_granted")
+
   // Pricing (locked at subscription time)
   pricePerPeriod Decimal @map("price_per_period") @db.Decimal(10, 2)
   currency       String  @default("INR") @db.VarChar(3)

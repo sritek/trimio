@@ -57,3 +57,6 @@ export {
   checkSubscriptionAccess,
   addSubscriptionWarning,
 } from './subscription.guard';
+
+// Feature Guards
+export { featureGuard, attachSubscriptionAccess } from './feature.guard';

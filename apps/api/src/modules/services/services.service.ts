@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
-import { NotFoundError } from '../../lib/errors';
+import { NotFoundError, ForbiddenError, ConflictError, BadRequestError } from '../../lib/errors';
 
 import type { Prisma, Service } from '@prisma/client';
 import type {
@@ -125,13 +125,53 @@ export class ServicesService {
     data: CreateServiceBody,
     createdBy?: string
   ): Promise<Service> {
+    // Check service limit based on branch subscriptions
+    const activeSubscriptions = await prisma.branchSubscription.findMany({
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial'] },
+      },
+      include: {
+        plan: {
+          select: { maxServices: true },
+        },
+      },
+    });
+
+    // Calculate total allowed services across all active subscriptions
+    // -1 means unlimited
+    let maxServices = 0;
+    for (const sub of activeSubscriptions) {
+      if (sub.plan.maxServices === -1) {
+        maxServices = -1; // Unlimited
+        break;
+      }
+      maxServices += sub.plan.maxServices;
+    }
+
+    if (maxServices !== -1) {
+      const currentServiceCount = await prisma.service.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+        },
+      });
+
+      if (currentServiceCount >= maxServices) {
+        throw new ForbiddenError(
+          'SERVICE_LIMIT_REACHED',
+          `Service limit reached (${currentServiceCount}/${maxServices}). Please upgrade your plan to add more services.`
+        );
+      }
+    }
+
     // Verify category exists
     const category = await prisma.serviceCategory.findFirst({
       where: { id: data.categoryId, tenantId, deletedAt: null },
     });
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new BadRequestError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     // Generate SKU if not provided
@@ -151,7 +191,10 @@ export class ServicesService {
       }
 
       if (attempts >= maxAttempts) {
-        throw new Error('Failed to generate unique SKU. Please try again.');
+        throw new BadRequestError(
+          'SKU_GENERATION_FAILED',
+          'Failed to generate unique SKU. Please try again.'
+        );
       }
     } else {
       // Check for duplicate SKU if provided manually
@@ -160,7 +203,7 @@ export class ServicesService {
       });
 
       if (existingSku) {
-        throw new Error('Service with this SKU already exists');
+        throw new ConflictError('DUPLICATE_SKU', 'Service with this SKU already exists');
       }
     }
 
@@ -215,7 +258,7 @@ export class ServicesService {
     });
 
     if (!existing) {
-      throw new Error('Service not found');
+      throw new NotFoundError('SERVICE_NOT_FOUND', 'Service not found');
     }
 
     // Check SKU uniqueness if changed
@@ -228,7 +271,7 @@ export class ServicesService {
         },
       });
       if (duplicate) {
-        throw new Error('Service with this SKU already exists');
+        throw new ConflictError('DUPLICATE_SKU', 'Service with this SKU already exists');
       }
     }
 
@@ -238,7 +281,7 @@ export class ServicesService {
         where: { id: data.categoryId, tenantId, deletedAt: null },
       });
       if (!category) {
-        throw new Error('Category not found');
+        throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
       }
     }
 

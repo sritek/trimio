@@ -20,10 +20,29 @@ const ERROR_MESSAGES: Record<string, string> = {
   // Conflict errors
   DUPLICATE_ENTRY: 'This record already exists. Please use a different value.',
   ALREADY_EXISTS: 'This item already exists.',
+  DUPLICATE_SKU: 'An item with this SKU already exists.',
+  DUPLICATE_BARCODE: 'An item with this barcode already exists.',
+  DUPLICATE_PHONE: 'This phone number is already registered.',
+  DUPLICATE_EMAIL: 'This email is already registered.',
+  DUPLICATE_CATEGORY_NAME: 'A category with this name already exists.',
+  DUPLICATE_CATEGORY_SLUG: 'A category with this slug already exists.',
 
   // Not found errors
   NOT_FOUND: 'The requested item was not found.',
   RESOURCE_NOT_FOUND: 'The requested resource was not found.',
+  CATEGORY_NOT_FOUND: 'The selected category was not found.',
+  SERVICE_NOT_FOUND: 'The service was not found.',
+  PRODUCT_NOT_FOUND: 'The product was not found.',
+  USER_NOT_FOUND: 'The user was not found.',
+  PARENT_CATEGORY_NOT_FOUND: 'The parent category was not found.',
+
+  // Subscription limit errors
+  USER_LIMIT_REACHED:
+    'You have reached your user limit. Please upgrade your plan to add more staff.',
+  SERVICE_LIMIT_REACHED:
+    'You have reached your service limit. Please upgrade your plan to add more services.',
+  PRODUCT_LIMIT_REACHED:
+    'You have reached your product limit. Please upgrade your plan to add more products.',
 
   // Business logic errors
   INSUFFICIENT_BALANCE: 'Insufficient balance. Please add funds and try again.',
@@ -35,6 +54,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   APPOINTMENT_CONFLICT: 'This time slot conflicts with another appointment.',
   INVALID_STATUS_TRANSITION: 'This action is not allowed for the current status.',
   REQUIRED_RELATION: 'A required item is missing. Please try again.',
+  CATEGORY_HAS_PRODUCTS: 'Cannot delete category with products. Remove products first.',
+  CATEGORY_HAS_CHILDREN: 'Cannot delete category with sub-categories. Remove sub-categories first.',
+  MAX_HIERARCHY_DEPTH: 'Maximum category depth is 2 levels.',
+  INACTIVE_CATEGORY: 'Cannot assign to an inactive category.',
+  INVALID_PRODUCT_TYPE: 'Invalid product type selected.',
+  INVALID_UNIT: 'Invalid unit of measure selected.',
+  MISSING_REQUIRED_FIELDS: 'Please fill in all required fields.',
+  SKU_GENERATION_FAILED: 'Failed to generate SKU. Please try again.',
 
   // Authentication errors
   UNAUTHORIZED: 'You are not authorized to perform this action.',

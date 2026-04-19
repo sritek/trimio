@@ -52,6 +52,12 @@ export interface SubscriptionAccess {
   planTier: string | null;
   features: SubscriptionFeatures;
   limits: SubscriptionLimits;
+  // Trial info
+  isOnTrial: boolean;
+  trialEndsAt: string | null;
+  trialDaysRemaining: number | null;
+  // Period info
+  currentPeriodEnd: string | null;
 }
 
 // Default features (most restrictive)
@@ -78,6 +84,10 @@ const DEFAULT_ACCESS: SubscriptionAccess = {
     maxServices: 5,
     maxProducts: 10,
   },
+  isOnTrial: false,
+  trialEndsAt: null,
+  trialDaysRemaining: null,
+  currentPeriodEnd: null,
 };
 
 /**

@@ -62,6 +62,7 @@ export { FeatureGate } from './feature-gate';
 export { UpgradePrompt } from './upgrade-prompt';
 export { LimitBanner, isLimitReached } from './limit-banner';
 export type { LimitType } from './limit-banner';
+export { TrialBanner } from './trial-banner';
 
 // i18n components
 export { LanguageSwitcher, LanguageSwitcherCompact } from './language-switcher';

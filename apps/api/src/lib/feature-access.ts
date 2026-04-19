@@ -49,6 +49,12 @@ export interface SubscriptionAccess {
   planTier: string | null;
   features: SubscriptionFeatures;
   limits: SubscriptionLimits;
+  // Trial info
+  isOnTrial: boolean;
+  trialEndsAt: string | null;
+  trialDaysRemaining: number | null;
+  // Period info
+  currentPeriodEnd: string | null;
 }
 
 // Default features for when there's no subscription (most restrictive)
@@ -93,11 +99,25 @@ export async function getSubscriptionAccess(branchId: string): Promise<Subscript
       planTier: null,
       features: DEFAULT_FEATURES,
       limits: DEFAULT_LIMITS,
+      isOnTrial: false,
+      trialEndsAt: null,
+      trialDaysRemaining: null,
+      currentPeriodEnd: null,
     };
   }
 
   // Check if subscription is in an active state (trial or active)
   const isActive = ['trial', 'active'].includes(subscription.status);
+  const isOnTrial = subscription.status === 'trial';
+
+  // Calculate trial days remaining
+  let trialDaysRemaining: number | null = null;
+  if (isOnTrial && subscription.trialEndDate) {
+    const now = new Date();
+    const trialEnd = new Date(subscription.trialEndDate);
+    const diffTime = trialEnd.getTime() - now.getTime();
+    trialDaysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
 
   // Parse features from plan (with defaults)
   const planFeatures = (subscription.plan.features || {}) as Partial<SubscriptionFeatures>;
@@ -121,6 +141,10 @@ export async function getSubscriptionAccess(branchId: string): Promise<Subscript
     planTier: subscription.plan.tier,
     features: isActive ? features : DEFAULT_FEATURES,
     limits: isActive ? limits : DEFAULT_LIMITS,
+    isOnTrial,
+    trialEndsAt: subscription.trialEndDate?.toISOString() ?? null,
+    trialDaysRemaining,
+    currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
   };
 }
 

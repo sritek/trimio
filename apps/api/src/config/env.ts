@@ -27,8 +27,6 @@ const envSchema = z
 
     // Database
     DATABASE_URL: z.string().min(1),
-    DATABASE_POOL_MIN: z.coerce.number().default(2),
-    DATABASE_POOL_MAX: z.coerce.number().default(10),
 
     // Redis (optional when ENABLE_REDIS is false)
     REDIS_URL: z.string().optional(),

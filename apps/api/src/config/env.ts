@@ -43,6 +43,10 @@ const envSchema = z
     S3_BUCKET_NAME: z.string().optional(),
     CDN_URL: z.string().url().optional(),
 
+    // Email (AWS SES)
+    EMAIL_FROM: z.string().email().optional(),
+    EMAIL_FROM_NAME: z.string().optional(),
+
     // Monitoring
     SENTRY_DSN: z.string().url().optional(),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

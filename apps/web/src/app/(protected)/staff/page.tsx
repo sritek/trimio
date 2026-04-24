@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
@@ -10,11 +9,13 @@ import { PERMISSIONS } from '@trimio/shared';
 
 import { useStaffList, useDeactivateStaff } from '@/hooks/queries/use-staff';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useUserLimitStatus } from '@/hooks/use-limit-status';
 
 import {
   AccessDenied,
   ConfirmDialog,
   FilterButton,
+  LimitBanner,
   PageContainer,
   PageContent,
   PageHeader,
@@ -22,6 +23,7 @@ import {
   SearchInput,
 } from '@/components/common';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { StaffTable } from './components/staff-table';
 import { StaffFilterSheet, type StaffFiltersState } from './components/staff-filter-sheet';
@@ -54,6 +56,7 @@ export default function StaffPage() {
 
   const deactivateStaff = useDeactivateStaff();
   const canWrite = hasPermission(PERMISSIONS.USERS_WRITE);
+  const { current: userCount, limit: userLimit, isAtLimit, isNearLimit } = useUserLimitStatus();
 
   const hasFilters =
     !!search ||
@@ -102,17 +105,38 @@ export default function StaffPage() {
           description={t('description')}
           actions={
             canWrite && (
-              <Button asChild>
-                <Link href="/staff/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t('addStaff')}
-                </Link>
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        disabled={isLoading || isAtLimit}
+                        isLoading={isLoading}
+                        onClick={() => {
+                          !isAtLimit && router.push('/staff/new');
+                        }}
+                        leftIcon={<Plus className="mr-2 h-4 w-4" />}
+                      >
+                        {t('addStaff')}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isAtLimit && (
+                    <TooltipContent>
+                      <p>User limit reached. Upgrade your plan to add more staff.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             )
           }
         />
 
         <PageContent>
+          {/* Limit Banner */}
+          {(isAtLimit || isNearLimit) && (
+            <LimitBanner type="users" current={userCount} limit={userLimit} className="mb-4" />
+          )}
           {/* Search and Filter */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 flex-shrink-0">
             <SearchInput

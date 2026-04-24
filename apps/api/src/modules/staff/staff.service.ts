@@ -6,13 +6,7 @@
 
 import { Prisma, UserRole } from '@prisma/client';
 import bcrypt from 'bcrypt';
-import {
-  format,
-  differenceInHours,
-  parseISO,
-  getDaysInMonth,
-  getDay,
-} from 'date-fns';
+import { format, differenceInHours, parseISO, getDaysInMonth, getDay } from 'date-fns';
 
 import { prisma, serializeDecimals } from '@/lib/prisma';
 import { NotFoundError, ConflictError, BadRequestError } from '@/lib/errors';
@@ -531,7 +525,7 @@ export const attendanceService = {
     const checkInTime = parseISO(`${today}T${attendance.checkInTime}`);
     const actualHours = differenceInHours(now, checkInTime);
 
-    let earlyLeaveMinutes = 0;
+    const earlyLeaveMinutes = 0;
 
     // Early leave calculation skipped — no shift data
 
@@ -1882,4 +1876,3 @@ export const breaksService = {
     return { success: true };
   },
 };
-

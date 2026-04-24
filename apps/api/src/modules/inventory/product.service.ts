@@ -5,6 +5,7 @@
  */
 
 import { prisma, serializeDecimals } from '../../lib/prisma';
+import { ForbiddenError, ConflictError, BadRequestError, NotFoundError } from '../../lib/errors';
 
 import type { Prisma, ProductCategory, BranchProductSettings } from '@prisma/client';
 import type {
@@ -58,7 +59,7 @@ export class ProductService {
     });
 
     if (existingName) {
-      throw new Error('Category with this name already exists');
+      throw new ConflictError('DUPLICATE_CATEGORY_NAME', 'Category with this name already exists');
     }
 
     // Check for duplicate slug within tenant
@@ -67,7 +68,7 @@ export class ProductService {
     });
 
     if (existingSlug) {
-      throw new Error('Category with this slug already exists');
+      throw new ConflictError('DUPLICATE_CATEGORY_SLUG', 'Category with this slug already exists');
     }
 
     // Enforce 2-level hierarchy constraint (Requirement 1.1, 1.3)
@@ -81,12 +82,15 @@ export class ProductService {
       });
 
       if (!parentCategory) {
-        throw new Error('Parent category not found');
+        throw new NotFoundError('PARENT_CATEGORY_NOT_FOUND', 'Parent category not found');
       }
 
       // Parent category cannot have a parent (max 2 levels)
       if (parentCategory.parentId) {
-        throw new Error('Cannot create category: maximum hierarchy depth is 2 levels');
+        throw new BadRequestError(
+          'MAX_HIERARCHY_DEPTH',
+          'Cannot create category: maximum hierarchy depth is 2 levels'
+        );
       }
     }
 
@@ -129,7 +133,7 @@ export class ProductService {
     });
 
     if (!existing) {
-      throw new Error('Category not found');
+      throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     // Check name uniqueness if changed (Requirement 1.2)
@@ -143,7 +147,10 @@ export class ProductService {
         },
       });
       if (duplicate) {
-        throw new Error('Category with this name already exists');
+        throw new ConflictError(
+          'DUPLICATE_CATEGORY_NAME',
+          'Category with this name already exists'
+        );
       }
     }
 
@@ -158,7 +165,10 @@ export class ProductService {
         },
       });
       if (duplicateSlug) {
-        throw new Error('Category with this slug already exists');
+        throw new ConflictError(
+          'DUPLICATE_CATEGORY_SLUG',
+          'Category with this slug already exists'
+        );
       }
     }
 
@@ -281,17 +291,20 @@ export class ProductService {
     });
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     // Cannot delete if has products
     if (category.products.length > 0) {
-      throw new Error('Cannot delete category with products');
+      throw new BadRequestError('CATEGORY_HAS_PRODUCTS', 'Cannot delete category with products');
     }
 
     // Cannot delete if has children
     if (category.children.length > 0) {
-      throw new Error('Cannot delete category with sub-categories');
+      throw new BadRequestError(
+        'CATEGORY_HAS_CHILDREN',
+        'Cannot delete category with sub-categories'
+      );
     }
 
     await prisma.productCategory.update({
@@ -314,21 +327,68 @@ export class ProductService {
     data: CreateProductInput,
     createdBy?: string
   ): Promise<ProductWithCategory> {
+    // Check product limit based on branch subscriptions
+    const activeSubscriptions = await prisma.branchSubscription.findMany({
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial'] },
+      },
+      include: {
+        plan: {
+          select: { maxProducts: true },
+        },
+      },
+    });
+
+    // Calculate total allowed products across all active subscriptions
+    // -1 means unlimited
+    let maxProducts = 0;
+    for (const sub of activeSubscriptions) {
+      if (sub.plan.maxProducts === -1) {
+        maxProducts = -1; // Unlimited
+        break;
+      }
+      maxProducts += sub.plan.maxProducts;
+    }
+
+    if (maxProducts !== -1) {
+      const currentProductCount = await prisma.product.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+        },
+      });
+
+      if (currentProductCount >= maxProducts) {
+        throw new ForbiddenError(
+          'PRODUCT_LIMIT_REACHED',
+          `Product limit reached (${currentProductCount}/${maxProducts}). Please upgrade your plan to add more products.`
+        );
+      }
+    }
+
     // Validate required fields (Requirement 2.1)
     if (!data.name || !data.categoryId || !data.productType || !data.unitOfMeasure) {
-      throw new Error('Name, category, product type, and unit of measure are required');
+      throw new BadRequestError(
+        'MISSING_REQUIRED_FIELDS',
+        'Name, category, product type, and unit of measure are required'
+      );
     }
 
     // Validate product type (Requirement 2.1)
     const validProductTypes = ['consumable', 'retail', 'both'];
     if (!validProductTypes.includes(data.productType)) {
-      throw new Error('Invalid product type. Must be: consumable, retail, or both');
+      throw new BadRequestError(
+        'INVALID_PRODUCT_TYPE',
+        'Invalid product type. Must be: consumable, retail, or both'
+      );
     }
 
     // Validate unit of measure (Requirement 2.2)
     const validUnits = ['ml', 'gm', 'pieces', 'bottles', 'sachets', 'tubes', 'boxes'];
     if (!validUnits.includes(data.unitOfMeasure)) {
-      throw new Error(
+      throw new BadRequestError(
+        'INVALID_UNIT',
         'Invalid unit of measure. Must be: ml, gm, pieces, bottles, sachets, tubes, or boxes'
       );
     }
@@ -339,11 +399,11 @@ export class ProductService {
     });
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
     }
 
     if (!category.isActive) {
-      throw new Error('Cannot assign product to inactive category');
+      throw new BadRequestError('INACTIVE_CATEGORY', 'Cannot assign product to inactive category');
     }
 
     // Check SKU uniqueness within tenant (Requirement 2.4)
@@ -352,7 +412,7 @@ export class ProductService {
         where: { tenantId_sku: { tenantId, sku: data.sku } },
       });
       if (existingSku) {
-        throw new Error('Product with this SKU already exists');
+        throw new ConflictError('DUPLICATE_SKU', 'Product with this SKU already exists');
       }
     }
 
@@ -362,7 +422,7 @@ export class ProductService {
         where: { tenantId_barcode: { tenantId, barcode: data.barcode } },
       });
       if (existingBarcode) {
-        throw new Error('Product with this barcode already exists');
+        throw new ConflictError('DUPLICATE_BARCODE', 'Product with this barcode already exists');
       }
     }
 
@@ -410,7 +470,7 @@ export class ProductService {
     });
 
     if (!existing) {
-      throw new Error('Product not found');
+      throw new NotFoundError('PRODUCT_NOT_FOUND', 'Product not found');
     }
 
     // Check SKU uniqueness if changed (Requirement 2.4)
@@ -425,7 +485,7 @@ export class ProductService {
           },
         });
         if (duplicate) {
-          throw new Error('Product with this SKU already exists');
+          throw new ConflictError('DUPLICATE_SKU', 'Product with this SKU already exists');
         }
       }
     }
@@ -442,7 +502,7 @@ export class ProductService {
           },
         });
         if (duplicate) {
-          throw new Error('Product with this barcode already exists');
+          throw new ConflictError('DUPLICATE_BARCODE', 'Product with this barcode already exists');
         }
       }
     }
@@ -453,10 +513,13 @@ export class ProductService {
         where: { id: data.categoryId, tenantId, deletedAt: null },
       });
       if (!category) {
-        throw new Error('Category not found');
+        throw new NotFoundError('CATEGORY_NOT_FOUND', 'Category not found');
       }
       if (!category.isActive) {
-        throw new Error('Cannot assign product to inactive category');
+        throw new BadRequestError(
+          'INACTIVE_CATEGORY',
+          'Cannot assign product to inactive category'
+        );
       }
     }
 
@@ -464,7 +527,10 @@ export class ProductService {
     if (data.productType) {
       const validProductTypes = ['consumable', 'retail', 'both'];
       if (!validProductTypes.includes(data.productType)) {
-        throw new Error('Invalid product type. Must be: consumable, retail, or both');
+        throw new BadRequestError(
+          'INVALID_PRODUCT_TYPE',
+          'Invalid product type. Must be: consumable, retail, or both'
+        );
       }
     }
 
@@ -472,7 +538,8 @@ export class ProductService {
     if (data.unitOfMeasure) {
       const validUnits = ['ml', 'gm', 'pieces', 'bottles', 'sachets', 'tubes', 'boxes'];
       if (!validUnits.includes(data.unitOfMeasure)) {
-        throw new Error(
+        throw new BadRequestError(
+          'INVALID_UNIT',
           'Invalid unit of measure. Must be: ml, gm, pieces, bottles, sachets, tubes, or boxes'
         );
       }
@@ -652,7 +719,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundError('PRODUCT_NOT_FOUND', 'Product not found');
     }
 
     // Check if product has active stock
@@ -693,7 +760,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundError('PRODUCT_NOT_FOUND', 'Product not found');
     }
 
     const settings = await prisma.branchProductSettings.findUnique({
@@ -719,7 +786,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundError('PRODUCT_NOT_FOUND', 'Product not found');
     }
 
     // Upsert branch settings
@@ -764,7 +831,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundError('PRODUCT_NOT_FOUND', 'Product not found');
     }
 
     const branchSettings = (product as any).branchSettings?.[0];

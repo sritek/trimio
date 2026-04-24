@@ -47,3 +47,20 @@ export {
 
 // Error handler
 export { errorHandler } from './error-handler';
+
+// Feature access utilities
+export {
+  getSubscriptionAccess,
+  hasFeatureAccess,
+  hasAdvancedReports,
+  checkLimit,
+  requireFeatureAccess,
+  requireWithinLimit,
+} from './feature-access';
+export type {
+  FeatureKey,
+  LimitKey,
+  SubscriptionFeatures,
+  SubscriptionLimits,
+  SubscriptionAccess,
+} from './feature-access';

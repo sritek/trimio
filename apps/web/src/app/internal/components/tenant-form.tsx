@@ -7,16 +7,9 @@
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { LogoUpload } from './logo-upload';
-import { SUBSCRIPTION_PLANS, SUBSCRIPTION_STATUSES } from '../constants';
-import type { TenantFormData, FormErrors, SubscriptionPlan, SubscriptionStatus } from '../types';
+import type { TenantFormData, FormErrors } from '../types';
 
 interface TenantFormProps {
   data: TenantFormData;
@@ -31,10 +24,8 @@ interface TenantFormProps {
   onLogoRemove: () => void;
   /** Whether logo is currently uploading */
   logoUploading?: boolean;
-  /** If true, shows status field (for edit mode) */
-  showStatus?: boolean;
-  /** If true, shows trial days field when plan is trial */
-  showTrialDays?: boolean;
+  /** Show billing fields (default: true) */
+  showBillingFields?: boolean;
 }
 
 export function TenantForm({
@@ -46,8 +37,7 @@ export function TenantForm({
   onLogoSelect,
   onLogoRemove,
   logoUploading = false,
-  showStatus = false,
-  showTrialDays = true,
+  showBillingFields = true,
 }: TenantFormProps) {
   const handleChange = (field: keyof TenantFormData, value: string | number | boolean) => {
     onChange({ ...data, [field]: value });
@@ -56,6 +46,17 @@ export function TenantForm({
 
   const handlePhoneChange = (value: string) => {
     handleChange('phone', value.replace(/\D/g, '').slice(0, 10));
+  };
+
+  const handleGstinChange = (value: string) => {
+    // GSTIN is 15 characters, uppercase alphanumeric
+    handleChange(
+      'gstin',
+      value
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 15)
+    );
   };
 
   return (
@@ -125,68 +126,55 @@ export function TenantForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label className="text-slate-700">Subscription Plan</Label>
-          <Select
-            value={data.subscriptionPlan}
-            onValueChange={(v) => handleChange('subscriptionPlan', v as SubscriptionPlan)}
-          >
-            <SelectTrigger className="border-slate-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SUBSCRIPTION_PLANS.map((plan) => (
-                <SelectItem key={plan.value} value={plan.value}>
-                  {plan.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {showStatus && (
-          <div className="space-y-2">
-            <Label className="text-slate-700">Status</Label>
-            <Select
-              value={data.subscriptionStatus}
-              onValueChange={(v) => handleChange('subscriptionStatus', v as SubscriptionStatus)}
-            >
-              <SelectTrigger className="border-slate-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SUBSCRIPTION_STATUSES.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>
-                    {status.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {/* Billing Information */}
+      {showBillingFields && (
+        <>
+          <div className="border-t border-slate-200 pt-4 mt-2">
+            <h4 className="text-sm font-medium text-slate-700 mb-3">Billing Information</h4>
           </div>
-        )}
 
-        {showTrialDays && data.subscriptionPlan === 'trial' && !showStatus && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-slate-700">Billing Email</Label>
+              <Input
+                type="email"
+                value={data.billingEmail}
+                onChange={(e) => handleChange('billingEmail', e.target.value)}
+                placeholder="accounts@glamourstudio.com"
+                className={`border-slate-300 ${errors.billingEmail ? 'border-red-500' : ''}`}
+              />
+              <p className="text-xs text-slate-500">
+                Subscription notifications will be sent here. Falls back to business email if empty.
+              </p>
+              {errors.billingEmail && <p className="text-xs text-red-500">{errors.billingEmail}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700">GSTIN</Label>
+              <Input
+                value={data.gstin}
+                onChange={(e) => handleGstinChange(e.target.value)}
+                placeholder="22AAAAA0000A1Z5"
+                className={`border-slate-300 font-mono ${errors.gstin ? 'border-red-500' : ''}`}
+                maxLength={15}
+              />
+              {errors.gstin && <p className="text-xs text-red-500">{errors.gstin}</p>}
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label className="text-slate-700">Trial Days</Label>
-            <Input
-              type="number"
-              value={data.trialDays || ''}
-              onChange={(e) =>
-                handleChange('trialDays', e.target.value ? parseInt(e.target.value) : 0)
-              }
-              onBlur={(e) => {
-                if (!e.target.value || parseInt(e.target.value) <= 0) {
-                  handleChange('trialDays', 14);
-                }
-              }}
-              min={1}
-              max={90}
-              className="border-slate-300"
+            <Label className="text-slate-700">Billing Address</Label>
+            <Textarea
+              value={data.billingAddress}
+              onChange={(e) => handleChange('billingAddress', e.target.value)}
+              placeholder="123 Business Park, MG Road, Bangalore, Karnataka 560001"
+              className={`border-slate-300 min-h-[80px] ${errors.billingAddress ? 'border-red-500' : ''}`}
             />
+            {errors.billingAddress && (
+              <p className="text-xs text-red-500">{errors.billingAddress}</p>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </>
   );
 }

@@ -13,6 +13,9 @@ const INDIAN_PHONE_REGEX = /^[6-9]\d{9}$/;
 const PINCODE_REGEX = /^\d{6}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// GSTIN regex: 15 characters alphanumeric (Indian GST format)
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 // ============================================
 // FIELD VALIDATORS
 // ============================================
@@ -52,6 +55,12 @@ export function validatePincode(pincode: string, required = false): string | nul
   return null;
 }
 
+export function validateGstin(gstin: string, required = false): string | null {
+  if (!gstin) return required ? 'GSTIN is required' : null;
+  if (!GSTIN_REGEX.test(gstin)) return 'Invalid GSTIN format (e.g., 22AAAAA0000A1Z5)';
+  return null;
+}
+
 // ============================================
 // FORM VALIDATORS
 // ============================================
@@ -61,6 +70,9 @@ export function validateTenantForm(data: TenantFormData): FormErrors {
     name: validateName(data.name, 'Business name'),
     email: validateEmail(data.email),
     phone: validatePhone(data.phone, false),
+    // Billing fields - all optional
+    billingEmail: data.billingEmail ? validateEmail(data.billingEmail, false) : null,
+    gstin: data.gstin ? validateGstin(data.gstin, false) : null,
   };
 }
 

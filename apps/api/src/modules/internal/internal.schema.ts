@@ -27,6 +27,9 @@ export const adminLoginResponseSchema = z.object({
 const indianPhoneRegex = /^[6-9]\d{9}$/;
 const pincodeRegex = /^\d{6}$/;
 
+// GSTIN regex: 15 characters alphanumeric
+const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 // Create tenant
 export const createTenantBodySchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(255),
@@ -34,8 +37,10 @@ export const createTenantBodySchema = z.object({
   email: z.string().email('Invalid email format'),
   phone: z.string().regex(indianPhoneRegex, 'Phone must be 10 digits starting with 6-9').optional(),
   logoUrl: z.string().url().optional(),
-  subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).default('trial'),
-  trialDays: z.number().int().min(0).max(90).default(14),
+  // Billing information
+  billingEmail: z.string().email('Invalid billing email format').optional(),
+  billingAddress: z.string().max(500).optional(),
+  gstin: z.string().regex(gstinRegex, 'Invalid GSTIN format').optional().or(z.literal('')),
   // Loyalty configuration
   loyaltyEnabled: z.boolean().default(true),
   loyaltyPointsPerUnit: z.number().min(0).max(1).default(0.01), // Points earned per ₹1 spent
@@ -97,8 +102,15 @@ export const updateTenantBodySchema = z.object({
     .optional()
     .nullable(),
   logoUrl: z.string().url().optional().nullable(),
-  subscriptionPlan: z.enum(['trial', 'basic', 'professional', 'enterprise']).optional(),
-  subscriptionStatus: z.enum(['active', 'inactive', 'suspended', 'cancelled']).optional(),
+  // Billing information
+  billingEmail: z.string().email('Invalid billing email format').optional().nullable(),
+  billingAddress: z.string().max(500).optional().nullable(),
+  gstin: z
+    .string()
+    .regex(gstinRegex, 'Invalid GSTIN format')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
 });
 
 export type UpdateTenantBody = z.infer<typeof updateTenantBodySchema>;
@@ -157,9 +169,6 @@ export const tenantResponseSchema = z.object({
   legalName: z.string().nullable(),
   email: z.string(),
   phone: z.string().nullable(),
-  subscriptionPlan: z.string(),
-  subscriptionStatus: z.string(),
-  trialEndsAt: z.string().nullable(),
   createdAt: z.string(),
 });
 
@@ -189,3 +198,104 @@ export const userResponseSchema = z.object({
   isActive: z.boolean(),
   createdAt: z.string(),
 });
+
+// ============================================
+// SUBSCRIPTION SCHEMAS (Internal Admin)
+// ============================================
+
+// Create subscription for a branch
+export const createSubscriptionBodySchema = z.object({
+  branchId: z.string().uuid(),
+  planId: z.string().uuid(),
+  billingCycle: z.enum(['monthly', 'annual']),
+  startTrial: z.boolean().default(true),
+  discountPercentage: z.number().min(0).max(100).default(0),
+  discountReason: z.string().max(255).optional(),
+});
+
+export type CreateSubscriptionBody = z.infer<typeof createSubscriptionBodySchema>;
+
+// Cancel subscription
+export const cancelSubscriptionBodySchema = z.object({
+  reason: z.string().min(10, 'Reason must be at least 10 characters').max(500),
+  cancelImmediately: z.boolean().default(false),
+});
+
+export type CancelSubscriptionBody = z.infer<typeof cancelSubscriptionBodySchema>;
+
+// Reactivate subscription
+export const reactivateSubscriptionBodySchema = z.object({
+  planId: z.string().uuid().optional(),
+  billingCycle: z.enum(['monthly', 'annual']).optional(),
+});
+
+export type ReactivateSubscriptionBody = z.infer<typeof reactivateSubscriptionBodySchema>;
+
+// Update subscription status (admin only)
+export const updateSubscriptionStatusBodySchema = z.object({
+  status: z.enum(['trial', 'active', 'past_due', 'suspended', 'cancelled', 'expired']),
+  reason: z.string().min(5, 'Reason must be at least 5 characters').max(500).optional(),
+});
+
+export type UpdateSubscriptionStatusBody = z.infer<typeof updateSubscriptionStatusBodySchema>;
+
+// Extend trial (admin only)
+export const extendTrialBodySchema = z.object({
+  additionalDays: z.number().int().min(1).max(90),
+  reason: z.string().min(5, 'Reason must be at least 5 characters').max(500),
+});
+
+export type ExtendTrialBody = z.infer<typeof extendTrialBodySchema>;
+
+// Apply discount (admin only)
+export const applyDiscountBodySchema = z.object({
+  discountPercentage: z.number().min(0).max(100),
+  discountReason: z.string().max(255).optional(),
+});
+
+export type ApplyDiscountBody = z.infer<typeof applyDiscountBodySchema>;
+
+// ============================================
+// SUBSCRIPTION PLAN MANAGEMENT SCHEMAS
+// ============================================
+
+// Create subscription plan
+export const createPlanBodySchema = z.object({
+  name: z.string().min(2).max(100),
+  code: z
+    .string()
+    .min(2)
+    .max(50)
+    .regex(/^[a-z0-9_]+$/, 'Code must be lowercase alphanumeric with underscores'),
+  tier: z.enum(['basic', 'professional', 'enterprise']),
+  description: z.string().max(1000).optional(),
+  monthlyPrice: z.number().min(0),
+  annualPrice: z.number().min(0),
+  currency: z.string().length(3).default('INR'),
+  maxUsers: z.number().int(), // -1 for unlimited
+  maxAppointmentsPerDay: z.number().int(),
+  maxServices: z.number().int(),
+  maxProducts: z.number().int(),
+  features: z.record(z.unknown()).default({}),
+  trialDays: z.number().int().min(0).default(14),
+  gracePeriodDays: z.number().int().min(0).default(7),
+  displayOrder: z.number().int().min(0).default(0),
+  isActive: z.boolean().default(true),
+  isPublic: z.boolean().default(true),
+});
+
+export type CreatePlanBody = z.infer<typeof createPlanBodySchema>;
+
+// Update subscription plan
+export const updatePlanBodySchema = createPlanBodySchema.partial().omit({ code: true });
+
+export type UpdatePlanBody = z.infer<typeof updatePlanBodySchema>;
+
+// List plans query
+export const listPlansQuerySchema = z.object({
+  isActive: z.coerce.boolean().optional(),
+  isPublic: z.coerce.boolean().optional(),
+  tier: z.enum(['basic', 'professional', 'enterprise']).optional(),
+});
+
+export type ListPlansQuery = z.infer<typeof listPlansQuerySchema>;

@@ -134,29 +134,38 @@ enum CustomerSource {
 // ============================================
 
 model Tenant {
-  id                 String    @id @default(uuid())
-  name               String    @db.VarChar(255)
-  slug               String    @unique @db.VarChar(100)
-  legalName          String?   @map("legal_name") @db.VarChar(255)
-  email              String    @db.VarChar(255)
-  phone              String?   @db.VarChar(20)
-  logoUrl            String?   @map("logo_url") @db.VarChar(500)
-  settings           Json      @default("{}")
-  subscriptionPlan   String    @default("trial") @map("subscription_plan") @db.VarChar(50)
-  subscriptionStatus String    @default("active") @map("subscription_status") @db.VarChar(20)
-  trialEndsAt        DateTime? @map("trial_ends_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  deletedAt          DateTime? @map("deleted_at")
+  id        String    @id @default(uuid())
+  name      String    @db.VarChar(255)
+  slug      String    @unique @db.VarChar(100)
+  legalName String?   @map("legal_name") @db.VarChar(255)
+  email     String    @db.VarChar(255)
+  phone     String?   @db.VarChar(20)
+  logoUrl   String?   @map("logo_url") @db.VarChar(500)
+  settings  Json      @default("{}")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Billing information (for branch-level subscriptions)
+  billingEmail   String? @map("billing_email") @db.VarChar(255)
+  billingAddress String? @map("billing_address") @db.Text
+  gstin          String? @db.VarChar(20)
+
+  // Volume discount settings (for multi-branch tenants)
+  volumeDiscountEnabled     Boolean @default(false) @map("volume_discount_enabled")
+  volumeDiscountPercentage  Decimal @default(0) @map("volume_discount_percentage") @db.Decimal(5, 2)
+  volumeDiscountMinBranches Int     @default(3) @map("volume_discount_min_branches")
 
   // Relations
-  branches      Branch[]
-  users         User[]
-  customers     Customer[]
-  services      Service[]
-  categories    ServiceCategory[]
-  customTags    CustomTag[]
-  loyaltyConfig LoyaltyConfig?
+  branches            Branch[]
+  users               User[]
+  customers           Customer[]
+  services            Service[]
+  categories          ServiceCategory[]
+  customTags          CustomTag[]
+  loyaltyConfig       LoyaltyConfig?
+  branchSubscriptions BranchSubscription[]
 
   @@map("tenants")
 }
@@ -186,6 +195,15 @@ model Branch {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
+  // Subscription status (denormalized for quick access checks)
+  subscriptionStatus BranchSubscriptionStatus? @map("subscription_status")
+  subscriptionPlanId String?                   @map("subscription_plan_id")
+
+  // Access control (for suspended/expired subscriptions)
+  isAccessible           Boolean   @default(true) @map("is_accessible")
+  accessRestrictedAt     DateTime? @map("access_restricted_at")
+  accessRestrictedReason String?   @map("access_restricted_reason") @db.VarChar(255)
+
   // Relations
   tenant                      Tenant                  @relation(fields: [tenantId], references: [id])
   userBranches                UserBranch[]
@@ -208,6 +226,9 @@ model Branch {
   customerPackagePurchases    CustomerPackage[]       @relation("PackagePurchaseBranch")
   membershipUsages            MembershipUsage[]
   packageRedemptions          PackageRedemption[]
+  // Subscription relation
+  subscription                BranchSubscription?     @relation(fields: [branchSubscriptionId], references: [id])
+  branchSubscriptionId        String?
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -284,29 +305,29 @@ model RefreshToken {
 // ============================================
 
 model Customer {
-  id                 String    @id @default(uuid())
-  tenantId           String    @map("tenant_id")
-  phone              String    @db.VarChar(20)
-  name               String    @db.VarChar(255)
-  email              String?   @db.VarChar(255)
-  gender             String?   @db.VarChar(10)
-  dateOfBirth        DateTime? @map("date_of_birth") @db.Date
-  anniversaryDate    DateTime? @map("anniversary_date") @db.Date
-  address            String?   @db.Text
-  notes              String?   @db.Text
-  preferences        Json      @default("{}")
-  allergies          String[]  @default([])
-  tags               String[]  @default([])
-  loyaltyPoints      Int       @default(0) @map("loyalty_points")
-  walletBalance      Decimal   @default(0) @map("wallet_balance") @db.Decimal(10, 2)
-  noShowCount        Int       @default(0) @map("no_show_count")
-  bookingStatus      String    @default("normal") @map("booking_status") @db.VarChar(20)
-  firstVisitBranchId String?   @map("first_visit_branch_id")
-  marketingConsent   Boolean   @default(true) @map("marketing_consent")
+  id                 String         @id @default(uuid())
+  tenantId           String         @map("tenant_id")
+  phone              String         @db.VarChar(20)
+  name               String         @db.VarChar(255)
+  email              String?        @db.VarChar(255)
+  gender             String?        @db.VarChar(10)
+  dateOfBirth        DateTime?      @map("date_of_birth") @db.Date
+  anniversaryDate    DateTime?      @map("anniversary_date") @db.Date
+  address            String?        @db.Text
+  notes              String?        @db.Text
+  preferences        Json           @default("{}")
+  allergies          String[]       @default([])
+  tags               String[]       @default([])
+  loyaltyPoints      Int            @default(0) @map("loyalty_points")
+  walletBalance      Decimal        @default(0) @map("wallet_balance") @db.Decimal(10, 2)
+  noShowCount        Int            @default(0) @map("no_show_count")
+  bookingStatus      String         @default("normal") @map("booking_status") @db.VarChar(20)
+  firstVisitBranchId String?        @map("first_visit_branch_id")
+  marketingConsent   Boolean        @default(true) @map("marketing_consent")
   source             CustomerSource @default(manual) @map("source")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  deletedAt          DateTime? @map("deleted_at")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  deletedAt          DateTime?      @map("deleted_at")
 
   // Relations
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
@@ -1543,10 +1564,10 @@ model PayrollItem {
   userId    String @map("user_id")
 
   // Attendance summary
-  workingDays   Int     @map("working_days")
-  presentDays   Decimal @map("present_days") @db.Decimal(4, 1)
-  absentDays    Decimal @map("absent_days") @db.Decimal(4, 1)
-  leaveDays     Decimal @map("leave_days") @db.Decimal(4, 1)
+  workingDays Int     @map("working_days")
+  presentDays Decimal @map("present_days") @db.Decimal(4, 1)
+  absentDays  Decimal @map("absent_days") @db.Decimal(4, 1)
+  leaveDays   Decimal @map("leave_days") @db.Decimal(4, 1)
 
   // Earnings
   baseSalary    Decimal @map("base_salary") @db.Decimal(10, 2)
@@ -2644,4 +2665,300 @@ model Station {
   @@index([tenantId, branchId])
   @@index([branchId, status])
   @@map("stations")
+}
+
+// ============================================
+// Branch Subscription Enums
+// ============================================
+
+enum SubscriptionPlanTier {
+  basic
+  professional
+  enterprise
+}
+
+enum BillingCycle {
+  monthly
+  annual
+}
+
+enum BranchSubscriptionStatus {
+  trial
+  active
+  past_due
+  suspended
+  cancelled
+  expired
+}
+
+enum SubscriptionInvoiceStatus {
+  draft
+  pending
+  paid
+  failed
+  refunded
+  cancelled
+}
+
+enum PaymentGateway {
+  razorpay
+  stripe
+  manual
+}
+
+// ============================================
+// Branch Subscriptions
+// ============================================
+
+model SubscriptionPlan {
+  id          String               @id @default(uuid())
+  name        String               @db.VarChar(100)
+  code        String               @unique @db.VarChar(50)
+  tier        SubscriptionPlanTier
+  description String?              @db.Text
+
+  // Pricing
+  monthlyPrice Decimal @map("monthly_price") @db.Decimal(10, 2)
+  annualPrice  Decimal @map("annual_price") @db.Decimal(10, 2)
+  currency     String  @default("INR") @db.VarChar(3)
+
+  // Feature limits (-1 for unlimited)
+  maxUsers              Int @map("max_users")
+  maxAppointmentsPerDay Int @map("max_appointments_per_day")
+  maxServices           Int @map("max_services")
+  maxProducts           Int @map("max_products")
+
+  // Feature flags (JSON for flexibility)
+  features Json @default("{}")
+
+  // Trial settings
+  trialDays Int @default(14) @map("trial_days")
+
+  // Grace period settings
+  gracePeriodDays Int @default(7) @map("grace_period_days")
+
+  // Display
+  displayOrder Int     @default(0) @map("display_order")
+  isActive     Boolean @default(true) @map("is_active")
+  isPublic     Boolean @default(true) @map("is_public")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  branchSubscriptions BranchSubscription[]
+
+  @@index([isActive, isPublic])
+  @@map("subscription_plans")
+}
+
+model BranchSubscription {
+  id       String @id @default(uuid())
+  tenantId String @map("tenant_id")
+  branchId String @unique @map("branch_id")
+  planId   String @map("plan_id")
+
+  // Billing cycle
+  billingCycle BillingCycle @map("billing_cycle")
+
+  // Status
+  status BranchSubscriptionStatus @default(trial)
+
+  // Trial period
+  trialStartDate DateTime? @map("trial_start_date") @db.Date
+  trialEndDate   DateTime? @map("trial_end_date") @db.Date
+
+  // Current billing period
+  currentPeriodStart DateTime @map("current_period_start") @db.Date
+  currentPeriodEnd   DateTime @map("current_period_end") @db.Date
+
+  // Grace period tracking
+  gracePeriodEndDate DateTime? @map("grace_period_end_date") @db.Date
+
+  // Locked plan terms at subscription creation (won't change if plan is edited)
+  trialDaysGranted       Int @map("trial_days_granted")
+  gracePeriodDaysGranted Int @map("grace_period_days_granted")
+
+  // Pricing (locked at subscription time)
+  pricePerPeriod Decimal @map("price_per_period") @db.Decimal(10, 2)
+  currency       String  @default("INR") @db.VarChar(3)
+
+  // Discount
+  discountPercentage Decimal @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  discountReason     String? @map("discount_reason") @db.VarChar(255)
+
+  // Payment method
+  paymentGateway  PaymentGateway? @map("payment_gateway")
+  paymentMethodId String?         @map("payment_method_id") @db.VarChar(255)
+  autoRenew       Boolean         @default(true) @map("auto_renew")
+
+  // Cancellation
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancelledBy        String?   @map("cancelled_by")
+  cancellationReason String?   @map("cancellation_reason") @db.Text
+  cancelAtPeriodEnd  Boolean   @default(false) @map("cancel_at_period_end")
+
+  // Suspension tracking
+  suspendedAt     DateTime? @map("suspended_at")
+  suspensionCount Int       @default(0) @map("suspension_count")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+
+  // Relations
+  tenant   Tenant                @relation(fields: [tenantId], references: [id])
+  plan     SubscriptionPlan      @relation(fields: [planId], references: [id])
+  invoices SubscriptionInvoice[]
+  payments SubscriptionPayment[]
+  history  SubscriptionHistory[]
+  Branch   Branch[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@index([gracePeriodEndDate])
+  @@map("branch_subscriptions")
+}
+
+model SubscriptionInvoice {
+  id             String @id @default(uuid())
+  tenantId       String @map("tenant_id")
+  subscriptionId String @map("subscription_id")
+
+  // Invoice details
+  invoiceNumber String   @map("invoice_number") @db.VarChar(50)
+  invoiceDate   DateTime @map("invoice_date") @db.Date
+  dueDate       DateTime @map("due_date") @db.Date
+
+  // Billing period
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+
+  // Amounts
+  subtotal       Decimal @db.Decimal(10, 2)
+  discountAmount Decimal @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  taxableAmount  Decimal @map("taxable_amount") @db.Decimal(10, 2)
+  cgstAmount     Decimal @default(0) @map("cgst_amount") @db.Decimal(10, 2)
+  sgstAmount     Decimal @default(0) @map("sgst_amount") @db.Decimal(10, 2)
+  igstAmount     Decimal @default(0) @map("igst_amount") @db.Decimal(10, 2)
+  totalTax       Decimal @map("total_tax") @db.Decimal(10, 2)
+  grandTotal     Decimal @map("grand_total") @db.Decimal(10, 2)
+
+  // GST details
+  gstin         String? @db.VarChar(20)
+  placeOfSupply String? @map("place_of_supply") @db.VarChar(50)
+  isIgst        Boolean @default(false) @map("is_igst")
+
+  // Status
+  status SubscriptionInvoiceStatus @default(pending)
+
+  // Payment tracking
+  amountPaid Decimal   @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  paidAt     DateTime? @map("paid_at")
+
+  // Retry tracking
+  paymentAttempts    Int       @default(0) @map("payment_attempts")
+  lastPaymentAttempt DateTime? @map("last_payment_attempt")
+  nextRetryDate      DateTime? @map("next_retry_date") @db.Date
+
+  // PDF storage
+  pdfUrl String? @map("pdf_url") @db.VarChar(500)
+
+  // Notes
+  notes String? @db.Text
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  subscription BranchSubscription    @relation(fields: [subscriptionId], references: [id])
+  payments     SubscriptionPayment[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([subscriptionId, status])
+  @@index([dueDate, status])
+  @@map("subscription_invoices")
+}
+
+model SubscriptionPayment {
+  id             String @id @default(uuid())
+  tenantId       String @map("tenant_id")
+  subscriptionId String @map("subscription_id")
+  invoiceId      String @map("invoice_id")
+
+  // Payment details
+  amount   Decimal        @db.Decimal(10, 2)
+  currency String         @default("INR") @db.VarChar(3)
+  gateway  PaymentGateway
+
+  // Gateway details
+  gatewayPaymentId String? @map("gateway_payment_id") @db.VarChar(255)
+  gatewayOrderId   String? @map("gateway_order_id") @db.VarChar(255)
+  gatewaySignature String? @map("gateway_signature") @db.VarChar(500)
+  gatewayResponse  Json?   @map("gateway_response")
+
+  // Status: pending, completed, failed, refunded
+  status String @default("pending") @db.VarChar(20)
+
+  // Failure tracking
+  failureReason String? @map("failure_reason") @db.Text
+  failureCode   String? @map("failure_code") @db.VarChar(50)
+
+  // Refund tracking
+  refundedAt   DateTime? @map("refunded_at")
+  refundAmount Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundReason String?   @map("refund_reason") @db.Text
+  refundId     String?   @map("refund_id") @db.VarChar(255)
+
+  // Metadata
+  paymentDate DateTime @default(now()) @map("payment_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  subscription BranchSubscription  @relation(fields: [subscriptionId], references: [id])
+  invoice      SubscriptionInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([subscriptionId])
+  @@index([invoiceId])
+  @@index([gatewayPaymentId])
+  @@map("subscription_payments")
+}
+
+model SubscriptionHistory {
+  id             String @id @default(uuid())
+  tenantId       String @map("tenant_id")
+  subscriptionId String @map("subscription_id")
+
+  // Event type: created, activated, renewed, upgraded, downgraded, 
+  //             payment_failed, grace_period_started, suspended, 
+  //             reactivated, cancelled, expired
+  eventType String @map("event_type") @db.VarChar(50)
+
+  // Event details
+  fromStatus BranchSubscriptionStatus? @map("from_status")
+  toStatus   BranchSubscriptionStatus? @map("to_status")
+  fromPlanId String?                   @map("from_plan_id")
+  toPlanId   String?                   @map("to_plan_id")
+
+  // Additional data
+  metadata Json?   @default("{}")
+  notes    String? @db.Text
+
+  // Actor
+  performedBy String? @map("performed_by")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  subscription BranchSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@index([eventType])
+  @@map("subscription_history")
 }

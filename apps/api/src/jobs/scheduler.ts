@@ -13,7 +13,14 @@ import { format } from 'date-fns';
 import { logger } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { isRedisEnabled } from '@/lib/redis';
-import { addStaffJob, staffQueue } from './index';
+import {
+  addStaffJob,
+  addSubscriptionJob,
+  staffQueue,
+  subscriptionQueue,
+  SUBSCRIPTION_JOB_TYPES,
+} from './index';
+import { processSubscriptionLifecycle } from './subscription-jobs';
 
 /**
  * Schedule auto-absent jobs for all branches
@@ -106,7 +113,7 @@ export async function initializeScheduler() {
   // Skip initialization if Redis is disabled
   if (!isRedisEnabled) {
     logger.warn(
-      'Redis disabled - job scheduler not initialized. Background jobs (auto-absent, leave balance init) will not run automatically.'
+      'Redis disabled - job scheduler not initialized. Background jobs (auto-absent, leave balance init, subscription lifecycle) will not run automatically.'
     );
     return;
   }
@@ -124,6 +131,9 @@ export async function initializeScheduler() {
 
     // Check if we need to run leave balance init
     await scheduleLeaveBalanceInit();
+
+    // Schedule subscription lifecycle job
+    await scheduleSubscriptionLifecycleJob();
 
     // Set up recurring schedule using BullMQ repeat
     // Auto-absent: Every day at 11:59 PM
@@ -173,4 +183,52 @@ export async function triggerAutoAbsent(tenantId: string, branchId: string, date
 export async function triggerLeaveBalanceInit(tenantId: string, financialYear: string) {
   await addStaffJob.leaveBalanceInit({ tenantId, financialYear });
   logger.info({ tenantId, financialYear }, 'Manual leave balance init job triggered');
+}
+
+/**
+ * Schedule subscription lifecycle job
+ * Runs daily at midnight to process:
+ * - Expired trials
+ * - Past-due subscriptions
+ * - Cancelled subscriptions at period end
+ */
+export async function scheduleSubscriptionLifecycleJob() {
+  if (!subscriptionQueue) {
+    logger.warn('Subscription queue not available - subscription lifecycle job not scheduled');
+    return;
+  }
+
+  // Add recurring job for daily midnight execution
+  await subscriptionQueue.add(
+    SUBSCRIPTION_JOB_TYPES.PROCESS_LIFECYCLE,
+    {},
+    {
+      repeat: {
+        pattern: '0 0 * * *', // Midnight daily
+      },
+      jobId: 'recurring-subscription-lifecycle',
+    }
+  );
+
+  logger.info('Subscription lifecycle job scheduled for daily midnight execution');
+}
+
+/**
+ * Manually trigger subscription lifecycle processing
+ * Useful for testing or catching up on missed runs
+ */
+export async function triggerSubscriptionLifecycle() {
+  await addSubscriptionJob.processLifecycle();
+  logger.info('Manual subscription lifecycle job triggered');
+}
+
+/**
+ * Run subscription lifecycle processing immediately (synchronous)
+ * Useful for testing without Redis
+ */
+export async function runSubscriptionLifecycleNow() {
+  logger.info('Running subscription lifecycle processing immediately');
+  const results = await processSubscriptionLifecycle();
+  logger.info({ results }, 'Subscription lifecycle processing completed');
+  return results;
 }

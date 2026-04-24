@@ -49,8 +49,14 @@ export {
 } from './permission.guard';
 
 // Branch Access Guards
+export { requireBranchAccess, requireBranchesAccess, requireOwnResource } from './branch.guard';
+
+// Subscription Guards
 export {
-  requireBranchAccess,
-  requireBranchesAccess,
-  requireOwnResource,
-} from './branch.guard';
+  requireActiveSubscription,
+  checkSubscriptionAccess,
+  addSubscriptionWarning,
+} from './subscription.guard';
+
+// Feature Guards
+export { featureGuard, attachSubscriptionAccess } from './feature.guard';

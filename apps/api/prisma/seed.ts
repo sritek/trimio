@@ -76,6 +76,14 @@ async function main() {
     // 11. Station Types & Stations
     const { stationTypes, stations } = await seedStations(tenant.id, branches);
     console.log(`✅ Created ${stationTypes.length} station types and ${stations.length} stations`);
+
+    // 12. Subscription Plans & Branch Subscriptions
+    const subscriptionPlans = await seedSubscriptionPlans();
+    console.log(`✅ Created ${subscriptionPlans.length} subscription plans`);
+
+    // 13. Branch Subscriptions
+    await seedBranchSubscriptions(tenant.id, branches, subscriptionPlans);
+    console.log(`✅ Created branch subscriptions`);
   }
 
   console.log('🎉 Seed completed successfully!');
@@ -140,6 +148,12 @@ async function clearDatabase() {
   await safeTruncate('audit_logs');
   await safeTruncate('refresh_tokens');
   await safeTruncate('stations, station_types');
+  // Subscription tables
+  await safeTruncate('subscription_history');
+  await safeTruncate('subscription_payments');
+  await safeTruncate('subscription_invoices');
+  await safeTruncate('branch_subscriptions');
+  await safeTruncate('subscription_plans');
   await safeTruncate('user_branches');
   await safeTruncate('users');
   await safeTruncate('branches');
@@ -158,9 +172,7 @@ async function seedTenantAndBranches() {
       legalName: 'Glamour Studio Pvt. Ltd.',
       email: 'admin@glamourstudio.com',
       phone: '9876543210',
-      subscriptionPlan: 'professional',
-      subscriptionStatus: 'active',
-      trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      billingEmail: 'billing@glamourstudio.com',
       settings: {
         currency: 'INR',
         timezone: 'Asia/Kolkata',
@@ -2589,6 +2601,164 @@ async function seedStations(tenantId: string, branches: { id: string }[]) {
   const stations = await prisma.station.createManyAndReturn({ data: stationsData });
 
   return { stationTypes, stations };
+}
+
+// ============================================
+// Subscription Plans
+// ============================================
+
+async function seedSubscriptionPlans() {
+  const plansData = [
+    {
+      code: 'basic',
+      name: 'Basic',
+      tier: 'basic' as const,
+      description: 'Perfect for small salons just getting started',
+      monthlyPrice: new Prisma.Decimal(999),
+      annualPrice: new Prisma.Decimal(9990),
+      currency: 'INR',
+      maxUsers: 5,
+      maxAppointmentsPerDay: 50,
+      maxServices: 25,
+      maxProducts: 50,
+      features: {
+        appointments: true,
+        customers: true,
+        services: true,
+        billing: true,
+        basicReports: true,
+        inventory: false,
+        marketing: false,
+        advancedReports: false,
+        multipleStations: false,
+        apiAccess: false,
+      },
+      trialDays: 14,
+      gracePeriodDays: 7,
+      displayOrder: 1,
+      isActive: true,
+      isPublic: true,
+    },
+    {
+      code: 'professional',
+      name: 'Professional',
+      tier: 'professional' as const,
+      description: 'For growing salons that need more features',
+      monthlyPrice: new Prisma.Decimal(2499),
+      annualPrice: new Prisma.Decimal(24990),
+      currency: 'INR',
+      maxUsers: 15,
+      maxAppointmentsPerDay: 150,
+      maxServices: 100,
+      maxProducts: 200,
+      features: {
+        appointments: true,
+        customers: true,
+        services: true,
+        billing: true,
+        basicReports: true,
+        inventory: true,
+        marketing: true,
+        advancedReports: true,
+        multipleStations: true,
+        apiAccess: false,
+      },
+      trialDays: 14,
+      gracePeriodDays: 14,
+      displayOrder: 2,
+      isActive: true,
+      isPublic: true,
+    },
+    {
+      code: 'enterprise',
+      name: 'Enterprise',
+      tier: 'enterprise' as const,
+      description: 'For large salons and chains with advanced needs',
+      monthlyPrice: new Prisma.Decimal(4999),
+      annualPrice: new Prisma.Decimal(49990),
+      currency: 'INR',
+      maxUsers: -1, // Unlimited
+      maxAppointmentsPerDay: -1, // Unlimited
+      maxServices: -1, // Unlimited
+      maxProducts: -1, // Unlimited
+      features: {
+        appointments: true,
+        customers: true,
+        services: true,
+        billing: true,
+        basicReports: true,
+        inventory: true,
+        marketing: true,
+        advancedReports: true,
+        multipleStations: true,
+        apiAccess: true,
+        prioritySupport: true,
+        customIntegrations: true,
+        whiteLabeling: true,
+      },
+      trialDays: 30,
+      gracePeriodDays: 30,
+      displayOrder: 3,
+      isActive: true,
+      isPublic: true,
+    },
+  ];
+
+  const plans = await prisma.subscriptionPlan.createManyAndReturn({
+    data: plansData,
+  });
+
+  return plans;
+}
+
+// ============================================
+// Branch Subscriptions
+// ============================================
+
+async function seedBranchSubscriptions(
+  tenantId: string,
+  branches: { id: string; name: string }[],
+  plans: { id: string; code: string }[]
+) {
+  const professionalPlan = plans.find((p) => p.code === 'professional');
+  if (!professionalPlan) {
+    console.log('⚠️ Professional plan not found, skipping branch subscriptions');
+    return;
+  }
+
+  const today = new Date();
+  const nextMonth = new Date(today);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+  for (const branch of branches) {
+    // Create subscription for each branch
+    const subscription = await prisma.branchSubscription.create({
+      data: {
+        tenantId,
+        branchId: branch.id,
+        planId: professionalPlan.id,
+        billingCycle: 'monthly',
+        status: 'active',
+        currentPeriodStart: today,
+        currentPeriodEnd: nextMonth,
+        pricePerPeriod: new Prisma.Decimal(2499),
+        currency: 'INR',
+        discountPercentage: new Prisma.Decimal(0),
+        autoRenew: true,
+      },
+    });
+
+    // Update branch with subscription status
+    await prisma.branch.update({
+      where: { id: branch.id },
+      data: {
+        subscriptionStatus: 'active',
+        subscriptionPlanId: professionalPlan.id,
+        branchSubscriptionId: subscription.id,
+        isAccessible: true,
+      },
+    });
+  }
 }
 
 // ============================================

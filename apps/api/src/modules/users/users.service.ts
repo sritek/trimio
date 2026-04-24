@@ -6,7 +6,6 @@
 import bcrypt from 'bcrypt';
 import { prisma, serializeDecimals } from '../../lib/prisma';
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from '../../lib/errors';
-import { tenantService } from '../tenant/tenant.service';
 import type { PaginatedResult } from '../../lib/types';
 import type {
   CreateUserBody,
@@ -140,26 +139,47 @@ export class UsersService {
    * Create a new user
    */
   async createUser(tenantId: string, data: CreateUserBody, _createdBy: string) {
-    // Check user limit
-    const tenant = await prisma.tenant.findFirst({
-      where: { id: tenantId, deletedAt: null },
-      select: { subscriptionPlan: true },
+    // Check user limit based on branch subscriptions
+    // Get the highest plan limit from all active branch subscriptions
+    const activeSubscriptions = await prisma.branchSubscription.findMany({
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial'] },
+      },
+      include: {
+        plan: {
+          select: { maxUsers: true },
+        },
+      },
     });
 
-    if (!tenant) {
-      throw new NotFoundError('TENANT_NOT_FOUND', 'Tenant not found');
+    // Calculate total allowed users across all active subscriptions
+    // -1 means unlimited
+    let maxUsers = 0;
+    for (const sub of activeSubscriptions) {
+      if (sub.plan.maxUsers === -1) {
+        maxUsers = -1; // Unlimited
+        break;
+      }
+      maxUsers += sub.plan.maxUsers;
     }
 
-    const limits = tenantService.getPlanLimits(tenant.subscriptionPlan);
-    const currentUserCount = await prisma.user.count({
-      where: { tenantId, deletedAt: null },
-    });
+    if (maxUsers !== -1) {
+      // Count users excluding super_owner (they don't count against the limit)
+      const currentUserCount = await prisma.user.count({
+        where: {
+          tenantId,
+          deletedAt: null,
+          role: { not: 'super_owner' },
+        },
+      });
 
-    if (currentUserCount >= limits.users) {
-      throw new ForbiddenError(
-        'User limit reached. Please upgrade your plan.',
-        'USER_LIMIT_REACHED'
-      );
+      if (currentUserCount >= maxUsers) {
+        throw new ForbiddenError(
+          'USER_LIMIT_REACHED',
+          `User limit reached (${currentUserCount}/${maxUsers}). Please upgrade your plan to add more staff.`
+        );
+      }
     }
 
     // Check for duplicate phone

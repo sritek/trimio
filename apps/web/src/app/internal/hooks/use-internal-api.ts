@@ -19,6 +19,13 @@ import type {
   Owner,
   TenantsResponse,
   LoyaltyConfig,
+  SubscriptionPlan,
+  BranchSubscription,
+  CreateSubscriptionFormData,
+  SubscriptionBillingOverview,
+  CreatePlanFormData,
+  UpdatePlanFormData,
+  SubscriptionHistory,
 } from '../types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -168,8 +175,6 @@ export function useInternalApi() {
           legalName: data.legalName || undefined,
           email: data.email,
           phone: data.phone || undefined,
-          subscriptionPlan: data.subscriptionPlan,
-          trialDays: data.trialDays,
         }),
       });
     },
@@ -186,8 +191,6 @@ export function useInternalApi() {
           email: data.email,
           phone: data.phone || null,
           logoUrl: data.logoUrl || null,
-          subscriptionPlan: data.subscriptionPlan,
-          subscriptionStatus: data.subscriptionStatus,
         }),
       });
     },
@@ -314,6 +317,174 @@ export function useInternalApi() {
     [uploadFile]
   );
 
+  // ============================================
+  // SUBSCRIPTION OPERATIONS
+  // ============================================
+
+  const listPlans = useCallback(
+    async (query?: {
+      isActive?: boolean;
+      isPublic?: boolean;
+      tier?: string;
+    }): Promise<SubscriptionPlan[]> => {
+      const params = new URLSearchParams();
+      if (query?.isActive !== undefined) params.set('isActive', String(query.isActive));
+      if (query?.isPublic !== undefined) params.set('isPublic', String(query.isPublic));
+      if (query?.tier) params.set('tier', query.tier);
+
+      const queryString = params.toString();
+      return apiFetch<SubscriptionPlan[]>(
+        `/subscriptions/plans${queryString ? `?${queryString}` : ''}`
+      );
+    },
+    [apiFetch]
+  );
+
+  const getPlan = useCallback(
+    async (planId: string): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>(`/subscriptions/plans/${planId}`);
+    },
+    [apiFetch]
+  );
+
+  const createPlan = useCallback(
+    async (data: CreatePlanFormData): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>('/subscriptions/plans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    [apiFetch]
+  );
+
+  const updatePlan = useCallback(
+    async (planId: string, data: UpdatePlanFormData): Promise<SubscriptionPlan> => {
+      return apiFetch<SubscriptionPlan>(`/subscriptions/plans/${planId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    [apiFetch]
+  );
+
+  const getBillingOverview = useCallback(
+    async (tenantId: string): Promise<SubscriptionBillingOverview> => {
+      return apiFetch<SubscriptionBillingOverview>(`/subscriptions/tenants/${tenantId}/billing`);
+    },
+    [apiFetch]
+  );
+
+  const createSubscription = useCallback(
+    async (tenantId: string, data: CreateSubscriptionFormData): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(`/subscriptions/tenants/${tenantId}/subscriptions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          branchId: data.branchId,
+          planId: data.planId,
+          billingCycle: data.billingCycle,
+          startTrial: data.startTrial,
+          discountPercentage: data.discountPercentage || 0,
+          discountReason: data.discountReason || undefined,
+        }),
+      });
+    },
+    [apiFetch]
+  );
+
+  const cancelSubscription = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data: { reason: string; cancelImmediately: boolean }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const reactivateSubscription = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data?: { planId?: string; billingCycle?: 'monthly' | 'annual' }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/reactivate`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data || {}),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const updateSubscriptionStatus = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data: { status: string; reason?: string }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/status`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const extendTrial = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data: { additionalDays: number; reason: string }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/extend-trial`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const applyDiscount = useCallback(
+    async (
+      tenantId: string,
+      branchId: string,
+      data: { discountPercentage: number; discountReason?: string }
+    ): Promise<BranchSubscription> => {
+      return apiFetch<BranchSubscription>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/discount`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        }
+      );
+    },
+    [apiFetch]
+  );
+
+  const getSubscriptionHistory = useCallback(
+    async (tenantId: string, branchId: string): Promise<SubscriptionHistory[]> => {
+      return apiFetch<SubscriptionHistory[]>(
+        `/subscriptions/tenants/${tenantId}/branches/${branchId}/history`
+      );
+    },
+    [apiFetch]
+  );
+
   // Memoize the returned object to prevent infinite loops when used in useEffect dependencies
   return useMemo(
     () => ({
@@ -333,6 +504,21 @@ export function useInternalApi() {
       updateLoyaltyConfig,
       // Upload
       uploadLogo,
+      // Subscription Plans
+      listPlans,
+      getPlan,
+      createPlan,
+      updatePlan,
+      // Subscriptions
+      getBillingOverview,
+      createSubscription,
+      cancelSubscription,
+      reactivateSubscription,
+      // Admin subscription operations
+      updateSubscriptionStatus,
+      extendTrial,
+      applyDiscount,
+      getSubscriptionHistory,
     }),
     [
       listTenants,
@@ -346,6 +532,18 @@ export function useInternalApi() {
       getLoyaltyConfig,
       updateLoyaltyConfig,
       uploadLogo,
+      listPlans,
+      getPlan,
+      createPlan,
+      updatePlan,
+      getBillingOverview,
+      createSubscription,
+      cancelSubscription,
+      reactivateSubscription,
+      updateSubscriptionStatus,
+      extendTrial,
+      applyDiscount,
+      getSubscriptionHistory,
     ]
   );
 }

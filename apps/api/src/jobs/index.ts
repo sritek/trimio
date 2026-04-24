@@ -23,6 +23,7 @@ export const QUEUE_NAMES = {
   STAFF: 'staff-jobs',
   NOTIFICATIONS: 'notification-jobs',
   REPORTS: 'report-jobs',
+  SUBSCRIPTIONS: 'subscription-jobs',
 } as const;
 
 // Job types for staff queue
@@ -34,10 +35,17 @@ export const STAFF_JOB_TYPES = {
   PAYSLIP_WHATSAPP: 'payslip-whatsapp',
 } as const;
 
+// Job types for subscription queue
+export const SUBSCRIPTION_JOB_TYPES = {
+  PROCESS_LIFECYCLE: 'process-lifecycle',
+} as const;
+
 // Conditional Redis connection and queues
 let connection: Redis | null = null;
 let staffQueue: Queue | null = null;
 let staffQueueEvents: QueueEvents | null = null;
+let subscriptionQueue: Queue | null = null;
+let subscriptionQueueEvents: QueueEvents | null = null;
 
 if (isRedisEnabled && env.REDIS_URL) {
   // Redis connection for BullMQ (separate from cache connection)
@@ -45,27 +53,37 @@ if (isRedisEnabled && env.REDIS_URL) {
     maxRetriesPerRequest: null, // Required for BullMQ
   });
 
-  // Create queues
+  const defaultJobOptions = {
+    attempts: 3,
+    backoff: {
+      type: 'exponential' as const,
+      delay: 1000,
+    },
+    removeOnComplete: {
+      age: 24 * 3600, // Keep completed jobs for 24 hours
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 7 * 24 * 3600, // Keep failed jobs for 7 days
+    },
+  };
+
+  // Create staff queue
   staffQueue = new Queue(QUEUE_NAMES.STAFF, {
     connection: connection as unknown as ConnectionOptions,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-      removeOnComplete: {
-        age: 24 * 3600, // Keep completed jobs for 24 hours
-        count: 1000,
-      },
-      removeOnFail: {
-        age: 7 * 24 * 3600, // Keep failed jobs for 7 days
-      },
-    },
+    defaultJobOptions,
   });
 
-  // Queue events for monitoring
-  staffQueueEvents = new QueueEvents(QUEUE_NAMES.STAFF, { connection: connection as unknown as ConnectionOptions });
+  // Create subscription queue
+  subscriptionQueue = new Queue(QUEUE_NAMES.SUBSCRIPTIONS, {
+    connection: connection as unknown as ConnectionOptions,
+    defaultJobOptions,
+  });
+
+  // Queue events for monitoring - Staff
+  staffQueueEvents = new QueueEvents(QUEUE_NAMES.STAFF, {
+    connection: connection as unknown as ConnectionOptions,
+  });
 
   staffQueueEvents.on('completed', ({ jobId }) => {
     logger.info({ jobId, queue: QUEUE_NAMES.STAFF }, 'Job completed');
@@ -73,6 +91,19 @@ if (isRedisEnabled && env.REDIS_URL) {
 
   staffQueueEvents.on('failed', ({ jobId, failedReason }) => {
     logger.error({ jobId, queue: QUEUE_NAMES.STAFF, reason: failedReason }, 'Job failed');
+  });
+
+  // Queue events for monitoring - Subscriptions
+  subscriptionQueueEvents = new QueueEvents(QUEUE_NAMES.SUBSCRIPTIONS, {
+    connection: connection as unknown as ConnectionOptions,
+  });
+
+  subscriptionQueueEvents.on('completed', ({ jobId }) => {
+    logger.info({ jobId, queue: QUEUE_NAMES.SUBSCRIPTIONS }, 'Job completed');
+  });
+
+  subscriptionQueueEvents.on('failed', ({ jobId, failedReason }) => {
+    logger.error({ jobId, queue: QUEUE_NAMES.SUBSCRIPTIONS, reason: failedReason }, 'Job failed');
   });
 
   logger.info('BullMQ job queues initialized');
@@ -83,7 +114,7 @@ if (isRedisEnabled && env.REDIS_URL) {
 }
 
 // Export queues (may be null if Redis disabled)
-export { staffQueue, staffQueueEvents };
+export { staffQueue, staffQueueEvents, subscriptionQueue, subscriptionQueueEvents };
 
 // Job data types
 export interface AutoAbsentJobData {
@@ -179,6 +210,26 @@ export const addStaffJob = {
   },
 };
 
+// Helper to add subscription jobs (no-ops when Redis disabled)
+export const addSubscriptionJob = {
+  async processLifecycle() {
+    if (!subscriptionQueue) {
+      logger.warn(
+        { jobType: SUBSCRIPTION_JOB_TYPES.PROCESS_LIFECYCLE },
+        'Redis disabled - subscription lifecycle job skipped'
+      );
+      return null;
+    }
+    return subscriptionQueue.add(
+      SUBSCRIPTION_JOB_TYPES.PROCESS_LIFECYCLE,
+      {},
+      {
+        jobId: `subscription-lifecycle-${new Date().toISOString().split('T')[0]}`,
+      }
+    );
+  },
+};
+
 // Graceful shutdown
 export async function closeQueues() {
   if (!isRedisEnabled) {
@@ -188,6 +239,8 @@ export async function closeQueues() {
 
   if (staffQueue) await staffQueue.close();
   if (staffQueueEvents) await staffQueueEvents.close();
+  if (subscriptionQueue) await subscriptionQueue.close();
+  if (subscriptionQueueEvents) await subscriptionQueueEvents.close();
   if (connection) await connection.quit();
   logger.info('Job queues closed');
 }

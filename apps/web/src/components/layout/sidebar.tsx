@@ -35,6 +35,7 @@ import {
   LogOut,
   Building2,
   Check,
+  Lock,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -62,6 +63,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAppointmentsUIStore } from '@/stores/appointments-ui-store';
 import { type FeatureFlags, isFeatureEnabled } from '@/config/features';
+import { useSubscriptionAccess, type FeatureKey } from '@/hooks/use-feature-access';
 import { useLocale } from 'next-intl';
 import { locales, localeNames, type Locale } from '@/i18n/config';
 import Image from 'next/image';
@@ -72,6 +74,7 @@ interface NavItem {
   icon: React.ElementType;
   permission?: string;
   featureFlag?: Partial<FeatureFlags>;
+  subscriptionFeature?: FeatureKey; // Subscription-based feature check
   children?: NavItem[];
 }
 
@@ -122,6 +125,7 @@ const mainNavItems: NavItem[] = [
     icon: Package,
     permission: PERMISSIONS.INVENTORY_READ,
     featureFlag: 'inventory',
+    subscriptionFeature: 'inventory',
     children: [
       {
         titleKey: 'stock',
@@ -185,6 +189,7 @@ const mainNavItems: NavItem[] = [
     icon: Crown,
     permission: PERMISSIONS.SERVICES_READ,
     featureFlag: 'memberships',
+    subscriptionFeature: 'memberships',
     children: [
       {
         titleKey: 'membershipPlans',
@@ -238,12 +243,14 @@ function NavLink({
   t,
   onNavigate,
   isChildItem = false,
+  isLocked = false,
 }: {
   item: NavItem;
   isCollapsed: boolean;
   t: (key: string) => string;
   onNavigate?: (href: string) => void;
   isChildItem?: boolean;
+  isLocked?: boolean;
 }) {
   const pathname = usePathname();
   const isActive = isChildItem
@@ -261,11 +268,17 @@ function NavLink({
         isActive
           ? 'bg-primary text-primary-foreground'
           : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-        isCollapsed && 'justify-center px-2'
+        isCollapsed && 'justify-center px-2',
+        isLocked && 'opacity-60'
       )}
     >
       <item.icon className="h-5 w-5 shrink-0" />
-      {!isCollapsed && <span>{title}</span>}
+      {!isCollapsed && (
+        <>
+          <span className="flex-1">{title}</span>
+          {isLocked && <Lock className="h-3.5 w-3.5 text-amber-500" />}
+        </>
+      )}
     </Link>
   );
 
@@ -273,7 +286,10 @@ function NavLink({
     return (
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right">{title}</TooltipContent>
+        <TooltipContent side="right" className="flex items-center gap-2">
+          {title}
+          {isLocked && <Lock className="h-3 w-3 text-amber-500" />}
+        </TooltipContent>
       </Tooltip>
     );
   }
@@ -291,12 +307,14 @@ function NavGroup({
   t,
   onNavigate,
   hasPermission,
+  isLocked = false,
 }: {
   item: NavItem;
   isCollapsed: boolean;
   t: (key: string) => string;
   onNavigate?: (href: string) => void;
   hasPermission: (permission: string) => boolean;
+  isLocked?: boolean;
 }) {
   const pathname = usePathname();
   const isChildActive =
@@ -328,14 +346,18 @@ function NavGroup({
               'flex items-center justify-center rounded-lg px-2 py-2 text-sm transition-all',
               isActive
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              isLocked && 'opacity-60'
             )}
           >
             <item.icon className="h-5 w-5 shrink-0" />
           </Link>
         </TooltipTrigger>
         <TooltipContent side="right" className="flex flex-col gap-1 p-2">
-          <span className="font-medium">{title}</span>
+          <span className="font-medium flex items-center gap-2">
+            {title}
+            {isLocked && <Lock className="h-3 w-3 text-amber-500" />}
+          </span>
           {visibleChildren.map((child) => (
             <Link
               key={child.href}
@@ -365,11 +387,13 @@ function NavGroup({
           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all',
           isActive
             ? 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+          isLocked && 'opacity-60'
         )}
       >
         <item.icon className="h-5 w-5 shrink-0" />
         <span className="flex-1 text-left">{title}</span>
+        {isLocked && <Lock className="h-3.5 w-3.5 text-amber-500" />}
         <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
       </button>
       {isOpen && (
@@ -711,7 +735,19 @@ export function Sidebar({ className }: SidebarProps) {
   const { sidebarCollapsed, toggleSidebarCollapse } = useUIStore();
   const { user, tenant } = useAuthStore();
   const { hasPermission } = usePermissions();
+  const { access: subscriptionAccess } = useSubscriptionAccess();
   const resetAppointmentsToToday = useAppointmentsUIStore((state) => state.resetToToday);
+
+  // Check if user has subscription access to a feature
+  const hasSubscriptionAccess = useCallback(
+    (feature: FeatureKey | undefined): boolean => {
+      if (!feature) return true; // No subscription feature required
+      if (!subscriptionAccess.hasActiveSubscription) return false;
+      const featureValue = subscriptionAccess.features[feature];
+      return typeof featureValue === 'boolean' ? featureValue : !!featureValue;
+    },
+    [subscriptionAccess]
+  );
 
   const visibleMainNavItems = useMemo(
     () =>
@@ -790,26 +826,31 @@ export function Sidebar({ className }: SidebarProps) {
         {/* Main Navigation */}
         <nav className="flex-1 overflow-y-auto p-2">
           <ul className="space-y-1">
-            {visibleMainNavItems.map((item) => (
-              <li key={item.href}>
-                {item.children ? (
-                  <NavGroup
-                    item={item}
-                    isCollapsed={sidebarCollapsed}
-                    t={t}
-                    onNavigate={handleNavigate}
-                    hasPermission={hasPermission}
-                  />
-                ) : (
-                  <NavLink
-                    item={item}
-                    isCollapsed={sidebarCollapsed}
-                    t={t}
-                    onNavigate={handleNavigate}
-                  />
-                )}
-              </li>
-            ))}
+            {visibleMainNavItems.map((item) => {
+              const isLocked = !hasSubscriptionAccess(item.subscriptionFeature);
+              return (
+                <li key={item.href}>
+                  {item.children ? (
+                    <NavGroup
+                      item={item}
+                      isCollapsed={sidebarCollapsed}
+                      t={t}
+                      onNavigate={handleNavigate}
+                      hasPermission={hasPermission}
+                      isLocked={isLocked}
+                    />
+                  ) : (
+                    <NavLink
+                      item={item}
+                      isCollapsed={sidebarCollapsed}
+                      t={t}
+                      onNavigate={handleNavigate}
+                      isLocked={isLocked}
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </nav>
 
@@ -817,13 +858,13 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="border-t p-2 space-y-1 flex flex-col items-center">
           {/* Settings */}
           {!sidebarCollapsed && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full">
               <Avatar className="h-9 w-9 shrink-0">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {getInitials(user?.name)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <p className="text-sm font-medium truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate capitalize">
                   {user?.role?.replace(/_/g, ' ')}

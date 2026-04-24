@@ -2,52 +2,20 @@
  * Internal Admin Portal - Constants
  */
 
-import type { SubscriptionPlan, SubscriptionStatus } from './types';
-
-// ============================================
-// SUBSCRIPTION OPTIONS
-// ============================================
-
-export const SUBSCRIPTION_PLANS: { value: SubscriptionPlan; label: string }[] = [
-  { value: 'trial', label: 'Trial' },
-  { value: 'basic', label: 'Basic' },
-  { value: 'professional', label: 'Professional' },
-  { value: 'enterprise', label: 'Enterprise' },
-];
-
-export const SUBSCRIPTION_STATUSES: { value: SubscriptionStatus; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-  { value: 'suspended', label: 'Suspended' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
-// ============================================
-// PLAN BADGE COLORS
-// ============================================
-
-export const PLAN_BADGE_COLORS: Record<SubscriptionPlan, string> = {
-  trial: 'bg-primary/10 text-primary border-primary/20',
-  basic: 'bg-blue-100 text-blue-700 border-blue-200',
-  professional: 'bg-purple-100 text-purple-700 border-purple-200',
-  enterprise: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-};
-
 // ============================================
 // DEFAULT VALUES
 // ============================================
-
-export const DEFAULT_TRIAL_DAYS = 14;
 
 export const EMPTY_TENANT_FORM = {
   name: '',
   legalName: '',
   email: '',
   phone: '',
-  subscriptionPlan: 'trial' as SubscriptionPlan,
-  subscriptionStatus: 'active' as SubscriptionStatus,
-  trialDays: DEFAULT_TRIAL_DAYS,
   logoUrl: '',
+  // Billing information
+  billingEmail: '',
+  billingAddress: '',
+  gstin: '',
 };
 
 export const EMPTY_BRANCH_FORM = {

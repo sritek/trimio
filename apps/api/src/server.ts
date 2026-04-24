@@ -52,6 +52,15 @@ import { stationTypesRoutes } from './modules/station-types';
 import { stationsRoutes } from './modules/stations';
 import { floorViewRoutes } from './modules/floor-view';
 import { internalRoutes } from './modules/internal';
+import { subscriptionsRoutes } from './modules/subscriptions';
+
+// Import job workers (they self-initialize when Redis is enabled)
+import './jobs/staff-jobs';
+import './jobs/subscription-worker';
+import { initializeScheduler } from './jobs/scheduler';
+import { closeQueues } from './jobs/index';
+import { closeStaffWorker } from './jobs/staff-jobs';
+import { closeSubscriptionWorker } from './jobs/subscription-worker';
 
 // Create Fastify instance with Zod type provider
 const fastify = Fastify({
@@ -243,6 +252,9 @@ async function registerRoutes() {
 
   // Internal Admin Portal routes (company-only)
   fastify.register(internalRoutes, { prefix: '/api/v1/internal' });
+
+  // Subscriptions routes
+  fastify.register(subscriptionsRoutes, { prefix: '/api/v1/subscriptions' });
 }
 
 // Start server
@@ -250,6 +262,9 @@ async function start() {
   try {
     await registerPlugins();
     await registerRoutes();
+
+    // Initialize job scheduler (no-op if Redis disabled)
+    await initializeScheduler();
 
     await fastify.listen({
       port: env.PORT,
@@ -270,6 +285,10 @@ signals.forEach((signal) => {
   process.on(signal, async () => {
     logger.info(`Received ${signal}, shutting down gracefully...`);
     await fastify.close();
+    // Close job queues and workers
+    await closeStaffWorker();
+    await closeSubscriptionWorker();
+    await closeQueues();
     process.exit(0);
   });
 });

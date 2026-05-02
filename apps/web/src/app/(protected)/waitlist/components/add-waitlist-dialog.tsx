@@ -105,7 +105,7 @@ export function AddWaitlistDialog({ open, onOpenChange }: AddWaitlistDialogProps
 
   const createWaitlistEntry = useCreateWaitlistEntry();
   const { data: customers } = useCustomerSearch({ q: debouncedSearch, limit: 5 });
-  const { data: servicesData } = useServices({ limit: 100 });
+  const { data: servicesData } = useServices({ limit: -1 });
   const { data: staffData } = useStaffList({ role: 'stylist', limit: 50 });
 
   const services = servicesData?.data || [];

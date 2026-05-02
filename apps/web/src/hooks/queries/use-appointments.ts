@@ -173,7 +173,7 @@ export function useCreateAppointment() {
       return { toastId, optimisticId, previousCalendarData, calendarParams };
     },
 
-    onSuccess: (response, _newAppointment, context) => {
+    onSuccess: (response, newAppointment, context) => {
       // Update toast to success
       toast.success('Appointment created successfully!', { id: context?.toastId });
 
@@ -220,6 +220,11 @@ export function useCreateAppointment() {
       // If a new customer was created, invalidate customers list so it appears in Customers page
       if (response.customerCreated) {
         queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      }
+
+      // If created from walk-in queue, invalidate the queue so it updates
+      if (newAppointment.walkInQueueId) {
+        queryClient.invalidateQueries({ queryKey: queueKeys.all });
       }
     },
 
@@ -279,6 +284,8 @@ export function useUpdateAppointmentServices() {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      // Also invalidate floor view since service changes affect estimated end time
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
     },
 
     onError: (_, __, context) => {
@@ -392,6 +399,8 @@ export function useCompleteAppointment() {
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
       // Also invalidate floor view since station is now free
       queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+      // Also invalidate walk-in queue in case this was a walk-in appointment
+      queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
 
     onError: () => {
@@ -655,10 +664,14 @@ export function useAddToQueue() {
   return useMutation({
     mutationFn: (data: AddToQueueInput) =>
       api.post<AddToQueueResponse>('/appointments/walk-in/queue', data),
-    onSuccess: (_, data) => {
+    onSuccess: (response, data) => {
       queryClient.invalidateQueries({
         queryKey: queueKeys.list({ branchId: data.branchId }),
       });
+      // If a new customer was created, invalidate customers list
+      if (response.customerCreated) {
+        queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      }
     },
   });
 }

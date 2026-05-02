@@ -83,7 +83,7 @@ export default function WalkInQueuePage() {
     date: format(new Date(), 'yyyy-MM-dd'),
   });
 
-  const { data: servicesResult } = useServices({ isActive: true });
+  const { data: servicesResult } = useServices({ isActive: true, limit: -1 });
   const services = servicesResult?.data || [];
 
   const addToQueue = useAddToQueue();

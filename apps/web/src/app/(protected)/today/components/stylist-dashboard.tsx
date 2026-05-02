@@ -4,6 +4,7 @@
  * Stylist Dashboard Component
  * Shows attendance buttons (with confirmation) + leave application
  * + today's read-only appointments (card/list view)
+ * + walk-in queue section (for receptionist role)
  * Mobile-first design
  */
 
@@ -26,17 +27,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, ConfirmDialog } from '@/components/common';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useErrorHandler } from '@/hooks/use-error-handler';
 import { useAppointments } from '@/hooks/queries/use-appointments';
-import {
-  useStaffCheckIn,
-  useAttendanceList,
-  useManualAttendance,
-} from '@/hooks/queries/use-staff';
-import type { Appointment } from '@/types/appointments';
+import { useStaffCheckIn, useAttendanceList, useManualAttendance } from '@/hooks/queries/use-staff';
+import { WalkInQueueSection } from './walk-in-queue-section';
+import type { Appointment, WalkInQueueEntry } from '@/types/appointments';
 import type { AttendanceStatus } from '@/types/staff';
 
 // ============================================
@@ -50,7 +49,9 @@ function AttendanceSection() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // Confirm dialog state
-  const [confirmAction, setConfirmAction] = useState<'present' | 'absent' | 'on_leave' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'present' | 'absent' | 'on_leave' | null>(
+    null
+  );
 
   const checkInMutation = useStaffCheckIn();
   const manualAttendanceMutation = useManualAttendance();
@@ -290,9 +291,7 @@ function AppointmentRow({ appointment }: { appointment: Appointment }) {
         <p className="text-xs text-muted-foreground">{appointment.totalDuration}m</p>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate">
-          {appointment.customerName || 'Walk-in'}
-        </p>
+        <p className="font-medium text-sm truncate">{appointment.customerName || 'Walk-in'}</p>
         <p className="text-xs text-muted-foreground truncate">{serviceNames || '—'}</p>
       </div>
       <StatusBadge status={appointment.status} size="sm" />
@@ -405,8 +404,31 @@ function AppointmentsSection() {
 // ============================================
 
 export function StylistDashboard() {
+  const { openNewAppointment } = useOpenPanel();
+
+  // Handle serve from walk-in queue - opens new appointment panel with pre-filled data
+  const handleServeWalkIn = useCallback(
+    (entry: WalkInQueueEntry) => {
+      // Get current time in HH:mm format for walk-ins
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      // Open new appointment panel with customer, services, time, stylist preference, and booking type pre-filled
+      openNewAppointment({
+        customerId: entry.customerId || undefined,
+        serviceIds: entry.serviceIds,
+        walkInQueueId: entry.id,
+        bookingType: 'walk_in',
+        time: currentTime,
+        stylistId: entry.stylistPreferenceId || undefined,
+      });
+    },
+    [openNewAppointment]
+  );
+
   return (
     <div className="space-y-6">
+      <WalkInQueueSection onServe={handleServeWalkIn} />
       <AttendanceSection />
       <AppointmentsSection />
     </div>

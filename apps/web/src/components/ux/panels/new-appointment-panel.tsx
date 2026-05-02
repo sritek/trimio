@@ -31,6 +31,7 @@ import {
   UserPlus,
   UserX,
   CheckCircle2,
+  PlayCircle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -58,7 +59,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useClosePanel, useSlideOverUnsavedChanges } from '@/components/ux/slide-over';
 import { useCreateAppointment, useStylistBusySlots } from '@/hooks/queries/use-appointments';
-import { useCustomerSearch, useCustomerPhoneLookup } from '@/hooks/queries/use-customers';
+import {
+  useCustomerSearch,
+  useCustomerPhoneLookup,
+  useCustomer,
+} from '@/hooks/queries/use-customers';
 import { useServices } from '@/hooks/queries/use-services';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useBranchContext } from '@/hooks/use-branch-context';
@@ -66,6 +71,7 @@ import { useBranch } from '@/hooks/queries/use-branches';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { StartServiceDialog } from '@/components/ux/dialogs/start-service-dialog';
 
 // Form validation schema
 const appointmentSchema = z
@@ -115,6 +121,9 @@ interface NewAppointmentPanelProps {
   date?: string;
   time?: string;
   customerId?: string;
+  serviceIds?: string[];
+  walkInQueueId?: string;
+  bookingType?: 'online' | 'phone' | 'walk_in';
   onSuccess?: (appointmentId: string) => void;
 }
 
@@ -123,6 +132,9 @@ export function NewAppointmentPanel({
   date: initialDate,
   time: initialTime,
   customerId: initialCustomerId,
+  serviceIds: initialServiceIds,
+  walkInQueueId,
+  bookingType: initialBookingType,
   onSuccess,
 }: NewAppointmentPanelProps) {
   const closePanel = useClosePanel();
@@ -135,11 +147,25 @@ export function NewAppointmentPanel({
   // UI State
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>(initialServiceIds || []);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
 
-  // Fetch data
-  const { data: servicesData, isLoading: servicesLoading } = useServices({});
+  // Start Service Dialog state (for "Create & Start Service" flow)
+  const [showStartServiceDialog, setShowStartServiceDialog] = useState(false);
+  const [createdAppointmentId, setCreatedAppointmentId] = useState<string | null>(null);
+  const [createdAppointmentData, setCreatedAppointmentData] = useState<{
+    customerName: string;
+    serviceName: string;
+    scheduledTime: string;
+  } | null>(null);
+
+  // Fetch initial customer if customerId is provided
+  const { data: initialCustomerData, isLoading: isLoadingInitialCustomer } = useCustomer(
+    initialCustomerId || ''
+  );
+
+  // Fetch data - use limit: -1 to load all services
+  const { data: servicesData, isLoading: servicesLoading } = useServices({ limit: -1 });
   const { data: staffData, isLoading: staffLoading } = useStaffList({
     branchId: branchId || '',
     role: 'stylist',
@@ -178,7 +204,7 @@ export function NewAppointmentPanel({
       customerPhone: '',
       serviceIds: [] as string[],
       notes: '',
-      bookingType: 'phone' as const,
+      bookingType: initialBookingType || ('phone' as const),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -203,7 +229,15 @@ export function NewAppointmentPanel({
   const watchedCustomerPhone = watch('customerPhone');
 
   // Extract working hours for the selected date from branch data
-  const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+  const DAY_NAMES = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ] as const;
   const branchWorkingHours = useMemo(() => {
     if (!branchData?.workingHours || !watchedDate) return { startHour: 9, endHour: 21 };
     const [year, month, day] = watchedDate.split('-').map(Number);
@@ -238,6 +272,31 @@ export function NewAppointmentPanel({
     }
   }, [isNewCustomer, phoneLookupData, debouncedPhone, setValue]);
 
+  // Load initial customer data when it's fetched
+  useEffect(() => {
+    if (initialCustomerData && initialCustomerId && !selectedCustomer) {
+      const customer: CustomerOption = {
+        id: initialCustomerData.id,
+        name: initialCustomerData.name,
+        phone: initialCustomerData.phone,
+        visitCount: initialCustomerData.visitCount,
+        loyaltyPoints: initialCustomerData.loyaltyPoints,
+        tags: initialCustomerData.tags || [],
+      };
+      setSelectedCustomer(customer);
+      setValue('customerId', customer.id);
+      setValue('customerName', customer.name);
+      setValue('customerPhone', customer.phone);
+    }
+  }, [initialCustomerData, initialCustomerId, selectedCustomer, setValue]);
+
+  // Set initial services in form when provided
+  useEffect(() => {
+    if (initialServiceIds && initialServiceIds.length > 0) {
+      setValue('serviceIds', initialServiceIds);
+    }
+  }, [initialServiceIds, setValue]);
+
   // Fetch stylist busy slots when stylist and date are selected
   const { data: busySlotsData, isLoading: busySlotsLoading } = useStylistBusySlots(
     watchedStylistId || undefined,
@@ -248,12 +307,16 @@ export function NewAppointmentPanel({
   // Calculate total duration from selected services
   const totalDuration = useMemo(() => {
     if (!selectedServices.length || !servicesData?.data) return 30;
-    const services = servicesData.data;
+    const servicesArr = servicesData.data;
     return selectedServices.reduce((total, serviceId) => {
-      const service = services.find((s) => s.id === serviceId);
+      const service = servicesArr.find((s) => s.id === serviceId);
       return total + (service?.durationMinutes || 30);
     }, 0);
   }, [selectedServices, servicesData?.data]);
+
+  // Derived data
+  const services = servicesData?.data || [];
+  const stylists = staffData?.data || [];
 
   // Track unsaved changes
   useEffect(() => {
@@ -320,6 +383,7 @@ export function NewAppointmentPanel({
           customerNotes: data.notes || undefined,
           bookingType: data.bookingType,
           assignLater: data.assignLater,
+          walkInQueueId: walkInQueueId || undefined,
         });
 
         // Toast is handled by the mutation hook
@@ -331,13 +395,68 @@ export function NewAppointmentPanel({
         // Error toast is handled by the mutation hook
       }
     },
-    [branchId, createMutation, closePanel, onSuccess]
+    [branchId, createMutation, closePanel, onSuccess, walkInQueueId]
   );
 
-  const services = servicesData?.data || [];
-  const stylists = staffData?.data || [];
+  // Handle "Create & Start Service" submission
+  const onSubmitAndStart = useCallback(
+    async (data: AppointmentFormData) => {
+      try {
+        const result = await createMutation.mutateAsync({
+          branchId: branchId || '',
+          customerId: data.customerId || undefined,
+          customerName: data.customerName,
+          customerPhone: data.customerPhone || undefined,
+          services: data.serviceIds.map((serviceId) => ({
+            serviceId,
+            stylistId: data.assignLater ? undefined : data.stylistId,
+          })),
+          stylistId: data.assignLater ? undefined : data.stylistId,
+          scheduledDate: data.date,
+          scheduledTime: data.time,
+          customerNotes: data.notes || undefined,
+          bookingType: data.bookingType,
+          assignLater: data.assignLater,
+          walkInQueueId: walkInQueueId || undefined,
+        });
 
-  console.log('stylists', stylists);
+        // Open the Start Service Dialog
+        if (result.appointment?.id) {
+          // Get service names for the dialog
+          const serviceNames = data.serviceIds
+            .map((id) => services.find((s) => s.id === id)?.name)
+            .filter(Boolean)
+            .join(', ');
+
+          setCreatedAppointmentId(result.appointment.id);
+          setCreatedAppointmentData({
+            customerName: data.customerName,
+            serviceName: serviceNames,
+            scheduledTime: data.time,
+          });
+          setShowStartServiceDialog(true);
+        }
+      } catch {
+        // Error toast is handled by the mutation hook
+      }
+    },
+    [branchId, createMutation, walkInQueueId, services]
+  );
+
+  // Handle Start Service Dialog close
+  const handleStartServiceDialogClose = useCallback(
+    (open: boolean) => {
+      setShowStartServiceDialog(open);
+      if (!open) {
+        // Dialog closed - close the panel
+        if (onSuccess && createdAppointmentId) {
+          onSuccess(createdAppointmentId);
+        }
+        closePanel();
+      }
+    },
+    [closePanel, onSuccess, createdAppointmentId]
+  );
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full relative">
@@ -350,8 +469,19 @@ export function NewAppointmentPanel({
               Customer
             </Label>
 
+            {/* Loading state when fetching initial customer */}
+            {initialCustomerId && isLoadingInitialCustomer && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 animate-pulse">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+            )}
+
             {/* New Customer Form */}
-            {isNewCustomer && (
+            {!initialCustomerId && isNewCustomer && (
               <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">
@@ -415,7 +545,8 @@ export function NewAppointmentPanel({
             )}
 
             {/* Customer Search Combobox with Add New Button */}
-            {!isNewCustomer && (
+            {/* Hide when: loading initial customer OR in new customer mode */}
+            {!isNewCustomer && !(initialCustomerId && isLoadingInitialCustomer) && (
               <div className="flex gap-2">
                 <div className="flex-1">
                   <CustomerCombobox
@@ -453,7 +584,7 @@ export function NewAppointmentPanel({
               Services
             </Label>
 
-            {/* Service Combobox */}
+            {/* Service Combobox - controlled mode with external services data */}
             {servicesLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : (
@@ -643,7 +774,30 @@ export function NewAppointmentPanel({
         <Button type="button" variant="outline" className="flex-1" onClick={() => closePanel()}>
           Cancel
         </Button>
-        <Button type="submit" className="flex-1" disabled={createMutation.isPending}>
+        {/* Show "Create & Start Service" button for walk-ins */}
+        {(walkInQueueId || watchedBookingType === 'walk_in') && (
+          <Button
+            type="button"
+            className="flex-1"
+            disabled={createMutation.isPending}
+            onClick={handleSubmit(onSubmitAndStart)}
+          >
+            {createMutation.isPending ? (
+              'Creating...'
+            ) : (
+              <>
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Create & Start
+              </>
+            )}
+          </Button>
+        )}
+        <Button
+          type="submit"
+          variant={walkInQueueId || watchedBookingType === 'walk_in' ? 'outline' : 'default'}
+          className="flex-1"
+          disabled={createMutation.isPending}
+        >
           {createMutation.isPending ? (
             'Creating...'
           ) : (
@@ -654,6 +808,18 @@ export function NewAppointmentPanel({
           )}
         </Button>
       </div>
+
+      {/* Start Service Dialog */}
+      {createdAppointmentId && (
+        <StartServiceDialog
+          open={showStartServiceDialog}
+          onOpenChange={handleStartServiceDialogClose}
+          appointmentId={createdAppointmentId}
+          customerName={createdAppointmentData?.customerName}
+          serviceName={createdAppointmentData?.serviceName}
+          scheduledTime={createdAppointmentData?.scheduledTime}
+        />
+      )}
     </form>
   );
 }

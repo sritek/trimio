@@ -126,7 +126,8 @@ enum PackageStatus {
 
 enum CustomerSource {
   manual
-  phone
+  create_appointment
+  add_walk_in
 }
 
 // ============================================

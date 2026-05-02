@@ -27,9 +27,47 @@ export class WalkInQueueService {
 
   /**
    * Add customer to walk-in queue
+   * If no customerId provided but phone is given, looks up or creates customer
+   * If no phone is provided, no customer record is created (same as appointment creation)
    */
   async addToQueue(tenantId: string, branchId: string, input: AddToQueueInput, _userId: string) {
     const today = getTodayUTC();
+
+    // Resolve customer ID - either use provided, or lookup/create by phone
+    // If no phone is provided, we don't create a customer (matches appointment creation behavior)
+    let customerId = input.customerId;
+    let customerCreated = false;
+
+    if (!customerId && input.customerPhone) {
+      // Try to find existing customer by phone
+      const existingCustomer = await this.prisma.customer.findFirst({
+        where: {
+          tenantId,
+          phone: input.customerPhone,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+      } else {
+        // Create new customer
+        const newCustomer = await this.prisma.customer.create({
+          data: {
+            tenantId,
+            phone: input.customerPhone,
+            name: input.customerName,
+            firstVisitBranchId: branchId,
+            source: 'add_walk_in',
+          },
+        });
+        customerId = newCustomer.id;
+        customerCreated = true;
+      }
+    }
+    // If no phone provided, customerId remains undefined - no customer record created
+    // The customer will be created later when the appointment is created (if phone is provided then)
 
     // Generate token number (sequential per branch per day)
     const tokenNumber = await this.generateToken(branchId, today);
@@ -40,14 +78,14 @@ export class WalkInQueueService {
     // Get current position
     const position = (await this.getCurrentQueueLength(tenantId, branchId, today)) + 1;
 
-    // Create queue entry
+    // Create queue entry - always with customerId now
     const entry = await this.prisma.walkInQueue.create({
       data: {
         tenantId,
         branchId,
         queueDate: today,
         tokenNumber,
-        customerId: input.customerId,
+        customerId,
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         serviceIds: input.serviceIds,
@@ -64,6 +102,7 @@ export class WalkInQueueService {
       tokenNumber,
       position,
       estimatedWaitMinutes: estimatedWait,
+      customerCreated,
     };
   }
 

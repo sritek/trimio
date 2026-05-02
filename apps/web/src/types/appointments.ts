@@ -170,6 +170,7 @@ export interface CreateAppointmentInput {
   internalNotes?: string;
   assignLater?: boolean;
   waitlistEntryId?: string;
+  walkInQueueId?: string;
 }
 
 export interface UpdateAppointmentInput {
@@ -382,6 +383,7 @@ export interface AddToQueueResponse {
   tokenNumber: number;
   position: number;
   estimatedWaitMinutes: number;
+  customerCreated?: boolean;
 }
 
 // ============================================

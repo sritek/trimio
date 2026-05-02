@@ -303,9 +303,7 @@ function FinalizePaymentDialog({
 // Main Component
 // ============================================
 
-export function NewInvoicePanel({
-  onSuccess,
-}: NewInvoicePanelProps) {
+export function NewInvoicePanel({ onSuccess }: NewInvoicePanelProps) {
   const closePanel = useClosePanel();
   const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { openNewAppointment } = useOpenPanel();
@@ -324,7 +322,7 @@ export function NewInvoicePanel({
 
   // Queries
   const { data: customerSearchData } = useCustomerSearch({ q: customerSearchQuery, limit: 10 });
-  const { data: servicesData, isLoading: servicesLoading } = useServices({});
+  const { data: servicesData, isLoading: servicesLoading } = useServices({ limit: -1 });
   const { data: staffData } = useStaffList({
     branchId: branchId || '',
     role: 'stylist',

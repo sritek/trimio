@@ -41,7 +41,7 @@ export function EditServicesDialog({
   canEdit,
 }: EditServicesDialogProps) {
   const updateServicesMutation = useUpdateAppointmentServices();
-  const { data: servicesData, isLoading: servicesLoading } = useServices({});
+  const { data: servicesData, isLoading: servicesLoading } = useServices({ limit: -1 });
 
   // Track selected service IDs
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);

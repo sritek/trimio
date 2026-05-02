@@ -6,6 +6,7 @@
  * Similar to OwnerDashboard but branch-scoped with staff attendance
  */
 
+import { useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -22,6 +23,10 @@ import { cn } from '@/lib/utils';
 import { useOwnerDashboard } from '@/hooks/queries/use-owner-dashboard';
 import { useDailyAttendance } from '@/hooks/queries/use-staff';
 import { format } from 'date-fns';
+import { WalkInQueueSection } from './walk-in-queue-section';
+import { useOpenPanel } from '@/components/ux/slide-over';
+import { StartServiceDialog } from '@/components/ux/dialogs/start-service-dialog';
+import type { WalkInQueueEntry } from '@/types/appointments';
 
 interface BranchManagerDashboardProps {
   branchId: string;
@@ -44,6 +49,32 @@ export function BranchManagerDashboard({ branchId }: BranchManagerDashboardProps
   const { data, isLoading } = useOwnerDashboard({ branchId });
   const { data: attendanceData } = useDailyAttendance(format(new Date(), 'yyyy-MM-dd'));
   const staffSummary = attendanceData?.summary;
+  const { openNewAppointment } = useOpenPanel();
+
+  // State for start service dialog
+  const [startServiceDialogOpen, setStartServiceDialogOpen] = useState(false);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string | undefined>();
+
+  // Handle serve from walk-in queue - opens new appointment panel with pre-filled data
+  const handleServeWalkIn = useCallback(
+    (entry: WalkInQueueEntry) => {
+      // Get current time in HH:mm format for walk-ins
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      // Open new appointment panel with customer, services, time, stylist preference, and booking type pre-filled
+      openNewAppointment({
+        customerId: entry.customerId || undefined,
+        serviceIds: entry.serviceIds,
+        walkInQueueId: entry.id,
+        bookingType: 'walk_in',
+        time: currentTime,
+        stylistId: entry.stylistPreferenceId || undefined,
+      });
+    },
+    [openNewAppointment]
+  );
 
   if (isLoading) {
     return <BranchManagerDashboardSkeleton />;
@@ -51,6 +82,9 @@ export function BranchManagerDashboard({ branchId }: BranchManagerDashboardProps
 
   return (
     <div className="space-y-6">
+      {/* Walk-In Queue Section */}
+      <WalkInQueueSection onServe={handleServeWalkIn} />
+
       {/* Revenue Metrics - Compact */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -179,9 +213,7 @@ export function BranchManagerDashboard({ branchId }: BranchManagerDashboardProps
                   <div className="h-2 w-2 rounded-full bg-red-500" />
                   <span className="text-sm font-medium">Absent</span>
                 </div>
-                <span className="text-lg font-bold text-red-600">
-                  {staffSummary?.absent ?? 0}
-                </span>
+                <span className="text-lg font-bold text-red-600">{staffSummary?.absent ?? 0}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
@@ -236,6 +268,20 @@ export function BranchManagerDashboard({ branchId }: BranchManagerDashboardProps
           </CardContent>
         </Card>
       </div>
+
+      {/* Start Service Dialog */}
+      {selectedAppointmentId && (
+        <StartServiceDialog
+          open={startServiceDialogOpen}
+          onOpenChange={setStartServiceDialogOpen}
+          appointmentId={selectedAppointmentId}
+          customerName={selectedCustomerName}
+          onSuccess={() => {
+            setSelectedAppointmentId(null);
+            setSelectedCustomerName(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }

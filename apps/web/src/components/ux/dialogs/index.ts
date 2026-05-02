@@ -1,3 +1,4 @@
+export { AddWalkInDialog } from './add-walk-in-dialog';
 export { AppointmentStatusDialog } from './appointment-status-dialog';
 export { CancelAppointmentDialog } from './cancel-appointment-dialog';
 export { ConfirmAppointmentDialog } from './confirm-appointment-dialog';

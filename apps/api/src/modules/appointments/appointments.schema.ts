@@ -71,6 +71,9 @@ const createAppointmentBaseSchema = z.object({
 
   // Waitlist conversion tracking
   waitlistEntryId: z.string().uuid().optional(),
+
+  // Walk-in queue tracking - when creating from walk-in queue
+  walkInQueueId: z.string().uuid().optional(),
 });
 
 export const createAppointmentSchema = createAppointmentBaseSchema

@@ -248,10 +248,20 @@ export function AppointmentDetailsPanel({
             <span>{formattedDate}</span>
           </div>
 
-          {/* Time */}
+          {/* Scheduled Time */}
           <div className="flex items-center gap-3">
             <Clock className="h-5 w-5 text-muted-foreground" />
-            <span>{formattedTime}</span>
+            <div className="flex flex-col">
+              <span>{formattedTime}</span>
+              {appointment.actualStartTime && (
+                <span className="text-xs text-muted-foreground">
+                  Started at {format(parseISO(appointment.actualStartTime), 'h:mm a')}
+                  {appointment.actualEndTime && (
+                    <> · Ended at {format(parseISO(appointment.actualEndTime), 'h:mm a')}</>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Stylist */}

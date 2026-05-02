@@ -94,7 +94,14 @@ export const updateServiceBodySchema = createServiceBodySchema.partial();
 
 export const serviceQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  // limit: -1 means fetch all (no pagination)
+  limit: z.coerce
+    .number()
+    .int()
+    .refine((val) => val === -1 || (val > 0 && val <= 100), {
+      message: 'Limit must be -1 (all) or between 1 and 100',
+    })
+    .default(20),
   categoryId: z.string().uuid().optional(),
   search: z.string().optional(),
   isActive: z.coerce.boolean().optional(),

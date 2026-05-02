@@ -561,6 +561,9 @@ export class AppointmentsService {
         }
       }
 
+      // Determine initial status - walk-ins start as in_progress since customer is already there
+      const initialStatus = input.bookingType === 'walk_in' ? 'in_progress' : 'booked';
+
       const apt = await tx.appointment.create({
         data: {
           tenantId,
@@ -576,7 +579,9 @@ export class AppointmentsService {
           stylistGenderPreference: input.stylistGenderPreference,
           bookingType: input.bookingType,
           bookingSource: input.bookingSource,
-          status: 'booked',
+          status: initialStatus,
+          // Set actualStartTime for walk-ins since they start immediately
+          actualStartTime: input.bookingType === 'walk_in' ? new Date() : null,
           tokenNumber,
           subtotal,
           taxAmount,
@@ -608,7 +613,7 @@ export class AppointmentsService {
         data: {
           tenantId,
           appointmentId: apt.id,
-          toStatus: 'booked',
+          toStatus: initialStatus,
           changedBy: userId,
         },
       });
@@ -660,6 +665,32 @@ export class AppointmentsService {
               appointmentId: apt.id,
               scheduledDate: input.scheduledDate,
               scheduledTime: input.scheduledTime,
+            },
+          },
+        });
+      }
+
+      // Mark walk-in queue entry as serving if provided
+      if (input.walkInQueueId) {
+        await tx.walkInQueue.update({
+          where: { id: input.walkInQueueId },
+          data: {
+            status: 'serving',
+            appointmentId: apt.id,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            branchId: input.branchId,
+            userId,
+            action: 'WALKIN_QUEUE_SERVING',
+            entityType: 'walk_in_queue',
+            entityId: input.walkInQueueId,
+            newValues: {
+              appointmentId: apt.id,
+              status: 'serving',
             },
           },
         });
@@ -805,6 +836,37 @@ export class AppointmentsService {
           changedBy: userId,
         },
       });
+
+      // If this appointment was created from a walk-in queue entry, mark it as completed
+      const walkInEntry = await tx.walkInQueue.findFirst({
+        where: {
+          tenantId,
+          appointmentId,
+          status: 'serving',
+        },
+      });
+
+      if (walkInEntry) {
+        await tx.walkInQueue.update({
+          where: { id: walkInEntry.id },
+          data: { status: 'completed' },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            branchId: appointment.branchId,
+            userId,
+            action: 'WALKIN_QUEUE_COMPLETED',
+            entityType: 'walk_in_queue',
+            entityId: walkInEntry.id,
+            newValues: {
+              appointmentId,
+              status: 'completed',
+            },
+          },
+        });
+      }
 
       return updated;
     });

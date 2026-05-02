@@ -3,6 +3,10 @@
 /**
  * ServiceCombobox - Multi-select service selection component
  *
+ * Supports two modes:
+ * 1. Self-contained mode (default) - fetches its own services data
+ * 2. Controlled mode - receives services from parent via `services` prop
+ *
  * Uses Popover + Command pattern for reliable combobox behavior.
  * Services are grouped by category with chips display for selected items.
  */
@@ -22,6 +26,8 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useServices } from '@/hooks/queries/use-services';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -42,8 +48,11 @@ export interface ServiceComboboxProps {
   value: string[];
   /** Callback when selection changes */
   onChange: (serviceIds: string[]) => void;
-  /** Services to display - parent component handles fetching */
-  services: ServiceOption[];
+  /**
+   * Services to display (controlled mode).
+   * If not provided, component fetches its own data (self-contained mode).
+   */
+  services?: ServiceOption[];
   /** Placeholder text */
   placeholder?: string;
   /** Disabled state */
@@ -54,6 +63,10 @@ export interface ServiceComboboxProps {
   hasError?: boolean;
   /** Show total price */
   showTotal?: boolean;
+  /** Filter by category ID (only in self-contained mode) */
+  categoryId?: string;
+  /** Filter by gender applicable (only in self-contained mode) */
+  genderApplicable?: 'all' | 'male' | 'female';
 }
 
 // ============================================
@@ -71,14 +84,48 @@ function formatPrice(price: number): string {
 export function ServiceCombobox({
   value,
   onChange,
-  services,
+  services: externalServices,
   placeholder = 'Select services...',
   disabled = false,
   className,
   hasError = false,
   showTotal = true,
+  categoryId,
+  genderApplicable,
 }: ServiceComboboxProps) {
   const [open, setOpen] = useState(false);
+
+  // Determine if we're in self-contained mode
+  const isSelfContained = externalServices === undefined;
+
+  // Fetch services only in self-contained mode
+  // Use limit: -1 to fetch all services
+  const { data: servicesData, isLoading } = useServices(
+    isSelfContained
+      ? {
+          isActive: true,
+          limit: -1,
+          categoryId,
+          genderApplicable,
+        }
+      : { limit: 0 } // Don't fetch if services are provided externally
+  );
+
+  // Map API response to internal format (only in self-contained mode)
+  const fetchedServices: ServiceOption[] = useMemo(() => {
+    if (!isSelfContained || !servicesData?.data) return [];
+    return servicesData.data.map((s) => ({
+      id: s.id,
+      name: s.name,
+      basePrice: s.basePrice,
+      categoryId: s.categoryId,
+      categoryName: s.category?.name,
+      duration: s.durationMinutes,
+    }));
+  }, [isSelfContained, servicesData?.data]);
+
+  // Use external services if provided, otherwise use fetched services
+  const services = externalServices ?? fetchedServices;
 
   // Group services by category
   const serviceGroups = useMemo(() => {
@@ -118,6 +165,11 @@ export function ServiceCombobox({
     },
     [value, onChange]
   );
+
+  // Show skeleton while loading (only in self-contained mode)
+  if (isSelfContained && isLoading) {
+    return <Skeleton className="h-10 w-full" />;
+  }
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -164,15 +216,13 @@ export function ServiceCombobox({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0"
-          align="start"
-          // onOpenAutoFocus={(e) => e.preventDefault()}
-        >
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search services..." />
             <CommandList className="max-h-[300px]">
-              <CommandEmpty>No services found.</CommandEmpty>
+              <CommandEmpty>
+                {services.length === 0 ? 'No services available.' : 'No services found.'}
+              </CommandEmpty>
               {serviceGroups.map(([category, categoryServices], index) => (
                 <div key={category}>
                   <CommandGroup heading={category}>

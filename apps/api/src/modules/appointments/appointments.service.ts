@@ -174,9 +174,19 @@ export class AppointmentsService {
         services: {
           include: {
             service: {
-              select: { id: true, name: true, sku: true },
+              select: { id: true, name: true, sku: true, durationMinutes: true },
+            },
+            assignedStylist: {
+              select: { id: true, name: true },
+            },
+            actualStylist: {
+              select: { id: true, name: true },
+            },
+            station: {
+              include: { stationType: { select: { id: true, name: true, color: true } } },
             },
           },
+          orderBy: { sequence: 'asc' },
         },
         statusHistory: {
           orderBy: { createdAt: 'desc' },
@@ -188,7 +198,51 @@ export class AppointmentsService {
       throw new AppError('APT_040', 'Appointment not found', 404);
     }
 
-    return appointment;
+    // Calculate derived status and services summary for multi-service appointments
+    const services = appointment.services;
+    const isMultiService = services.length > 1;
+
+    // Calculate services summary
+    const servicesSummary = {
+      total: services.length,
+      waiting: services.filter((s) => s.status === 'waiting').length,
+      inProgress: services.filter((s) => s.status === 'in_progress').length,
+      completed: services.filter((s) => s.status === 'completed').length,
+      skipped: services.filter((s) => s.status === 'skipped').length,
+    };
+
+    // Derive status from services if multi-service
+    let derivedStatus = appointment.status;
+    if (isMultiService) {
+      const statuses = services.map((s) => s.status);
+
+      // All skipped → cancelled
+      if (statuses.every((s) => s === 'skipped')) {
+        derivedStatus = 'cancelled';
+      }
+      // Any in_progress → in_progress
+      else if (statuses.some((s) => s === 'in_progress')) {
+        derivedStatus = 'in_progress';
+      }
+      // All completed (or completed + skipped with at least one completed) → completed
+      else if (
+        statuses.some((s) => s === 'completed') &&
+        statuses.every((s) => s === 'completed' || s === 'skipped')
+      ) {
+        derivedStatus = 'completed';
+      }
+      // All waiting and customer checked in → checked_in
+      else if (statuses.every((s) => s === 'waiting') && appointment.checkedInAt) {
+        derivedStatus = 'checked_in';
+      }
+    }
+
+    return {
+      ...appointment,
+      isMultiService,
+      derivedStatus,
+      servicesSummary,
+    };
   }
 
   /**
@@ -345,7 +399,24 @@ export class AppointmentsService {
     let subtotal = 0;
     let taxAmount = 0;
 
-    const appointmentServices = services.map((service) => {
+    // First pass: build service data with pricing
+    // Sort by sequence from input to ensure correct order for parallel execution
+    const sortedInputServices = [...input.services].sort((a, b) => {
+      const seqA = a.sequence ?? Infinity;
+      const seqB = b.sequence ?? Infinity;
+      return seqA - seqB;
+    });
+
+    const serviceDataList = sortedInputServices.map((inputService, inputIndex) => {
+      // Find the service from database
+      const service = services.find((s) => s.id === inputService.serviceId);
+      if (!service) {
+        throw new AppError('APT_010', `Service ${inputService.serviceId} not found`, 400);
+      }
+
+      // Use per-service stylistId if provided, otherwise fall back to main stylistId
+      const assignedStylistId = inputService.stylistId || input.stylistId;
+
       const branchPrice = service.branchPrices[0];
       const unitPrice = branchPrice?.price ? Number(branchPrice.price) : Number(service.basePrice);
       const taxRate = Number(service.taxRate);
@@ -370,6 +441,98 @@ export class AppointmentsService {
       taxAmount += serviceTax;
 
       return {
+        service,
+        serviceInput: inputService,
+        inputIndex,
+        assignedStylistId,
+        unitPrice,
+        taxRate,
+        serviceTax,
+        totalAmount,
+      };
+    });
+
+    // Second pass: calculate per-service scheduling times
+    // Services are executed sequentially by default, unless runParallel is true
+    // Services are already sorted by sequence from the first pass
+    const appointmentStartTime = input.scheduledTime;
+    const [startHours, startMins] = appointmentStartTime.split(':').map(Number);
+
+    // Parse the date components for creating DateTime objects
+    const [year, month, day] = input.scheduledDate.split('-').map(Number);
+
+    // Track the current offset for sequential services
+    // For parallel services, we don't add to the offset
+    let currentOffsetMinutes = 0;
+    // Track the previous service's start offset for parallel services
+    let previousServiceStartOffset = 0;
+
+    const appointmentServices = serviceDataList.map((data, index) => {
+      const {
+        service,
+        serviceInput,
+        assignedStylistId,
+        unitPrice,
+        taxRate,
+        serviceTax,
+        totalAmount,
+      } = data;
+
+      // Get sequence from input or use index + 1
+      const sequence = serviceInput?.sequence ?? index + 1;
+      // Get runParallel from input or default to false
+      const runParallel = serviceInput?.runParallel ?? false;
+
+      // Calculate this service's start time
+      // If runParallel is true and not the first service, use the same start as previous service
+      let serviceStartOffset: number;
+      if (runParallel && index > 0) {
+        // Start at the same time as the previous service
+        serviceStartOffset = previousServiceStartOffset;
+      } else {
+        // Start after all previous services
+        serviceStartOffset = currentOffsetMinutes;
+      }
+
+      const serviceStartMinutes = startHours * 60 + startMins + serviceStartOffset;
+      const serviceEndMinutes = serviceStartMinutes + service.durationMinutes;
+
+      // Create DateTime objects for scheduledStartTime and scheduledEndTime
+      // Use local time components to avoid timezone issues
+      const scheduledStartTime = new Date(
+        year,
+        month - 1,
+        day,
+        Math.floor(serviceStartMinutes / 60),
+        serviceStartMinutes % 60,
+        0,
+        0
+      );
+
+      const scheduledEndTime = new Date(
+        year,
+        month - 1,
+        day,
+        Math.floor(serviceEndMinutes / 60),
+        serviceEndMinutes % 60,
+        0,
+        0
+      );
+
+      // Save this service's start offset for potential parallel services
+      previousServiceStartOffset = serviceStartOffset;
+
+      // Update the cumulative offset for the next sequential service
+      // Only add duration if this service is NOT parallel (sequential services add to the timeline)
+      if (!runParallel || index === 0) {
+        currentOffsetMinutes = serviceStartOffset + service.durationMinutes;
+      } else {
+        // For parallel services, update the offset to the max of current and this service's end
+        const thisServiceEndOffset = serviceStartOffset + service.durationMinutes;
+        currentOffsetMinutes = Math.max(currentOffsetMinutes, thisServiceEndOffset);
+      }
+
+      return {
         tenantId,
         serviceId: service.id,
         serviceName: service.name,
@@ -383,8 +546,12 @@ export class AppointmentsService {
         durationMinutes: service.durationMinutes,
         activeTimeMinutes: service.activeTimeMinutes,
         processingTimeMinutes: service.processingTimeMinutes,
-        stylistId: input.stylistId,
-        status: 'pending',
+        assignedStylistId: assignedStylistId,
+        sequence,
+        runParallel,
+        scheduledStartTime,
+        scheduledEndTime,
+        status: 'waiting',
         commissionRate: new Decimal(service.commissionValue),
         commissionAmount: new Decimal((unitPrice * Number(service.commissionValue)) / 100),
       };
@@ -951,12 +1118,37 @@ export class AppointmentsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      // For multi-service appointments, mark all waiting services as skipped
+      const services = appointment.services || [];
+      const hasCompletedServices = services.some((s) => s.status === 'completed');
+
+      // Mark all waiting services as skipped (Property 29)
+      if (services.length > 0) {
+        await tx.appointmentService.updateMany({
+          where: {
+            appointmentId,
+            tenantId,
+            status: 'waiting',
+          },
+          data: {
+            status: 'skipped',
+          },
+        });
+      }
+
       // Update appointment status
       const updated = await tx.appointment.update({
         where: { id: appointmentId },
         data: { status: 'no_show' },
         include: {
-          services: true,
+          services: {
+            include: {
+              service: { select: { id: true, name: true, sku: true } },
+              assignedStylist: { select: { id: true, name: true } },
+              actualStylist: { select: { id: true, name: true } },
+            },
+            orderBy: { sequence: 'asc' },
+          },
           customer: {
             select: { id: true, name: true, phone: true, noShowCount: true, bookingStatus: true },
           },
@@ -971,11 +1163,15 @@ export class AppointmentsService {
           fromStatus: appointment.status,
           toStatus: 'no_show',
           changedBy: userId,
+          notes: hasCompletedServices
+            ? 'Partial no-show: some services were completed'
+            : 'Full no-show: no services were completed',
         },
       });
 
-      // Increment customer no-show count and apply policy
-      if (appointment.customerId) {
+      // Only increment customer no-show count if NO services were completed (Property 27, 28)
+      // If some services were completed, this is a partial visit, not a true no-show
+      if (appointment.customerId && !hasCompletedServices) {
         const customer = await tx.customer.findUnique({
           where: { id: appointment.customerId },
           select: { noShowCount: true },
@@ -1010,6 +1206,24 @@ export class AppointmentsService {
             newValues: {
               noShowCount: newNoShowCount,
               bookingStatus: newBookingStatus,
+              allServicesNoShow: true,
+            },
+          },
+        });
+      } else if (appointment.customerId && hasCompletedServices) {
+        // Log partial no-show (some services completed) - don't increment no-show count
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            branchId: appointment.branchId,
+            userId,
+            action: 'PARTIAL_NO_SHOW_MARKED',
+            entityType: 'appointment',
+            entityId: appointmentId,
+            newValues: {
+              completedServicesCount: services.filter((s) => s.status === 'completed').length,
+              totalServicesCount: services.length,
+              noShowCountIncremented: false,
             },
           },
         });
@@ -1118,8 +1332,8 @@ export class AppointmentsService {
           durationMinutes: s.durationMinutes,
           activeTimeMinutes: s.activeTimeMinutes,
           processingTimeMinutes: s.processingTimeMinutes,
-          stylistId: input.stylistId ?? s.stylistId,
-          status: 'pending',
+          assignedStylistId: input.stylistId ?? s.assignedStylistId,
+          status: 'waiting',
           commissionRate: s.commissionRate,
           commissionAmount: s.commissionAmount,
         })),
@@ -1415,7 +1629,7 @@ export class AppointmentsService {
       // Update services with stylist
       await tx.appointmentService.updateMany({
         where: { appointmentId },
-        data: { stylistId },
+        data: { assignedStylistId: stylistId },
       });
 
       // Create audit log
@@ -1555,7 +1769,15 @@ export class AppointmentsService {
   async updateServices(
     tenantId: string,
     appointmentId: string,
-    input: { services: Array<{ serviceId: string; stylistId?: string; quantity?: number }> },
+    input: {
+      services: Array<{
+        serviceId: string;
+        stylistId?: string;
+        quantity?: number;
+        sequence?: number;
+        runParallel?: boolean;
+      }>;
+    },
     userId: string
   ) {
     const appointment = await this.getAppointmentById(tenantId, appointmentId);
@@ -1594,17 +1816,36 @@ export class AppointmentsService {
     // Build service map for easy lookup
     const serviceMap = new Map(services.map((s) => [s.id, s]));
 
-    // Calculate new totals
+    // Sort input services by sequence
+    const sortedInputServices = [...input.services].sort((a, b) => {
+      const seqA = a.sequence ?? Infinity;
+      const seqB = b.sequence ?? Infinity;
+      return seqA - seqB;
+    });
+
+    // Calculate new totals and per-service times
     let subtotal = 0;
     let taxAmount = 0;
-    let totalDuration = 0;
 
-    const appointmentServices = input.services.map((inputService) => {
+    // Parse appointment start time and date for calculating per-service times
+    const [startHours, startMins] = appointment.scheduledTime.split(':').map(Number);
+    const scheduledDate = new Date(appointment.scheduledDate);
+    const year = scheduledDate.getFullYear();
+    const month = scheduledDate.getMonth();
+    const day = scheduledDate.getDate();
+
+    // Track offsets for sequential/parallel execution
+    let currentOffsetMinutes = 0;
+    let previousServiceStartOffset = 0;
+
+    const appointmentServices = sortedInputServices.map((inputService, index) => {
       const service = serviceMap.get(inputService.serviceId)!;
       const branchPrice = service.branchPrices[0];
       const unitPrice = branchPrice?.price ? Number(branchPrice.price) : Number(service.basePrice);
       const quantity = inputService.quantity || 1;
       const taxRate = Number(service.taxRate);
+      const sequence = inputService.sequence ?? index + 1;
+      const runParallel = inputService.runParallel ?? false;
 
       // Handle tax-inclusive vs tax-exclusive pricing
       let serviceTax: number;
@@ -1622,7 +1863,52 @@ export class AppointmentsService {
 
       subtotal += unitPrice * quantity;
       taxAmount += serviceTax;
-      totalDuration += service.durationMinutes * quantity;
+
+      // Calculate this service's start time
+      let serviceStartOffset: number;
+      if (runParallel && index > 0) {
+        // Start at the same time as the previous service
+        serviceStartOffset = previousServiceStartOffset;
+      } else {
+        // Start after all previous services
+        serviceStartOffset = currentOffsetMinutes;
+      }
+
+      const serviceStartMinutes = startHours * 60 + startMins + serviceStartOffset;
+      const serviceEndMinutes = serviceStartMinutes + service.durationMinutes * quantity;
+
+      // Create DateTime objects for scheduledStartTime and scheduledEndTime
+      const scheduledStartTime = new Date(
+        year,
+        month,
+        day,
+        Math.floor(serviceStartMinutes / 60),
+        serviceStartMinutes % 60,
+        0,
+        0
+      );
+
+      const scheduledEndTime = new Date(
+        year,
+        month,
+        day,
+        Math.floor(serviceEndMinutes / 60),
+        serviceEndMinutes % 60,
+        0,
+        0
+      );
+
+      // Save this service's start offset for potential parallel services
+      previousServiceStartOffset = serviceStartOffset;
+
+      // Update the cumulative offset for the next sequential service
+      if (!runParallel || index === 0) {
+        currentOffsetMinutes = serviceStartOffset + service.durationMinutes * quantity;
+      } else {
+        // For parallel services, update the offset to the max of current and this service's end
+        const thisServiceEndOffset = serviceStartOffset + service.durationMinutes * quantity;
+        currentOffsetMinutes = Math.max(currentOffsetMinutes, thisServiceEndOffset);
+      }
 
       return {
         tenantId,
@@ -1638,8 +1924,12 @@ export class AppointmentsService {
         durationMinutes: service.durationMinutes,
         activeTimeMinutes: service.activeTimeMinutes,
         processingTimeMinutes: service.processingTimeMinutes,
-        stylistId: inputService.stylistId || appointment.stylistId,
-        status: 'pending' as const,
+        assignedStylistId: inputService.stylistId || appointment.stylistId,
+        sequence,
+        runParallel,
+        scheduledStartTime,
+        scheduledEndTime,
+        status: 'waiting' as const,
         commissionRate: new Decimal(service.commissionValue),
         commissionAmount: new Decimal(
           (unitPrice * quantity * Number(service.commissionValue)) / 100
@@ -1648,6 +1938,8 @@ export class AppointmentsService {
     });
 
     const totalAmount = subtotal + taxAmount;
+    // Total duration is the time from start to the last service end
+    const totalDuration = currentOffsetMinutes;
     const endTime = this.calculateEndTime(appointment.scheduledTime, totalDuration);
 
     // Update in transaction
@@ -1680,7 +1972,9 @@ export class AppointmentsService {
           services: {
             include: {
               service: { select: { id: true, name: true, sku: true } },
+              assignedStylist: { select: { id: true, name: true } },
             },
+            orderBy: { sequence: 'asc' },
           },
           customer: {
             select: { id: true, name: true, phone: true },
@@ -1782,7 +2076,7 @@ export class AppointmentsService {
           serviceId: input.serviceId,
           serviceName: service.name,
           serviceSku: service.sku,
-          stylistId,
+          assignedStylistId: stylistId,
           quantity,
           unitPrice,
           totalAmount,
@@ -1791,7 +2085,7 @@ export class AppointmentsService {
           durationMinutes: service.durationMinutes,
           activeTimeMinutes: service.activeTimeMinutes,
           processingTimeMinutes: service.processingTimeMinutes,
-          status: 'pending',
+          status: 'waiting',
           addedMidAppointment: true,
           addedAt: new Date(),
           addedBy: userId,

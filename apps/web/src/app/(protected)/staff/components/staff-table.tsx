@@ -27,7 +27,7 @@ interface StaffTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
   hasFilters: boolean;
 }
 
@@ -45,14 +45,14 @@ export function StaffTable({
   onPageChange,
   onPageSizeChange,
   onEdit,
-  onDelete,
+  onToggleStatus,
   hasFilters,
 }: StaffTableProps) {
   const t = useTranslations('staff');
   const tCommon = useTranslations('common');
   const columns = useMemo(
-    () => getStaffColumns({ canWrite, onEdit, onDelete }),
-    [canWrite, onEdit, onDelete]
+    () => getStaffColumns({ canWrite, onEdit, onToggleStatus }),
+    [canWrite, onEdit, onToggleStatus]
   );
 
   if (error) {

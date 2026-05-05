@@ -264,6 +264,9 @@ model User {
   staffProfile        StaffProfile?
   stylistAppointments Appointment[]       @relation("AppointmentStylist")
   packageRedemptions  PackageRedemption[] @relation("RedemptionStylist")
+  // Multi-service appointment relations
+  assignedServices    AppointmentService[] @relation("AssignedStylist")
+  actualServices      AppointmentService[] @relation("ActualStylist")
 
   @@unique([tenantId, phone])
   @@unique([tenantId, email])
@@ -522,6 +525,10 @@ model Service {
   // Applicability
   genderApplicable String @default("all") @map("gender_applicable") @db.VarChar(20)
 
+  // Multi-service appointment settings
+  // Default parallel execution setting: always, never, optional
+  defaultRunParallel String @default("optional") @map("default_run_parallel") @db.VarChar(20)
+
   // Commission
   commissionType  String  @default("percentage") @map("commission_type") @db.VarChar(20)
   commissionValue Decimal @default(0) @map("commission_value") @db.Decimal(10, 2)
@@ -739,6 +746,9 @@ model Appointment {
   // Status: booked, confirmed, checked_in, in_progress, completed, cancelled, no_show, rescheduled
   status AppointmentStatus @default(booked)
 
+  // Customer check-in tracking (separate from service status for multi-service appointments)
+  checkedInAt DateTime? @map("checked_in_at")
+
   // Walk-in specific
   tokenNumber Int? @map("token_number")
 
@@ -832,16 +842,30 @@ model AppointmentService {
   activeTimeMinutes     Int @map("active_time_minutes")
   processingTimeMinutes Int @default(0) @map("processing_time_minutes")
 
-  // Staff
-  stylistId   String? @map("stylist_id")
-  assistantId String? @map("assistant_id")
+  // === MULTI-SERVICE APPOINTMENT FIELDS ===
 
-  // Status: pending, in_progress, completed, cancelled
-  status      String    @default("pending") @db.VarChar(20)
-  startedAt   DateTime? @map("started_at")
-  completedAt DateTime? @map("completed_at")
+  // Sequencing
+  sequence    Int     @default(1)                          // Order of execution (1, 2, 3...)
+  runParallel Boolean @default(false) @map("run_parallel") // Can run with same sequence services
 
-  // Commission (locked)
+  // Scheduling (per-service timing)
+  scheduledStartTime DateTime? @map("scheduled_start_time")
+  scheduledEndTime   DateTime? @map("scheduled_end_time")
+
+  // Stylist assignment
+  assignedStylistId String? @map("assigned_stylist_id") // Planned stylist at booking
+  actualStylistId   String? @map("actual_stylist_id")   // Who actually performed
+  assistantId       String? @map("assistant_id")
+
+  // Station assignment (assigned when service starts)
+  stationId String? @map("station_id")
+
+  // Status tracking: waiting, in_progress, completed, skipped
+  status          String    @default("waiting") @db.VarChar(20)
+  actualStartTime DateTime? @map("actual_start_time")
+  actualEndTime   DateTime? @map("actual_end_time")
+
+  // Commission (locked at billing, based on actualStylistId)
   commissionRate   Decimal? @map("commission_rate") @db.Decimal(5, 2)
   commissionAmount Decimal? @map("commission_amount") @db.Decimal(10, 2)
 
@@ -853,11 +877,16 @@ model AppointmentService {
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
-  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  service     Service     @relation(fields: [serviceId], references: [id])
+  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service         Service     @relation(fields: [serviceId], references: [id])
+  assignedStylist User?       @relation("AssignedStylist", fields: [assignedStylistId], references: [id])
+  actualStylist   User?       @relation("ActualStylist", fields: [actualStylistId], references: [id])
+  station         Station?    @relation("ServiceStation", fields: [stationId], references: [id])
 
   @@index([appointmentId])
   @@index([tenantId])
+  @@index([assignedStylistId, scheduledStartTime])
+  @@index([stationId, status])
   @@map("appointment_services")
 }
 
@@ -2659,8 +2688,9 @@ model Station {
   deletedAt     DateTime? @map("deleted_at")
 
   // Relations
-  stationType  StationType   @relation(fields: [stationTypeId], references: [id])
-  appointments Appointment[] @relation("AppointmentStation")
+  stationType         StationType          @relation(fields: [stationTypeId], references: [id])
+  appointments        Appointment[]        @relation("AppointmentStation")
+  appointmentServices AppointmentService[] @relation("ServiceStation") // Multi-service appointment relation
 
   @@unique([branchId, name])
   @@index([tenantId, branchId])

@@ -70,6 +70,7 @@ const serviceFormSchema = z
     genderApplicable: z.enum(['all', 'male', 'female']).default('all'),
     commissionType: z.enum(['percentage', 'fixed']).default('percentage'),
     commissionValue: z.coerce.number().min(0, 'Commission cannot be negative').default(0),
+    defaultRunParallel: z.enum(['always', 'never', 'optional']).default('optional'),
     isActive: z.boolean().default(true),
   })
   .refine((data) => data.activeTimeMinutes + data.processingTimeMinutes === data.durationMinutes, {
@@ -114,6 +115,8 @@ export function ServiceForm({ service, onSuccess }: ServiceFormProps) {
       genderApplicable: service?.genderApplicable || 'all',
       commissionType: service?.commissionType || 'percentage',
       commissionValue: service?.commissionValue || 0,
+      defaultRunParallel:
+        (service?.defaultRunParallel as 'always' | 'never' | 'optional') || 'optional',
       isActive: service?.isActive ?? true,
     },
   });
@@ -457,23 +460,52 @@ export function ServiceForm({ service, onSuccess }: ServiceFormProps) {
           <Card>
             <CardContent className="pt-6">
               <h3 className="text-sm font-medium mb-4">Settings</h3>
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Active Service</FormLabel>
-                      <FormDescription>
-                        Show this service in listings and allow bookings
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="defaultRunParallel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Parallel Execution</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="optional">Optional (user decides)</SelectItem>
+                          <SelectItem value="always">Always run in parallel</SelectItem>
+                          <SelectItem value="never">Never run in parallel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        Controls if this service can run alongside other services in multi-service
+                        appointments
                       </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Active Service</FormLabel>
+                        <FormDescription>
+                          Show this service in listings and allow bookings
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>

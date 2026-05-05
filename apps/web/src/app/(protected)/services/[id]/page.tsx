@@ -14,10 +14,11 @@ import {
   Package,
   Percent,
   Plus,
+  Power,
   Trash2,
 } from 'lucide-react';
 
-import { useService } from '@/hooks/queries/use-services';
+import { useService, useToggleServiceStatus } from '@/hooks/queries/use-services';
 import {
   useVariants,
   useCreateVariant,
@@ -99,6 +100,7 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<ServiceVariant | null>(null);
   const [deleteVariantId, setDeleteVariantId] = useState<string | null>(null);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
 
   const { data: service, isLoading, error } = useService(id);
   const { data: variants } = useVariants(id);
@@ -107,6 +109,7 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
   const createVariant = useCreateVariant();
   const updateVariant = useUpdateVariant();
   const deleteVariant = useDeleteVariant();
+  const toggleStatus = useToggleServiceStatus();
 
   // Only fetch consumables data if inventory is enabled
   const { data: consumables } = useServiceConsumables(isInventoryEnabled ? id : '');
@@ -137,6 +140,13 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
     if (deleteVariantId) {
       await deleteVariant.mutateAsync({ serviceId: id, variantId: deleteVariantId });
       setDeleteVariantId(null);
+    }
+  };
+
+  const handleToggleStatus = async () => {
+    if (service) {
+      await toggleStatus.mutateAsync({ id, isActive: !service.isActive });
+      setShowStatusDialog(false);
     }
   };
 
@@ -280,9 +290,18 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
         description={service.sku}
         backHref="/services"
         actions={
-          <Button asChild>
-            <Link href={`/services/${id}?edit=true`}>Edit Service</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={service.isActive ? 'outline' : 'default'}
+              onClick={() => setShowStatusDialog(true)}
+            >
+              <Power className="mr-2 h-4 w-4" />
+              {service.isActive ? 'Deactivate' : 'Activate'}
+            </Button>
+            <Button asChild>
+              <Link href={`/services/${id}?edit=true`}>Edit Service</Link>
+            </Button>
+          </div>
         }
       />
 
@@ -385,6 +404,28 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
                     <div>
                       <dt className="text-sm font-medium text-muted-foreground">Tax Inclusive</dt>
                       <dd className="mt-1">{service.isTaxInclusive ? 'Yes' : 'No'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-muted-foreground">
+                        Parallel Execution
+                      </dt>
+                      <dd className="mt-1">
+                        <Badge
+                          variant={
+                            service.defaultRunParallel === 'always'
+                              ? 'default'
+                              : service.defaultRunParallel === 'never'
+                                ? 'secondary'
+                                : 'outline'
+                          }
+                        >
+                          {service.defaultRunParallel === 'always'
+                            ? 'Always Parallel'
+                            : service.defaultRunParallel === 'never'
+                              ? 'Never Parallel'
+                              : 'Optional'}
+                        </Badge>
+                      </dd>
                     </div>
                   </dl>
                 </CardContent>
@@ -693,6 +734,22 @@ export default function ServiceDetailPage({ params }: ServiceDetailPageProps) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Activate/Deactivate Confirmation Dialog */}
+      <ConfirmDialog
+        open={showStatusDialog}
+        onOpenChange={setShowStatusDialog}
+        title={service?.isActive ? 'Deactivate Service' : 'Activate Service'}
+        description={
+          service?.isActive
+            ? `Are you sure you want to deactivate "${service.name}"? It will no longer be available for booking.`
+            : `Are you sure you want to activate "${service?.name}"? It will become available for booking.`
+        }
+        confirmText={service?.isActive ? 'Deactivate' : 'Activate'}
+        variant={service?.isActive ? 'destructive' : 'default'}
+        onConfirm={handleToggleStatus}
+        isLoading={toggleStatus.isPending}
+      />
     </PageContainer>
   );
 }

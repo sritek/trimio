@@ -82,6 +82,9 @@ export const createServiceBodySchema = z.object({
   commissionType: z.enum(['percentage', 'fixed']).default('percentage'),
   commissionValue: z.number().min(0).default(0),
 
+  // Multi-service appointment settings
+  defaultRunParallel: z.enum(['always', 'never', 'optional']).default('optional'),
+
   // Display
   displayOrder: z.number().int().min(0).optional(),
   imageUrl: z.string().url().max(500).optional().nullable(),

@@ -257,7 +257,8 @@ export class CalendarService {
         // Check if stylist has full day blocked for the requested date
         // Since we already filtered blockedSlots by date range, just check isFullDay
         const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
-        const attendanceStatus = (attendanceMap.get(ub.user.id) ?? 'not_marked') as CalendarStylist['attendanceStatus'];
+        const attendanceStatus = (attendanceMap.get(ub.user.id) ??
+          'not_marked') as CalendarStylist['attendanceStatus'];
         const isAbsentOrOnLeave = attendanceStatus === 'absent' || attendanceStatus === 'on_leave';
 
         return {
@@ -287,7 +288,19 @@ export class CalendarService {
       },
       include: {
         services: {
-          select: { serviceName: true },
+          select: {
+            id: true,
+            serviceName: true,
+            sequence: true,
+            runParallel: true,
+            status: true,
+            assignedStylistId: true,
+            actualStylistId: true,
+            scheduledStartTime: true,
+            scheduledEndTime: true,
+            durationMinutes: true,
+          },
+          orderBy: { sequence: 'asc' },
         },
         customer: {
           select: { name: true, phone: true },
@@ -299,25 +312,183 @@ export class CalendarService {
     // Build conflict info for each appointment
     const appointmentConflicts = this.computeConflictInfo(appointments);
 
-    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => {
+    // For multi-stylist appointments, we need to create separate calendar entries
+    // for each stylist who has services assigned to them
+    // Each entry should show only the time slot for that stylist's services
+    const calendarAppointments: CalendarAppointment[] = [];
+
+    for (const apt of appointments) {
       const conflictData = appointmentConflicts.get(apt.id);
-      return {
-        id: apt.id,
-        stylistId: apt.stylistId,
-        date: format(apt.scheduledDate, 'yyyy-MM-dd'),
-        startTime: apt.scheduledTime,
-        endTime: apt.scheduledEndTime,
-        customerName: apt.customer?.name || apt.customerName || 'Guest',
-        customerPhone: apt.customer?.phone || apt.customerPhone,
-        services: apt.services.map((s) => s.serviceName),
-        status: apt.status,
-        bookingType: apt.bookingType,
-        totalAmount: Number(apt.totalAmount),
-        hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
-        conflictInfo:
-          conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
-      };
-    });
+      const isMultiService = apt.services.length > 1;
+
+      // Get unique stylist IDs from services (including primary stylist)
+      const stylistIdsInAppointment = new Set<string>();
+      if (apt.stylistId) {
+        stylistIdsInAppointment.add(apt.stylistId);
+      }
+      for (const service of apt.services) {
+        if (service.assignedStylistId) {
+          stylistIdsInAppointment.add(service.assignedStylistId);
+        }
+        if (service.actualStylistId) {
+          stylistIdsInAppointment.add(service.actualStylistId);
+        }
+      }
+
+      // If no stylists assigned, create one entry with null stylistId
+      if (stylistIdsInAppointment.size === 0) {
+        calendarAppointments.push({
+          id: apt.id,
+          stylistId: null,
+          date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+          startTime: apt.scheduledTime,
+          endTime: apt.scheduledEndTime,
+          customerName: apt.customer?.name || apt.customerName || 'Guest',
+          customerPhone: apt.customer?.phone || apt.customerPhone,
+          services: apt.services.map((s) => s.serviceName),
+          status: apt.status,
+          bookingType: apt.bookingType,
+          totalAmount: Number(apt.totalAmount),
+          hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+          conflictInfo:
+            conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+          isMultiService,
+          serviceCount: apt.services.length,
+        });
+        continue;
+      }
+
+      // Create a calendar entry for each stylist
+      for (const stylistId of stylistIdsInAppointment) {
+        // Get services assigned to this stylist
+        const stylistServices = apt.services.filter(
+          (s) => s.assignedStylistId === stylistId || s.actualStylistId === stylistId
+        );
+
+        // Calculate the time slot for this stylist based on their services
+        // Use per-service scheduledStartTime/scheduledEndTime if available
+        let stylistStartTime = apt.scheduledTime;
+        let stylistEndTime = apt.scheduledEndTime;
+
+        if (stylistServices.length > 0) {
+          // Find the earliest start time and latest end time for this stylist's services
+          const servicesWithTimes = stylistServices.filter(
+            (s) => s.scheduledStartTime && s.scheduledEndTime
+          );
+
+          if (servicesWithTimes.length > 0) {
+            // Get earliest start time
+            const earliestStart = servicesWithTimes.reduce(
+              (earliest, s) => {
+                if (!earliest || (s.scheduledStartTime && s.scheduledStartTime < earliest)) {
+                  return s.scheduledStartTime!;
+                }
+                return earliest;
+              },
+              null as Date | null
+            );
+
+            // Get latest end time
+            const latestEnd = servicesWithTimes.reduce(
+              (latest, s) => {
+                if (!latest || (s.scheduledEndTime && s.scheduledEndTime > latest)) {
+                  return s.scheduledEndTime!;
+                }
+                return latest;
+              },
+              null as Date | null
+            );
+
+            if (earliestStart) {
+              stylistStartTime = format(earliestStart, 'HH:mm');
+            }
+            if (latestEnd) {
+              stylistEndTime = format(latestEnd, 'HH:mm');
+            }
+          } else {
+            // Fallback: calculate from service durations if no scheduled times
+            // This handles legacy data without per-service times
+            const totalDuration = stylistServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+            // For now, use appointment start time + total duration
+            // This is a rough estimate for legacy data
+            const [startH, startM] = apt.scheduledTime.split(':').map(Number);
+            const endMinutes = startH * 60 + startM + totalDuration;
+            stylistEndTime = `${Math.floor(endMinutes / 60)
+              .toString()
+              .padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+          }
+        }
+
+        // Calculate per-stylist service info
+        let currentServiceIndex: number | undefined;
+        let totalServicesForStylist: number | undefined;
+        let linkedServiceInfo:
+          | { stylistId: string; serviceName: string; sequence: number }[]
+          | undefined;
+        let fullJourney: string[] | undefined;
+
+        if (isMultiService) {
+          totalServicesForStylist = stylistServices.length;
+
+          // Find current service index (first non-completed service)
+          const currentService = stylistServices.find(
+            (s) => s.status === 'waiting' || s.status === 'in_progress'
+          );
+          currentServiceIndex = currentService
+            ? stylistServices.findIndex((s) => s.id === currentService.id) + 1
+            : stylistServices.length;
+
+          // Get linked services (services assigned to other stylists) with sequence
+          linkedServiceInfo = apt.services
+            .filter(
+              (s) =>
+                s.assignedStylistId &&
+                s.assignedStylistId !== stylistId &&
+                s.actualStylistId !== stylistId
+            )
+            .map((s) => ({
+              stylistId: s.assignedStylistId!,
+              serviceName: s.serviceName,
+              sequence: s.sequence || 0,
+            }));
+
+          // Build full journey - all services in sequence order
+          fullJourney = apt.services
+            .slice()
+            .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+            .map((s) => s.serviceName);
+        }
+
+        calendarAppointments.push({
+          id: apt.id,
+          stylistId: stylistId,
+          date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+          startTime: stylistStartTime,
+          endTime: stylistEndTime,
+          customerName: apt.customer?.name || apt.customerName || 'Guest',
+          customerPhone: apt.customer?.phone || apt.customerPhone,
+          // Show only services assigned to this stylist
+          services:
+            stylistServices.length > 0
+              ? stylistServices.map((s) => s.serviceName)
+              : apt.services.map((s) => s.serviceName),
+          status: apt.status,
+          bookingType: apt.bookingType,
+          totalAmount: Number(apt.totalAmount),
+          hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+          conflictInfo:
+            conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+          // Multi-service fields
+          isMultiService,
+          serviceCount: apt.services.length,
+          currentServiceIndex,
+          totalServicesForStylist,
+          linkedServiceInfo:
+            linkedServiceInfo && linkedServiceInfo.length > 0 ? linkedServiceInfo : undefined,
+          fullJourney,
+        });
+      }
+    }
 
     return {
       date,

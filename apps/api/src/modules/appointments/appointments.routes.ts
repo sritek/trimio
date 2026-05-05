@@ -55,13 +55,25 @@ import {
   CreateAppointmentInput,
   GetAvailableSlotsInput,
   GetCalendarInput,
+  // Multi-service schemas
+  serviceParamsSchema,
+  startServiceSchema,
+  completeServiceSchema,
+  skipServiceSchema,
+  updateServiceSchema,
+  type StartServiceInput,
+  type CompleteServiceInput,
+  type SkipServiceInput,
+  type UpdateServiceInput,
 } from './appointments.schema';
+import { MultiServiceAppointmentService } from './multi-service.service';
 
 export async function appointmentsRoutes(fastify: FastifyInstance) {
   const appointmentsService = new AppointmentsService(prisma);
   const availabilityService = new AvailabilityService(prisma);
   const stylistScheduleService = new StylistScheduleService(prisma);
   const walkInQueueService = new WalkInQueueService(prisma, appointmentsService);
+  const multiServiceService = new MultiServiceAppointmentService(prisma);
   const controller = new AppointmentsController(appointmentsService, availabilityService);
 
   // Cast to ZodTypeProvider for type inference
@@ -735,6 +747,189 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       const { id } = request.params;
       const result = await appointmentsService.updateStylists(tenantId, id, request.body, userId);
       return reply.send({ success: true, data: result });
+    }
+  );
+
+  // =====================================================
+  // MULTI-SERVICE: INDIVIDUAL SERVICE EXECUTION
+  // =====================================================
+
+  app.post(
+    '/:id/services/:serviceId/start',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Start a service within an appointment',
+        description:
+          'Start a specific service within a multi-service appointment. Validates station availability and sequential prerequisites.',
+        params: serviceParamsSchema,
+        body: startServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: StartServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { stationId, actualStylistId } = request.body;
+
+      const result = await multiServiceService.startService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        stationId,
+        actualStylistId,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.post(
+    '/:id/services/:serviceId/complete',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Complete a service within an appointment',
+        description:
+          'Mark a specific service as completed. Releases the station and returns next service info if available.',
+        params: serviceParamsSchema,
+        body: completeServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: CompleteServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { actualEndTime } = request.body;
+
+      const result = await multiServiceService.completeService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        actualEndTime,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.post(
+    '/:id/services/:serviceId/skip',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Skip a service within an appointment',
+        description: 'Skip a specific service. Does not affect other services in the appointment.',
+        params: serviceParamsSchema,
+        body: skipServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: SkipServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { reason } = request.body;
+
+      const result = await multiServiceService.skipService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        reason,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.patch(
+    '/:id/services/:serviceId',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Update a service within an appointment',
+        description:
+          'Update service configuration (stylist assignment, sequence, parallel flag) before service starts.',
+        params: serviceParamsSchema,
+        body: updateServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: UpdateServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: _userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+
+      // For now, we'll implement a simple update - this can be enhanced later
+      const updatedService = await prisma.appointmentService.update({
+        where: {
+          id: serviceId,
+          tenantId,
+          appointmentId,
+          status: 'waiting', // Can only update waiting services
+        },
+        data: {
+          assignedStylistId: request.body.assignedStylistId,
+          sequence: request.body.sequence,
+          runParallel: request.body.runParallel,
+        },
+        include: {
+          service: { select: { id: true, name: true, sku: true } },
+          assignedStylist: { select: { id: true, name: true } },
+        },
+      });
+
+      return reply.send(successResponse(updatedService));
     }
   );
 

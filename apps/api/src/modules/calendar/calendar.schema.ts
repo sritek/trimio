@@ -31,7 +31,15 @@ export const calendarStylistSchema = z.object({
   avatar: z.string().nullable(),
   color: z.string(),
   isAvailable: z.boolean(),
-  attendanceStatus: z.enum(['present', 'absent', 'on_leave', 'half_day', 'holiday', 'week_off', 'not_marked']),
+  attendanceStatus: z.enum([
+    'present',
+    'absent',
+    'on_leave',
+    'half_day',
+    'holiday',
+    'week_off',
+    'not_marked',
+  ]),
   workingHours: z
     .object({
       start: z.string(),
@@ -77,6 +85,21 @@ export const calendarAppointmentSchema = z.object({
   totalAmount: z.number(),
   hasConflict: z.boolean(),
   conflictInfo: conflictInfoSchema.nullable(),
+  // Multi-service fields
+  isMultiService: z.boolean().optional(),
+  serviceCount: z.number().optional(),
+  currentServiceIndex: z.number().optional(),
+  totalServicesForStylist: z.number().optional(),
+  linkedServiceInfo: z
+    .array(
+      z.object({
+        stylistId: z.string(),
+        serviceName: z.string(),
+        sequence: z.number(),
+      })
+    )
+    .optional(),
+  fullJourney: z.array(z.string()).optional(),
 });
 
 export const resourceCalendarResponseSchema = z.object({

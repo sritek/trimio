@@ -102,6 +102,8 @@ export function useCreateStaff() {
     mutationFn: (input: CreateStaffInput) => api.post<{ staff: StaffProfile }>('/staff', input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: staffKeys.lists() });
+      // Invalidate limit counts to update the Add Staff button state immediately
+      queryClient.invalidateQueries({ queryKey: ['limit-counts'] });
     },
   });
 }
@@ -126,6 +128,21 @@ export function useDeactivateStaff() {
     mutationFn: (id: string) => api.delete<void>(`/staff/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: staffKeys.lists() });
+      // Invalidate limit counts since deactivating frees up a user slot
+      queryClient.invalidateQueries({ queryKey: ['limit-counts'] });
+    },
+  });
+}
+
+export function useReactivateStaff() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.post<StaffProfile>(`/staff/${id}/reactivate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: staffKeys.lists() });
+      // Invalidate limit counts since reactivating uses a user slot
+      queryClient.invalidateQueries({ queryKey: ['limit-counts'] });
     },
   });
 }
@@ -168,11 +185,7 @@ export function useDailyAttendance(date: string, branchId?: string) {
  * Fetch daily attendance for every date in a range using parallel queries.
  * Each date is cached individually. Returns merged rows + combined loading/error state.
  */
-export function useDailyAttendanceRange(
-  dateFrom: string,
-  dateTo: string,
-  branchId?: string
-) {
+export function useDailyAttendanceRange(dateFrom: string, dateTo: string, branchId?: string) {
   // Build array of date strings in the range
   const dates: string[] = [];
   const start = new Date(dateFrom + 'T00:00:00');

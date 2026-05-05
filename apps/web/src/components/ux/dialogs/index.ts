@@ -5,3 +5,4 @@ export { ConfirmAppointmentDialog } from './confirm-appointment-dialog';
 export { EditServicesDialog } from './edit-services-dialog';
 export { RescheduleAppointmentDialog } from './reschedule-appointment-dialog';
 export { StartServiceDialog } from './start-service-dialog';
+export { StartNextServiceDialog } from './start-next-service-dialog';

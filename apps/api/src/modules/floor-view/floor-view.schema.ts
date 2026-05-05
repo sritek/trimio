@@ -11,6 +11,30 @@ import { z } from 'zod';
 
 export const floorViewStatusEnum = z.enum(['available', 'occupied', 'reserved', 'out_of_service']);
 
+// Schema for "Up Next" service information
+export const upNextServiceSchema = z.object({
+  id: z.string().uuid(),
+  serviceName: z.string(),
+  customerName: z.string(),
+  assignedStylistId: z.string().uuid().nullable(),
+  assignedStylistName: z.string().nullable(),
+  estimatedStartTime: z.string().nullable(), // ISO timestamp
+  durationMinutes: z.number(),
+  sequence: z.number(),
+});
+
+// Schema for current service in multi-service appointment
+export const currentServiceInfoSchema = z.object({
+  id: z.string().uuid(),
+  serviceName: z.string(),
+  sequence: z.number(),
+  status: z.string(),
+  assignedStylistId: z.string().uuid().nullable(),
+  assignedStylistName: z.string().nullable(),
+  actualStylistId: z.string().uuid().nullable(),
+  actualStylistName: z.string().nullable(),
+});
+
 export const stationCardSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -36,8 +60,15 @@ export const stationCardSchema = z.object({
       remainingMinutes: z.number().nullable(),
       progressPercent: z.number().nullable(),
       isOvertime: z.boolean(),
+      // Multi-service fields
+      isMultiService: z.boolean(),
+      serviceCount: z.number(),
+      currentServiceIndex: z.number().nullable(), // 1-based index of current service
+      currentService: currentServiceInfoSchema.nullable(), // Details of current in-progress service
     })
     .nullable(),
+  // "Up Next" service for this station (next service in sequence for multi-service appointments)
+  upNext: upNextServiceSchema.nullable(),
 });
 
 export const floorViewResponseSchema = z.object({
@@ -63,6 +94,8 @@ export type FloorViewStatus = z.infer<typeof floorViewStatusEnum>;
 export type StationCard = z.infer<typeof stationCardSchema>;
 export type FloorViewResponse = z.infer<typeof floorViewResponseSchema>;
 export type BranchIdParam = z.infer<typeof branchIdParamSchema>;
+export type UpNextService = z.infer<typeof upNextServiceSchema>;
+export type CurrentServiceInfo = z.infer<typeof currentServiceInfoSchema>;
 
 // ============================================
 // Response Schemas

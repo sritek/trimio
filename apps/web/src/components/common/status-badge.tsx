@@ -17,6 +17,8 @@ export type StatusType =
   | 'rescheduled'
   | 'scheduled'
   | 'pending'
+  // Service statuses
+  | 'skipped'
   // Invoice statuses
   | 'draft'
   | 'finalized'
@@ -111,6 +113,13 @@ const STATUS_CONFIG: Record<StatusType, { label: string; variant: string; dotCol
     label: 'Pending',
     variant: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
     dotColor: 'bg-yellow-500',
+  },
+
+  // Service statuses
+  skipped: {
+    label: 'Skipped',
+    variant: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
+    dotColor: 'bg-gray-500',
   },
 
   // Invoice statuses

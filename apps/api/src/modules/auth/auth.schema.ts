@@ -5,18 +5,10 @@
 
 import { z } from 'zod';
 
-export const loginBodySchema = z
-  .object({
-    email: z.string().email().optional(),
-    phone: z
-      .string()
-      .regex(/^[6-9]\d{9}$/, 'Invalid phone number')
-      .optional(),
-    password: z.string().min(6),
-  })
-  .refine((data) => data.email || data.phone, {
-    message: 'Either email or phone is required',
-  });
+export const loginBodySchema = z.object({
+  identifier: z.string().min(1, 'Mobile number or email is required'),
+  password: z.string().min(6),
+});
 
 export type LoginBody = z.infer<typeof loginBodySchema>;
 

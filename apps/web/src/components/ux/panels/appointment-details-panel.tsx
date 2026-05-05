@@ -265,12 +265,54 @@ export function AppointmentDetailsPanel({
           </div>
 
           {/* Stylist */}
-          {appointment.stylist?.name && (
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <span>{appointment.stylist.name}</span>
-            </div>
-          )}
+          {(() => {
+            // Get unique stylists from services
+            const serviceStylists = new Map<string, string>();
+            appointment.services?.forEach((service) => {
+              const stylistId = service.assignedStylistId || service.actualStylistId;
+              const stylistName = service.assignedStylist?.name || service.actualStylist?.name;
+              if (stylistId && stylistName) {
+                serviceStylists.set(stylistId, stylistName);
+              }
+            });
+
+            // Add primary stylist if not already in the map
+            if (appointment.stylist?.id && appointment.stylist?.name) {
+              serviceStylists.set(appointment.stylist.id, appointment.stylist.name);
+            }
+
+            const uniqueStylists = Array.from(serviceStylists.values());
+
+            if (uniqueStylists.length === 0) {
+              return null;
+            }
+
+            if (uniqueStylists.length === 1) {
+              return (
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <span>{uniqueStylists[0]}</span>
+                </div>
+              );
+            }
+
+            // Multiple stylists
+            return (
+              <div className="flex items-start gap-3">
+                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Multiple Stylists</span>
+                  <div className="flex flex-wrap gap-1">
+                    {uniqueStylists.map((name, idx) => (
+                      <span key={idx} className="text-xs px-2 py-0.5 rounded-full bg-muted">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Station (if assigned) */}
           {appointment.station && (
@@ -325,6 +367,8 @@ export function AppointmentDetailsPanel({
                   price={service.unitPrice}
                   duration={service.durationMinutes}
                   quantity={service.quantity}
+                  stylistName={service.assignedStylist?.name || service.actualStylist?.name}
+                  status={service.status}
                 />
               ))
             ) : (
@@ -568,7 +612,18 @@ interface ServiceCardProps {
   duration?: number;
   stylistName?: string;
   quantity?: number;
+  status?: string;
 }
+
+// Valid status types that can be used with StatusBadge
+const VALID_SERVICE_STATUSES = [
+  'waiting',
+  'in_progress',
+  'completed',
+  'pending',
+  'cancelled',
+  'skipped',
+] as const;
 
 function ServiceCard({
   serviceName,
@@ -576,7 +631,12 @@ function ServiceCard({
   duration,
   stylistName,
   quantity = 1,
+  status,
 }: ServiceCardProps) {
+  // Check if status is a valid StatusBadge type
+  const isValidStatus =
+    status && VALID_SERVICE_STATUSES.includes(status as (typeof VALID_SERVICE_STATUSES)[number]);
+
   return (
     <div
       className={cn(
@@ -586,10 +646,18 @@ function ServiceCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">
-            {serviceName}
-            {quantity > 1 && <span className="text-muted-foreground ml-1">×{quantity}</span>}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-sm truncate">
+              {serviceName}
+              {quantity > 1 && <span className="text-muted-foreground ml-1">×{quantity}</span>}
+            </p>
+            {isValidStatus && (
+              <StatusBadge
+                status={status as 'waiting' | 'in_progress' | 'completed' | 'pending' | 'cancelled'}
+                size="sm"
+              />
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
             {duration && (
               <span className="flex items-center gap-1">

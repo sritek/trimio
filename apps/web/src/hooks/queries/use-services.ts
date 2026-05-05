@@ -115,3 +115,20 @@ export function useDeleteService() {
     },
   });
 }
+
+/**
+ * Toggle service active status (activate/deactivate)
+ */
+export function useToggleServiceStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch<Service>(`/services/${id}`, { isActive }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: serviceKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: serviceKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: serviceKeys.catalog() });
+    },
+  });
+}

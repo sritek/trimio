@@ -2,12 +2,14 @@
  * Appointment Block Component
  * Visual representation of an appointment in the calendar
  * Supports drag-and-drop for rescheduling via explicit drag handle
+ * Enhanced for multi-service appointments with link indicators
  */
 
 'use client';
 
 import { useCallback } from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import { Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { useAuthStore } from '@/stores/auth-store';
@@ -64,6 +66,12 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; accent: string }
   },
 };
 
+// Multi-service appointment styling (applied as overlay/modifier)
+const MULTI_SERVICE_STYLES = {
+  border: 'ring-1 ring-indigo-400/50 dark:ring-indigo-500/50',
+  indicator: 'bg-indigo-500',
+};
+
 // Conflict severity styles
 const CONFLICT_STYLES = {
   warning: {
@@ -101,6 +109,11 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
   const services = appointment.services || [];
 
+  // Build customer journey string for multi-service appointments
+  // Use fullJourney if available (contains all services in sequence order across all stylists)
+  // Otherwise fall back to current stylist's services
+  const customerJourney = appointment.fullJourney?.join(' → ') || services.join(' → ');
+
   return (
     <div className="space-y-2 text-sm text-gray-900">
       <div className="font-semibold">{appointment.customerName || 'Unknown Customer'}</div>
@@ -109,12 +122,47 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
           {shouldMask ? maskPhoneNumber(appointment.customerPhone) : appointment.customerPhone}
         </div>
       )}
+      {/* Multi-service indicator */}
+      {appointment.isMultiService && (
+        <div className="flex items-center gap-1.5 text-indigo-600 font-medium">
+          <Link2 className="h-3.5 w-3.5" />
+          <span>
+            {appointment.serviceCount} services
+            {appointment.totalServicesForStylist &&
+              appointment.totalServicesForStylist < appointment.serviceCount && (
+                <span className="text-gray-500 font-normal">
+                  {' '}
+                  ({appointment.totalServicesForStylist} for this stylist)
+                </span>
+              )}
+          </span>
+        </div>
+      )}
       {services.length > 0 && (
         <div className="border-t border-gray-200 pt-2">
-          <div className="font-medium">Services:</div>
-          <ul className="list-disc list-inside text-gray-700">
-            {services.map((service, idx) => (
-              <li key={idx}>{service}</li>
+          <div className="font-medium">
+            {appointment.isMultiService ? 'Customer Journey:' : 'Services:'}
+          </div>
+          {appointment.isMultiService ? (
+            <div className="text-gray-700 mt-1">{customerJourney}</div>
+          ) : (
+            <ul className="list-disc list-inside text-gray-700">
+              {services.map((service, idx) => (
+                <li key={idx}>{service}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {/* Linked services (other stylists) */}
+      {appointment.linkedServiceInfo && appointment.linkedServiceInfo.length > 0 && (
+        <div className="border-t border-gray-200 pt-2">
+          <div className="font-medium text-gray-600">Other Stylists:</div>
+          <ul className="text-gray-700 mt-1 space-y-0.5">
+            {appointment.linkedServiceInfo.map((linked, idx) => (
+              <li key={idx} className="text-xs">
+                • {linked.serviceName}
+              </li>
             ))}
           </ul>
         </div>
@@ -264,6 +312,8 @@ export function AppointmentBlock({
         // Conflict styling based on severity
         conflictStyle && conflictStyle.border,
         conflictStyle && conflictStyle.ring,
+        // Multi-service appointment indicator - subtle ring
+        !isOptimistic && appointment.isMultiService && MULTI_SERVICE_STYLES.border,
         // Unassigned appointment indicator - dashed border
         !isOptimistic &&
           !appointment.stylistId &&
@@ -289,9 +339,7 @@ export function AppointmentBlock({
       {isChip ? (
         /* Chip mode: initials + status dot, minimal footprint */
         <div className="px-1 py-0.5 h-full flex items-center gap-1 pl-2">
-          <span
-            className={cn('text-[10px] font-bold leading-none truncate', statusStyle.text)}
-          >
+          <span className={cn('text-[10px] font-bold leading-none truncate', statusStyle.text)}>
             {customerInitials}
           </span>
           {height >= 30 && (
@@ -369,6 +417,32 @@ export function AppointmentBlock({
         <span className="absolute top-1 right-4 text-[10px] font-medium bg-orange-500 text-white px-1 rounded">
           Unassigned
         </span>
+      )}
+
+      {/* Multi-service link icon indicator */}
+      {!isOptimistic && appointment.isMultiService && (
+        <div
+          className={cn(
+            'absolute flex items-center gap-0.5',
+            isChip ? 'bottom-0.5 right-0.5' : 'bottom-1 left-1.5',
+            canMove && !isChip && 'left-6'
+          )}
+        >
+          <Link2
+            className={cn(
+              'text-indigo-600 dark:text-indigo-400',
+              isChip ? 'h-2.5 w-2.5' : 'h-3 w-3'
+            )}
+          />
+          {!isChip &&
+            height >= 50 &&
+            appointment.currentServiceIndex &&
+            appointment.totalServicesForStylist && (
+              <span className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400">
+                {appointment.currentServiceIndex}/{appointment.totalServicesForStylist}
+              </span>
+            )}
+        </div>
       )}
 
       {/* Optimistic/Creating indicator */}

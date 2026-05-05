@@ -19,6 +19,23 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Calendar,
   User,
   Scissors,
@@ -32,6 +49,8 @@ import {
   UserX,
   CheckCircle2,
   PlayCircle,
+  GripVertical,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -88,6 +107,7 @@ const appointmentSchema = z
     serviceIds: z.array(z.string()).min(1, 'At least one service is required'),
     stylistId: z.string().optional(),
     assignLater: z.boolean().default(false),
+    customizeStylistsPerService: z.boolean().default(false),
     date: z.string().min(1, 'Date is required'),
     time: z.string().min(1, 'Time is required'),
     notes: z.string().optional(),
@@ -105,8 +125,8 @@ const appointmentSchema = z
   )
   .refine(
     (data) => {
-      // Stylist is required unless assignLater is true
-      if (!data.assignLater && !data.stylistId) {
+      // Stylist is required unless assignLater is true OR customizeStylistsPerService is true
+      if (!data.assignLater && !data.customizeStylistsPerService && !data.stylistId) {
         return false;
       }
       return true;
@@ -149,6 +169,13 @@ export function NewAppointmentPanel({
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>(initialServiceIds || []);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  // Per-service stylist mapping: Map<serviceId, stylistId>
+  const [perServiceStylists, setPerServiceStylists] = useState<Map<string, string>>(new Map());
+  // Per-service parallel execution: Map<serviceId, boolean>
+  const [perServiceParallel, setPerServiceParallel] = useState<Map<string, boolean>>(new Map());
+  // Ordered service IDs (for drag-and-drop reordering)
+  const [orderedServiceIds, setOrderedServiceIds] = useState<string[]>([]);
+  const [customizeStylistsPerService, setCustomizeStylistsPerService] = useState(false);
 
   // Start Service Dialog state (for "Create & Start Service" flow)
   const [showStartServiceDialog, setShowStartServiceDialog] = useState(false);
@@ -172,7 +199,7 @@ export function NewAppointmentPanel({
   });
 
   // Customer search query
-  const { data: customerSearchData } = useCustomerSearch({
+  const { data: customerSearchData, isFetching: isSearchingCustomers } = useCustomerSearch({
     q: customerSearchQuery,
     limit: 10,
   });
@@ -192,11 +219,36 @@ export function NewAppointmentPanel({
 
   const createMutation = useCreateAppointment();
 
+  // DnD sensors for service reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end for service reordering
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setOrderedServiceIds((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }, []);
+
   // Stable default values
   const stableDefaultValues = useMemo(
     () => ({
       stylistId: initialStylistId || '',
       assignLater: false,
+      customizeStylistsPerService: false,
       date: initialDate || format(new Date(), 'yyyy-MM-dd'),
       time: initialTime || '',
       customerId: initialCustomerId || '',
@@ -368,16 +420,56 @@ export function NewAppointmentPanel({
   const onSubmit = useCallback(
     async (data: AppointmentFormData) => {
       try {
+        // Get the ordered service IDs (use orderedServiceIds if customizing, otherwise use data.serviceIds)
+        const serviceOrder =
+          data.customizeStylistsPerService && orderedServiceIds.length > 0
+            ? orderedServiceIds
+            : data.serviceIds;
+
+        // Build services array with per-service stylist mapping, sequence, and parallel execution
+        const servicesPayload = serviceOrder.map((serviceId, index) => {
+          let stylistId: string | undefined;
+          if (data.assignLater) {
+            stylistId = undefined;
+          } else if (data.customizeStylistsPerService) {
+            // Use per-service stylist mapping
+            stylistId = perServiceStylists.get(serviceId) || undefined;
+          } else {
+            // Use single stylist for all services
+            stylistId = data.stylistId || undefined;
+          }
+
+          // Get sequence (1-based) and parallel execution flag
+          const sequence = index + 1;
+          const runParallel = data.customizeStylistsPerService
+            ? perServiceParallel.get(serviceId) || false
+            : false;
+
+          return { serviceId, stylistId, sequence, runParallel };
+        });
+
+        // Determine the primary stylistId to send
+        // - If assignLater: undefined
+        // - If customizeStylistsPerService: use first service's stylist or undefined
+        // - Otherwise: use the selected stylist
+        let primaryStylistId: string | undefined;
+        if (data.assignLater) {
+          primaryStylistId = undefined;
+        } else if (data.customizeStylistsPerService) {
+          // Use the first service's stylist as the primary, or undefined if none
+          const firstServiceStylist = servicesPayload.find((s) => s.stylistId)?.stylistId;
+          primaryStylistId = firstServiceStylist;
+        } else {
+          primaryStylistId = data.stylistId || undefined;
+        }
+
         const result = await createMutation.mutateAsync({
           branchId: branchId || '',
           customerId: data.customerId || undefined,
           customerName: data.customerName,
           customerPhone: data.customerPhone || undefined,
-          services: data.serviceIds.map((serviceId) => ({
-            serviceId,
-            stylistId: data.assignLater ? undefined : data.stylistId,
-          })),
-          stylistId: data.assignLater ? undefined : data.stylistId,
+          services: servicesPayload,
+          stylistId: primaryStylistId,
           scheduledDate: data.date,
           scheduledTime: data.time,
           customerNotes: data.notes || undefined,
@@ -395,23 +487,72 @@ export function NewAppointmentPanel({
         // Error toast is handled by the mutation hook
       }
     },
-    [branchId, createMutation, closePanel, onSuccess, walkInQueueId]
+    [
+      branchId,
+      createMutation,
+      closePanel,
+      onSuccess,
+      walkInQueueId,
+      perServiceStylists,
+      perServiceParallel,
+      orderedServiceIds,
+    ]
   );
 
   // Handle "Create & Start Service" submission
   const onSubmitAndStart = useCallback(
     async (data: AppointmentFormData) => {
       try {
+        // Get the ordered service IDs (use orderedServiceIds if customizing, otherwise use data.serviceIds)
+        const serviceOrder =
+          data.customizeStylistsPerService && orderedServiceIds.length > 0
+            ? orderedServiceIds
+            : data.serviceIds;
+
+        // Build services array with per-service stylist mapping, sequence, and parallel execution
+        const servicesPayload = serviceOrder.map((serviceId, index) => {
+          let stylistId: string | undefined;
+          if (data.assignLater) {
+            stylistId = undefined;
+          } else if (data.customizeStylistsPerService) {
+            // Use per-service stylist mapping
+            stylistId = perServiceStylists.get(serviceId) || undefined;
+          } else {
+            // Use single stylist for all services
+            stylistId = data.stylistId || undefined;
+          }
+
+          // Get sequence (1-based) and parallel execution flag
+          const sequence = index + 1;
+          const runParallel = data.customizeStylistsPerService
+            ? perServiceParallel.get(serviceId) || false
+            : false;
+
+          return { serviceId, stylistId, sequence, runParallel };
+        });
+
+        // Determine the primary stylistId to send
+        // - If assignLater: undefined
+        // - If customizeStylistsPerService: use first service's stylist or undefined
+        // - Otherwise: use the selected stylist
+        let primaryStylistId: string | undefined;
+        if (data.assignLater) {
+          primaryStylistId = undefined;
+        } else if (data.customizeStylistsPerService) {
+          // Use the first service's stylist as the primary, or undefined if none
+          const firstServiceStylist = servicesPayload.find((s) => s.stylistId)?.stylistId;
+          primaryStylistId = firstServiceStylist;
+        } else {
+          primaryStylistId = data.stylistId || undefined;
+        }
+
         const result = await createMutation.mutateAsync({
           branchId: branchId || '',
           customerId: data.customerId || undefined,
           customerName: data.customerName,
           customerPhone: data.customerPhone || undefined,
-          services: data.serviceIds.map((serviceId) => ({
-            serviceId,
-            stylistId: data.assignLater ? undefined : data.stylistId,
-          })),
-          stylistId: data.assignLater ? undefined : data.stylistId,
+          services: servicesPayload,
+          stylistId: primaryStylistId,
           scheduledDate: data.date,
           scheduledTime: data.time,
           customerNotes: data.notes || undefined,
@@ -440,7 +581,15 @@ export function NewAppointmentPanel({
         // Error toast is handled by the mutation hook
       }
     },
-    [branchId, createMutation, walkInQueueId, services]
+    [
+      branchId,
+      createMutation,
+      walkInQueueId,
+      services,
+      perServiceStylists,
+      perServiceParallel,
+      orderedServiceIds,
+    ]
   );
 
   // Handle Start Service Dialog close
@@ -554,6 +703,7 @@ export function NewAppointmentPanel({
                     onChange={handleCustomerSelect}
                     customers={customerOptions}
                     onSearchChange={setCustomerSearchQuery}
+                    isLoading={isSearchingCustomers}
                     placeholder="Search customer..."
                     hasError={!!errors.customerName && !selectedCustomer}
                   />
@@ -593,6 +743,36 @@ export function NewAppointmentPanel({
                 onChange={(serviceIds) => {
                   setSelectedServices(serviceIds);
                   setValue('serviceIds', serviceIds);
+                  // Update ordered service IDs - add new ones at the end, remove deleted ones
+                  setOrderedServiceIds((prev) => {
+                    const newOrder = prev.filter((id) => serviceIds.includes(id));
+                    const addedIds = serviceIds.filter((id) => !prev.includes(id));
+                    return [...newOrder, ...addedIds];
+                  });
+                  // Clear per-service stylists and parallel flags for removed services
+                  setPerServiceStylists((prev) => {
+                    const newMap = new Map(prev);
+                    for (const key of newMap.keys()) {
+                      if (!serviceIds.includes(key)) {
+                        newMap.delete(key);
+                      }
+                    }
+                    return newMap;
+                  });
+                  setPerServiceParallel((prev) => {
+                    const newMap = new Map(prev);
+                    for (const key of newMap.keys()) {
+                      if (!serviceIds.includes(key)) {
+                        newMap.delete(key);
+                      }
+                    }
+                    return newMap;
+                  });
+                  // Reset customization mode if only one service left
+                  if (serviceIds.length <= 1) {
+                    setCustomizeStylistsPerService(false);
+                    setValue('customizeStylistsPerService', false);
+                  }
                 }}
                 services={services.map((s) => ({
                   id: s.id,
@@ -628,6 +808,9 @@ export function NewAppointmentPanel({
                       setValue('assignLater', checked);
                       if (checked) {
                         setValue('stylistId', '');
+                        setCustomizeStylistsPerService(false);
+                        setValue('customizeStylistsPerService', false);
+                        setPerServiceStylists(new Map());
                       }
                     }}
                   />
@@ -651,36 +834,131 @@ export function NewAppointmentPanel({
             {/* Stylist Selection - hidden when assignLater is true */}
             {!watchedAssignLater && (
               <>
-                {staffLoading ? (
-                  <Skeleton className="h-10 w-full" />
-                ) : (
-                  <Select
-                    value={watchedStylistId || ''}
-                    onValueChange={(value) => setValue('stylistId', value)}
-                  >
-                    <SelectTrigger
-                      className={cn(errors.stylistId && !watchedStylistId && 'border-destructive')}
-                    >
-                      <SelectValue placeholder="Select a stylist..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stylists.map((stylist) => (
-                        <SelectItem key={stylist.userId} value={stylist.userId}>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-xs">
-                                {(stylist.user?.name || 'U').charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span>{stylist.user?.name || 'Unknown'}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Per-service customization toggle - only show when multiple services selected */}
+                {selectedServices.length > 1 && (
+                  <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg bg-muted/30 border border-dashed">
+                    <Switch
+                      checked={customizeStylistsPerService}
+                      onCheckedChange={(checked) => {
+                        setCustomizeStylistsPerService(checked);
+                        setValue('customizeStylistsPerService', checked);
+                        if (!checked) {
+                          setPerServiceStylists(new Map());
+                        }
+                      }}
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium">Customize stylist per service</span>
+                      <p className="text-xs text-muted-foreground">
+                        Assign different stylists to each service
+                      </p>
+                    </div>
+                  </label>
                 )}
-                {errors.stylistId && (
-                  <p className="text-xs text-destructive">{errors.stylistId.message}</p>
+
+                {/* Default stylist selection (single stylist for all) */}
+                {!customizeStylistsPerService && (
+                  <>
+                    {staffLoading ? (
+                      <Skeleton className="h-10 w-full" />
+                    ) : (
+                      <Select
+                        value={watchedStylistId || ''}
+                        onValueChange={(value) => setValue('stylistId', value)}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            errors.stylistId && !watchedStylistId && 'border-destructive'
+                          )}
+                        >
+                          <SelectValue placeholder="Select a stylist..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stylists.map((stylist) => (
+                            <SelectItem key={stylist.userId} value={stylist.userId}>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-6 w-6">
+                                  <AvatarFallback className="text-xs">
+                                    {(stylist.user?.name || 'U').charAt(0).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span>{stylist.user?.name || 'Unknown'}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {errors.stylistId && (
+                      <p className="text-xs text-destructive">{errors.stylistId.message}</p>
+                    )}
+                  </>
+                )}
+
+                {/* Per-service stylist selection */}
+                {customizeStylistsPerService && selectedServices.length > 0 && (
+                  <div className="space-y-3 p-3 rounded-lg border bg-muted/20">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Drag to reorder services. Assign stylist and set parallel execution:
+                    </p>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={orderedServiceIds.length > 0 ? orderedServiceIds : selectedServices}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-2">
+                          {(orderedServiceIds.length > 0
+                            ? orderedServiceIds
+                            : selectedServices
+                          ).map((serviceId, index) => {
+                            const service = services.find((s) => s.id === serviceId);
+                            const selectedStylistId = perServiceStylists.get(serviceId) || '';
+                            const isParallel = perServiceParallel.get(serviceId) || false;
+                            return (
+                              <SortableServiceItem
+                                key={serviceId}
+                                id={serviceId}
+                                index={index}
+                                serviceName={service?.name || 'Unknown Service'}
+                                duration={service?.durationMinutes}
+                                selectedStylistId={selectedStylistId}
+                                isParallel={isParallel}
+                                stylists={stylists}
+                                onStylistChange={(value) => {
+                                  setPerServiceStylists((prev) => {
+                                    const newMap = new Map(prev);
+                                    if (value) {
+                                      newMap.set(serviceId, value);
+                                    } else {
+                                      newMap.delete(serviceId);
+                                    }
+                                    return newMap;
+                                  });
+                                }}
+                                onParallelChange={(value) => {
+                                  setPerServiceParallel((prev) => {
+                                    const newMap = new Map(prev);
+                                    newMap.set(serviceId, value);
+                                    return newMap;
+                                  });
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                    {/* Validation hint */}
+                    {selectedServices.some((id) => !perServiceStylists.get(id)) && (
+                      <p className="text-xs text-amber-600">
+                        Tip: Services without a stylist will use the default stylist if set
+                      </p>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -821,5 +1099,108 @@ export function NewAppointmentPanel({
         />
       )}
     </form>
+  );
+}
+
+// ============================================
+// Sortable Service Item Component
+// ============================================
+
+interface SortableServiceItemProps {
+  id: string;
+  index: number;
+  serviceName: string;
+  duration?: number;
+  selectedStylistId: string;
+  isParallel: boolean;
+  stylists: Array<{ userId: string; user?: { name?: string } | null }>;
+  onStylistChange: (value: string) => void;
+  onParallelChange: (value: boolean) => void;
+}
+
+function SortableServiceItem({
+  id,
+  index,
+  serviceName,
+  duration,
+  selectedStylistId,
+  isParallel,
+  stylists,
+  onStylistChange,
+  onParallelChange,
+}: SortableServiceItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex flex-col gap-2 p-3 rounded-lg border bg-background',
+        isDragging && 'opacity-50 shadow-lg'
+      )}
+    >
+      <div className="flex items-center gap-2">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
+
+        {/* Sequence number */}
+        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+          {index + 1}
+        </span>
+
+        {/* Service info */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{serviceName}</p>
+          {duration && <p className="text-xs text-muted-foreground">{duration} min</p>}
+        </div>
+
+        {/* Stylist select */}
+        <Select value={selectedStylistId} onValueChange={onStylistChange}>
+          <SelectTrigger className="w-[140px] h-8 text-xs">
+            <SelectValue placeholder="Stylist..." />
+          </SelectTrigger>
+          <SelectContent>
+            {stylists.map((stylist) => (
+              <SelectItem key={stylist.userId} value={stylist.userId}>
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-4 w-4">
+                    <AvatarFallback className="text-[10px]">
+                      {(stylist.user?.name || 'U').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs">{stylist.user?.name || 'Unknown'}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Parallel execution toggle - only show for services after the first */}
+      {index > 0 && (
+        <label className="flex items-center gap-2 ml-7 cursor-pointer">
+          <Switch checked={isParallel} onCheckedChange={onParallelChange} className="scale-75" />
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <ArrowRightLeft className="h-3 w-3" />
+            Run parallel with previous
+          </span>
+        </label>
+      )}
+    </div>
   );
 }

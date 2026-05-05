@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Pencil, User, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Pencil, Power, ShieldOff, User, X } from 'lucide-react';
 
 import { PERMISSIONS } from '@trimio/shared';
 
@@ -18,11 +18,15 @@ import {
   useCustomTags,
   useAddCustomerTags,
   useRemoveCustomerTag,
+  useDeleteCustomer,
+  useReactivateCustomer,
+  useUnblockCustomer,
 } from '@/hooks/queries/use-customers';
 import { usePermissions } from '@/hooks/use-permissions';
 
 import {
   AccessDenied,
+  ConfirmDialog,
   EmptyState,
   LoadingSpinner,
   PageContainer,
@@ -93,6 +97,8 @@ export default function CustomerDetailPage() {
   const [showLoyaltyDialog, setShowLoyaltyDialog] = useState(false);
   const [showWalletDialog, setShowWalletDialog] = useState(false);
   const [showAddTagDialog, setShowAddTagDialog] = useState(false);
+  const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
+  const [showUnblockDialog, setShowUnblockDialog] = useState(false);
   const [noteContent, setNoteContent] = useState('');
 
   // Queries
@@ -109,6 +115,9 @@ export default function CustomerDetailPage() {
   const addNote = useAddCustomerNote();
   const addTags = useAddCustomerTags();
   const removeTag = useRemoveCustomerTag();
+  const deleteCustomer = useDeleteCustomer();
+  const reactivateCustomer = useReactivateCustomer();
+  const unblockCustomer = useUnblockCustomer();
 
   // Available tags for adding (exclude already assigned)
   const availableTags = customer
@@ -143,6 +152,21 @@ export default function CustomerDetailPage() {
   const handleRemoveTag = async (tag: string) => {
     if (SYSTEM_TAGS.includes(tag)) return;
     await removeTag.mutateAsync({ customerId, tag });
+  };
+
+  const handleDeactivate = async () => {
+    await deleteCustomer.mutateAsync(customerId);
+    setShowDeactivateDialog(false);
+    router.push('/customers');
+  };
+
+  const handleReactivate = async () => {
+    await reactivateCustomer.mutateAsync(customerId);
+  };
+
+  const handleUnblock = async () => {
+    await unblockCustomer.mutateAsync({ id: customerId, reason: 'Unblocked by manager' });
+    setShowUnblockDialog(false);
   };
 
   // Loading state
@@ -226,12 +250,39 @@ export default function CustomerDetailPage() {
           }
           backHref="/customers"
           actions={
-            canWrite && (
-              <Button onClick={() => router.push(`/customers/${customerId}?edit=true`)}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            )
+            <div className="flex gap-2">
+              {/* Unblock button - show if customer has booking restrictions */}
+              {canManage && customer.bookingStatus !== 'normal' && (
+                <Button variant="outline" onClick={() => setShowUnblockDialog(true)}>
+                  <ShieldOff className="mr-2 h-4 w-4" />
+                  Unblock
+                </Button>
+              )}
+              {/* Deactivate/Reactivate button */}
+              {canManage &&
+                (customer.deletedAt ? (
+                  <Button
+                    variant="default"
+                    onClick={handleReactivate}
+                    disabled={reactivateCustomer.isPending}
+                  >
+                    <Power className="mr-2 h-4 w-4" />
+                    {reactivateCustomer.isPending ? 'Reactivating...' : 'Reactivate'}
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setShowDeactivateDialog(true)}>
+                    <Power className="mr-2 h-4 w-4" />
+                    Deactivate
+                  </Button>
+                ))}
+              {/* Edit button */}
+              {canWrite && !customer.deletedAt && (
+                <Button onClick={() => router.push(`/customers/${customerId}?edit=true`)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              )}
+            </div>
           }
         />
 
@@ -319,6 +370,30 @@ export default function CustomerDetailPage() {
           availableTags={availableTags}
           onSubmit={handleAddTag}
           isPending={addTags.isPending}
+        />
+
+        {/* Deactivate Confirmation Dialog */}
+        <ConfirmDialog
+          open={showDeactivateDialog}
+          onOpenChange={setShowDeactivateDialog}
+          title="Deactivate Customer"
+          description={`Are you sure you want to deactivate "${customer.name}"? They will no longer appear in customer lists and cannot make bookings.`}
+          confirmText="Deactivate"
+          variant="destructive"
+          onConfirm={handleDeactivate}
+          isLoading={deleteCustomer.isPending}
+        />
+
+        {/* Unblock Confirmation Dialog */}
+        <ConfirmDialog
+          open={showUnblockDialog}
+          onOpenChange={setShowUnblockDialog}
+          title="Unblock Customer"
+          description={`Are you sure you want to unblock "${customer.name}"? This will reset their no-show count and allow them to book normally again.`}
+          confirmText="Unblock"
+          variant="default"
+          onConfirm={handleUnblock}
+          isLoading={unblockCustomer.isPending}
         />
       </PageContainer>
     </PermissionGuard>

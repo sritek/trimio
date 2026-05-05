@@ -321,7 +321,10 @@ export function NewInvoicePanel({ onSuccess }: NewInvoicePanelProps) {
   const [productSearchQuery] = useState('');
 
   // Queries
-  const { data: customerSearchData } = useCustomerSearch({ q: customerSearchQuery, limit: 10 });
+  const { data: customerSearchData, isFetching: isSearchingCustomers } = useCustomerSearch({
+    q: customerSearchQuery,
+    limit: 10,
+  });
   const { data: servicesData, isLoading: servicesLoading } = useServices({ limit: -1 });
   const { data: staffData } = useStaffList({
     branchId: branchId || '',
@@ -678,6 +681,7 @@ export function NewInvoicePanel({ onSuccess }: NewInvoicePanelProps) {
                     onChange={handleCustomerSelect}
                     customers={customerOptions}
                     onSearchChange={setCustomerSearchQuery}
+                    isLoading={isSearchingCustomers}
                     placeholder="Search customer..."
                   />
                 </div>

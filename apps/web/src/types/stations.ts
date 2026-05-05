@@ -80,6 +80,30 @@ export interface StationFilters {
 
 export type FloorViewStatus = 'available' | 'occupied' | 'out_of_service';
 
+// Current service info for multi-service appointments
+export interface CurrentServiceInfo {
+  id: string;
+  serviceName: string;
+  sequence: number;
+  status: string;
+  assignedStylistId: string | null;
+  assignedStylistName: string | null;
+  actualStylistId: string | null;
+  actualStylistName: string | null;
+}
+
+// "Up Next" service for multi-service appointments
+export interface UpNextService {
+  id: string;
+  serviceName: string;
+  customerName: string;
+  assignedStylistId: string | null;
+  assignedStylistName: string | null;
+  estimatedStartTime: string | null;
+  durationMinutes: number;
+  sequence: number;
+}
+
 export interface StationCard {
   id: string;
   name: string;
@@ -91,6 +115,8 @@ export interface StationCard {
   displayOrder: number;
   status: FloorViewStatus;
   appointment: StationAppointment | null;
+  /** Next service in sequence for multi-service appointments */
+  upNext: UpNextService | null;
 }
 
 export interface StationAppointment {
@@ -108,6 +134,15 @@ export interface StationAppointment {
   remainingMinutes: number | null;
   progressPercent: number | null;
   isOvertime: boolean;
+  // Multi-service fields
+  /** Whether this appointment has multiple services */
+  isMultiService: boolean;
+  /** Total number of services in the appointment */
+  serviceCount: number;
+  /** Current service index (1-based) */
+  currentServiceIndex: number | null;
+  /** Details of the current in-progress service */
+  currentService: CurrentServiceInfo | null;
 }
 
 export interface FloorViewSummary {

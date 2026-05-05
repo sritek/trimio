@@ -50,6 +50,8 @@ const createAppointmentBaseSchema = z.object({
         serviceId: z.string().uuid(),
         stylistId: z.string().uuid().optional(),
         quantity: z.number().int().min(1).default(1),
+        sequence: z.number().int().min(1).optional(),
+        runParallel: z.boolean().optional(),
       })
     )
     .min(1, 'At least one service is required'),
@@ -491,6 +493,8 @@ export const updateServicesSchema = z.object({
         serviceId: z.string().uuid(),
         stylistId: z.string().uuid().optional(),
         quantity: z.number().int().min(1).optional().default(1),
+        sequence: z.number().int().min(1).optional(),
+        runParallel: z.boolean().optional(),
       })
     )
     .min(1, 'At least one service is required'),
@@ -508,3 +512,127 @@ export const updateStylistsSchema = z.object({
 });
 
 export type UpdateStylistsInput = z.infer<typeof updateStylistsSchema>;
+
+// =====================================================
+// MULTI-SERVICE APPOINTMENT SCHEMAS
+// =====================================================
+
+/**
+ * Service status for multi-service appointments
+ */
+export const multiServiceStatusEnum = z.enum(['waiting', 'in_progress', 'completed', 'skipped']);
+
+/**
+ * Schema for per-service configuration in multi-service appointments
+ */
+export const multiServiceItemSchema = z.object({
+  serviceId: z.string().uuid(),
+  quantity: z.number().int().min(1).default(1),
+  assignedStylistId: z.string().uuid().optional(),
+  sequence: z.number().int().min(1).default(1),
+  runParallel: z.boolean().default(false),
+});
+
+export type MultiServiceItem = z.infer<typeof multiServiceItemSchema>;
+
+/**
+ * Schema for creating a multi-service appointment
+ * Extends the basic appointment creation with per-service stylist assignments
+ * and parallel/sequential configuration
+ */
+export const createMultiServiceAppointmentSchema = z
+  .object({
+    branchId: z.string().uuid(),
+
+    // Customer - at least one identifier required
+    customerId: z.string().uuid().optional(),
+    customerName: z.string().min(2).max(255).optional(),
+    customerPhone: z
+      .string()
+      .regex(/^[6-9]\d{9}$/, 'Invalid phone number')
+      .optional(),
+
+    // Scheduling
+    scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+    scheduledTime: z.string().regex(/^\d{2}:\d{2}$/, 'Time must be HH:mm'),
+
+    // Multi-service configuration
+    services: z.array(multiServiceItemSchema).min(1, 'At least one service is required'),
+
+    // Type
+    bookingType: bookingTypeEnum,
+    bookingSource: z.string().max(50).optional(),
+
+    // Notes
+    customerNotes: z.string().max(1000).optional(),
+    internalNotes: z.string().max(1000).optional(),
+
+    // Conflict handling
+    forceOverride: z.boolean().optional(),
+    overrideReason: z.string().max(500).optional(),
+  })
+  .refine((data) => data.customerId || data.customerName, {
+    message: 'Either customerId or customerName is required',
+  });
+
+export type CreateMultiServiceAppointmentInput = z.infer<
+  typeof createMultiServiceAppointmentSchema
+>;
+
+// =====================================================
+// SERVICE EXECUTION SCHEMAS (Start, Complete, Skip)
+// =====================================================
+
+/**
+ * Params for service-level operations
+ */
+export const serviceParamsSchema = z.object({
+  id: z.string().uuid(), // appointmentId
+  serviceId: z.string().uuid(), // appointmentServiceId
+});
+
+export type ServiceParams = z.infer<typeof serviceParamsSchema>;
+
+/**
+ * Schema for starting a service within an appointment
+ */
+export const startServiceSchema = z.object({
+  stationId: z.string().uuid(),
+  actualStylistId: z.string().uuid().optional(),
+});
+
+export type StartServiceInput = z.infer<typeof startServiceSchema>;
+
+/**
+ * Schema for completing a service within an appointment
+ */
+export const completeServiceSchema = z.object({
+  actualEndTime: z
+    .string()
+    .datetime()
+    .optional()
+    .transform((val) => (val ? new Date(val) : undefined)),
+  notes: z.string().max(500).optional(),
+});
+
+export type CompleteServiceInput = z.infer<typeof completeServiceSchema>;
+
+/**
+ * Schema for skipping a service within an appointment
+ */
+export const skipServiceSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+export type SkipServiceInput = z.infer<typeof skipServiceSchema>;
+
+/**
+ * Schema for updating a service within an appointment
+ */
+export const updateServiceSchema = z.object({
+  assignedStylistId: z.string().uuid().optional(),
+  sequence: z.number().int().min(1).optional(),
+  runParallel: z.boolean().optional(),
+});
+
+export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;

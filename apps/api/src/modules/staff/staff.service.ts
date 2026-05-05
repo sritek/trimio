@@ -377,6 +377,58 @@ export const staffService = {
 
     return { success: true };
   },
+
+  /**
+   * Reactivate staff member
+   */
+  async reactivate(tenantId: string, userId: string, _reactivatedBy?: string) {
+    const existing = await prisma.staffProfile.findFirst({
+      where: { tenantId, userId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError('STAFF_NOT_FOUND', 'Staff member not found');
+    }
+
+    if (existing.isActive && existing.user?.isActive) {
+      throw new BadRequestError('ALREADY_ACTIVE', 'Staff member is already active');
+    }
+
+    const [updatedProfile] = await prisma.$transaction([
+      prisma.staffProfile.update({
+        where: { id: existing.id },
+        data: { isActive: true, dateOfLeaving: null },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+              gender: true,
+              avatarUrl: true,
+              isActive: true,
+              branchAssignments: {
+                include: {
+                  branch: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { isActive: true },
+      }),
+    ]);
+
+    return updatedProfile;
+  },
 };
 
 // ============================================

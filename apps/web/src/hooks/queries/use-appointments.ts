@@ -18,6 +18,7 @@ import { customerKeys } from './use-customers';
 import type {
   Appointment,
   AppointmentFilters,
+  AppointmentService,
   CreateAppointmentInput,
   UpdateAppointmentInput,
   CancelAppointmentInput,
@@ -142,6 +143,9 @@ export function useCreateAppointment() {
         hasConflict: false,
         conflictInfo: null,
         isOptimistic: true,
+        // Multi-service fields - default to single service for optimistic
+        isMultiService: (newAppointment.services?.length ?? 0) > 1,
+        serviceCount: newAppointment.services?.length ?? 1,
       };
 
       // Find and update matching calendar queries
@@ -194,6 +198,9 @@ export function useCreateAppointment() {
         hasConflict: apt.hasConflict || false,
         conflictInfo: null,
         isOptimistic: false,
+        // Multi-service fields from server response
+        isMultiService: (apt.services?.length ?? 0) > 1,
+        serviceCount: apt.services?.length ?? 1,
       };
 
       // Replace optimistic appointment with real one in calendar
@@ -271,7 +278,13 @@ export function useUpdateAppointmentServices() {
       services,
     }: {
       id: string;
-      services: Array<{ serviceId: string; stylistId?: string; quantity?: number }>;
+      services: Array<{
+        serviceId: string;
+        stylistId?: string;
+        quantity?: number;
+        sequence?: number;
+        runParallel?: boolean;
+      }>;
     }) => api.put<Appointment>(`/appointments/${id}/services`, { services }),
 
     onMutate: async () => {
@@ -901,6 +914,162 @@ export function useAssignStylist() {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
+    },
+  });
+}
+
+// ============================================
+// Multi-Service Appointment Hooks
+// ============================================
+
+export interface StartServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  stationId: string;
+  actualStylistId?: string;
+}
+
+export interface StartServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+  stylistOverride: boolean;
+}
+
+export interface CompleteServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  actualEndTime?: string;
+}
+
+export interface CompleteServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+  nextService?: {
+    id: string;
+    serviceName: string;
+    sequence: number;
+    assignedStylistId?: string | null;
+    durationMinutes: number;
+  };
+  allServicesComplete: boolean;
+}
+
+export interface SkipServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  reason?: string;
+}
+
+export interface SkipServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+}
+
+/**
+ * Start a service within a multi-service appointment
+ */
+export function useStartService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, stationId, actualStylistId }: StartServiceInput) =>
+      api.post<StartServiceResponse>(`/appointments/${appointmentId}/services/${serviceId}/start`, {
+        stationId,
+        actualStylistId,
+      }),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Starting service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (_, { appointmentId }, context) => {
+      toast.success('Service started', { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to start service', {
+        id: context?.toastId,
+      });
+    },
+  });
+}
+
+/**
+ * Complete a service within a multi-service appointment
+ */
+export function useCompleteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, actualEndTime }: CompleteServiceInput) =>
+      api.post<CompleteServiceResponse>(
+        `/appointments/${appointmentId}/services/${serviceId}/complete`,
+        { actualEndTime }
+      ),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Completing service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (response, { appointmentId }, context) => {
+      const message = response.allServicesComplete
+        ? 'All services completed!'
+        : response.nextService
+          ? `Service completed. Next: ${response.nextService.serviceName}`
+          : 'Service completed';
+      toast.success(message, { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to complete service', {
+        id: context?.toastId,
+      });
+    },
+  });
+}
+
+/**
+ * Skip a service within a multi-service appointment
+ */
+export function useSkipService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, reason }: SkipServiceInput) =>
+      api.post<SkipServiceResponse>(`/appointments/${appointmentId}/services/${serviceId}/skip`, {
+        reason,
+      }),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Skipping service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (_, { appointmentId }, context) => {
+      toast.success('Service skipped', { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to skip service', {
+        id: context?.toastId,
+      });
     },
   });
 }

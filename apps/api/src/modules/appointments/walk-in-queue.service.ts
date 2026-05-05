@@ -314,6 +314,7 @@ export class WalkInQueueService {
 
   /**
    * Calculate estimated wait time
+   * For multi-service appointments, uses parallel optimization when services can run in parallel
    */
   private async calculateEstimatedWait(
     tenantId: string,
@@ -332,16 +333,33 @@ export class WalkInQueueService {
       },
     });
 
-    // Get average service time for requested services
+    // Get service details including duration and parallel settings
     const services = await this.prisma.service.findMany({
       where: { id: { in: serviceIds } },
-      select: { durationMinutes: true },
+      select: { id: true, durationMinutes: true, defaultRunParallel: true },
     });
 
-    const avgServiceTime =
-      services.length > 0
-        ? services.reduce((sum, s) => sum + s.durationMinutes, 0) / services.length
-        : 30; // Default 30 minutes
+    // Calculate total duration considering parallel services
+    // For walk-ins, we assume sequential execution by default unless services are marked as "always" parallel
+    let totalServiceTime = 0;
+    if (services.length > 0) {
+      // Group services that can run in parallel
+      const parallelServices = services.filter((s) => s.defaultRunParallel === 'always');
+      const sequentialServices = services.filter((s) => s.defaultRunParallel !== 'always');
+
+      // Sequential services: sum of durations
+      const sequentialTime = sequentialServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+
+      // Parallel services: max duration (they run at the same time)
+      const parallelTime =
+        parallelServices.length > 0
+          ? Math.max(...parallelServices.map((s) => s.durationMinutes))
+          : 0;
+
+      totalServiceTime = sequentialTime + parallelTime;
+    } else {
+      totalServiceTime = 30; // Default 30 minutes
+    }
 
     // Get number of available stylists (simplified - count active stylists at branch)
     const availableStylists = await this.prisma.user.count({
@@ -355,10 +373,10 @@ export class WalkInQueueService {
       },
     });
 
-    if (availableStylists === 0) return waitingAhead * avgServiceTime;
+    if (availableStylists === 0) return waitingAhead * totalServiceTime;
 
-    // Estimate: (waiting customers * avg time) / available stylists
-    return Math.ceil((waitingAhead * avgServiceTime) / availableStylists);
+    // Estimate: (waiting customers * total service time) / available stylists
+    return Math.ceil((waitingAhead * totalServiceTime) / availableStylists);
   }
 
   /**

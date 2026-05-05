@@ -3,9 +3,21 @@
 /**
  * Station Card Component
  * Displays a single station with status, appointment info, and actions
+ * Enhanced for multi-service appointments with "Up Next" section
  */
 
-import { Plus, Clock, User, Scissors, AlertTriangle, Wrench, AlertCircle } from 'lucide-react';
+import {
+  Plus,
+  Clock,
+  User,
+  Scissors,
+  AlertTriangle,
+  Wrench,
+  AlertCircle,
+  Link2,
+  ChevronRight,
+  Play,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,6 +33,7 @@ interface StationCardProps {
     scheduledDate?: string,
     scheduledTime?: string
   ) => void;
+  onStartNextService?: (appointmentId: string, serviceId: string, stationId: string) => void;
 }
 
 const statusConfig: Record<
@@ -47,9 +60,15 @@ const statusConfig: Record<
   },
 };
 
-export function StationCard({ station, onAssign, onCheckout }: StationCardProps) {
+export function StationCard({
+  station,
+  onAssign,
+  onCheckout,
+  onStartNextService,
+}: StationCardProps) {
   const config = statusConfig[station.status];
   const appointment = station.appointment;
+  const upNext = station.upNext;
 
   return (
     <Card className={cn('transition-all', config.bg, config.border)}>
@@ -93,6 +112,16 @@ export function StationCard({ station, onAssign, onCheckout }: StationCardProps)
               </div>
             )}
 
+            {/* Multi-service indicator */}
+            {appointment.isMultiService && (
+              <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-1.5 flex items-center gap-2">
+                <Link2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                  Service {appointment.currentServiceIndex || 1} of {appointment.serviceCount}
+                </span>
+              </div>
+            )}
+
             {/* Customer & Stylist Info */}
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -111,11 +140,24 @@ export function StationCard({ station, onAssign, onCheckout }: StationCardProps)
               )}
             </div>
 
-            {/* Services */}
-            <div className="text-xs text-muted-foreground">
-              {appointment.services.slice(0, 2).join(', ')}
-              {appointment.services.length > 2 && ` +${appointment.services.length - 2} more`}
-            </div>
+            {/* Current Service (for multi-service) */}
+            {appointment.isMultiService && appointment.currentService ? (
+              <div className="text-xs text-muted-foreground">
+                <span className="font-medium">{appointment.currentService.serviceName}</span>
+                {appointment.currentService.actualStylistName &&
+                  appointment.currentService.actualStylistName !== appointment.stylistName && (
+                    <span className="text-amber-600 ml-1">
+                      (by {appointment.currentService.actualStylistName})
+                    </span>
+                  )}
+              </div>
+            ) : (
+              /* Services list for single-service appointments */
+              <div className="text-xs text-muted-foreground">
+                {appointment.services.slice(0, 2).join(', ')}
+                {appointment.services.length > 2 && ` +${appointment.services.length - 2} more`}
+              </div>
+            )}
 
             {/* Delay Badge */}
             {appointment.delayMinutes > 0 && (
@@ -182,6 +224,51 @@ export function StationCard({ station, onAssign, onCheckout }: StationCardProps)
               )}
             </div>
           </>
+        )}
+
+        {/* Up Next Section - for multi-service appointments */}
+        {station.status === 'occupied' && upNext && (
+          <div className="border-t border-dashed pt-3 mt-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+              <ChevronRight className="h-3.5 w-3.5" />
+              Up Next
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-md p-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium truncate">{upNext.serviceName}</span>
+                <span className="text-xs text-muted-foreground">{upNext.durationMinutes}m</span>
+              </div>
+              {upNext.assignedStylistName && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Scissors className="h-3 w-3" />
+                  <span>{upNext.assignedStylistName}</span>
+                </div>
+              )}
+              {upNext.estimatedStartTime && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>
+                    Est.{' '}
+                    {new Date(upNext.estimatedStartTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              )}
+              {onStartNextService && appointment && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={() => onStartNextService(appointment.id, upNext.id, station.id)}
+                >
+                  <Play className="h-3.5 w-3.5 mr-1.5" />
+                  Start Next Service
+                </Button>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Out of Service */}

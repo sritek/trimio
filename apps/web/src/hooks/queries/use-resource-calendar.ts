@@ -40,6 +40,12 @@ export interface ConflictInfo {
   severity: 'warning' | 'severe';
 }
 
+export interface LinkedServiceInfo {
+  stylistId: string;
+  serviceName: string;
+  sequence: number;
+}
+
 export interface CalendarAppointment {
   id: string;
   stylistId: string | null;
@@ -56,6 +62,19 @@ export interface CalendarAppointment {
   conflictInfo: ConflictInfo | null;
   /** Flag for optimistic updates - appointment is being created */
   isOptimistic?: boolean;
+  // Multi-service appointment fields
+  /** Whether this appointment has multiple services */
+  isMultiService: boolean;
+  /** Total number of services in the appointment */
+  serviceCount: number;
+  /** Current service index for this stylist (1-based) */
+  currentServiceIndex?: number;
+  /** Total services assigned to this stylist */
+  totalServicesForStylist?: number;
+  /** Services assigned to other stylists in this appointment */
+  linkedServiceInfo?: LinkedServiceInfo[];
+  /** Full customer journey - all services in sequence order across all stylists */
+  fullJourney?: string[];
 }
 
 export interface ResourceCalendarData {

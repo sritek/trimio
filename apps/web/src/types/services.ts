@@ -66,6 +66,7 @@ export interface Service {
   genderApplicable: 'all' | 'male' | 'female';
   commissionType: 'percentage' | 'fixed';
   commissionValue: number;
+  defaultRunParallel: 'always' | 'never' | 'optional';
   displayOrder: number;
   imageUrl?: string;
   isActive: boolean;
@@ -94,6 +95,7 @@ export interface CreateServiceInput {
   genderApplicable?: 'all' | 'male' | 'female';
   commissionType?: 'percentage' | 'fixed';
   commissionValue?: number;
+  defaultRunParallel?: 'always' | 'never' | 'optional';
   displayOrder?: number;
   imageUrl?: string;
   isActive?: boolean;

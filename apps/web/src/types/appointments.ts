@@ -20,7 +20,13 @@ export type BookingType = 'online' | 'phone' | 'walk_in';
 
 export type GenderPreference = 'male' | 'female' | 'any';
 
-export type ServiceStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type ServiceStatus =
+  | 'waiting'
+  | 'in_progress'
+  | 'completed'
+  | 'skipped'
+  | 'pending'
+  | 'cancelled';
 
 export type QueueStatus = 'waiting' | 'called' | 'serving' | 'completed' | 'left';
 
@@ -66,6 +72,8 @@ export interface Appointment {
   stationId?: string | null;
   actualStartTime?: string | null;
   actualEndTime?: string | null;
+  // Customer check-in tracking
+  checkedInAt?: string | null;
   // Conflict tracking
   hasConflict: boolean;
   conflictNotes?: string | null;
@@ -75,6 +83,16 @@ export interface Appointment {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  // Multi-service fields
+  derivedStatus?: AppointmentStatus;
+  isMultiService?: boolean;
+  servicesSummary?: {
+    total: number;
+    waiting: number;
+    inProgress: number;
+    completed: number;
+    skipped: number;
+  };
   // Relations
   customer?: {
     id: string;
@@ -133,6 +151,33 @@ export interface AppointmentService {
     name: string;
     sku: string;
   } | null;
+  // Multi-service fields
+  sequence?: number;
+  runParallel?: boolean;
+  scheduledStartTime?: string | null;
+  scheduledEndTime?: string | null;
+  assignedStylistId?: string | null;
+  actualStylistId?: string | null;
+  stationId?: string | null;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
+  assignedStylist?: {
+    id: string;
+    name: string;
+  } | null;
+  actualStylist?: {
+    id: string;
+    name: string;
+  } | null;
+  station?: {
+    id: string;
+    name: string;
+    stationType?: {
+      id: string;
+      name: string;
+      color?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface AppointmentStatusHistory {
@@ -157,11 +202,7 @@ export interface CreateAppointmentInput {
   customerPhone?: string;
   scheduledDate: string;
   scheduledTime: string;
-  services: {
-    serviceId: string;
-    stylistId?: string;
-    quantity?: number;
-  }[];
+  services: CreateAppointmentServiceInput[];
   stylistId?: string;
   stylistGenderPreference?: GenderPreference;
   bookingType: BookingType;
@@ -171,6 +212,14 @@ export interface CreateAppointmentInput {
   assignLater?: boolean;
   waitlistEntryId?: string;
   walkInQueueId?: string;
+}
+
+export interface CreateAppointmentServiceInput {
+  serviceId: string;
+  stylistId?: string;
+  quantity?: number;
+  sequence?: number;
+  runParallel?: boolean;
 }
 
 export interface UpdateAppointmentInput {

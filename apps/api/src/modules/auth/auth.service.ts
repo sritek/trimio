@@ -17,7 +17,23 @@ export class AuthService {
    * Login with email/phone and password
    */
   async login(data: LoginBody) {
-    const { email, phone, password } = data;
+    const { identifier, password } = data;
+
+    // Determine if identifier is email or phone
+    let email: string | undefined;
+    let phone: string | undefined;
+
+    if (identifier.includes('@')) {
+      email = identifier;
+    } else {
+      // Treat as phone number - strip any non-digit characters
+      phone = identifier.replace(/\D/g, '');
+    }
+
+    // Validate phone format if provided
+    if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+      throw new BadRequestError('INVALID_CREDENTIALS', 'Invalid mobile number or password.');
+    }
 
     // Find user by email or phone
     const user = await prisma.user.findFirst({

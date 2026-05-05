@@ -39,7 +39,6 @@ import type { BookingStatus, CustomerFilters as CustomerFiltersType } from '@/ty
 export default function CustomersPage() {
   const router = useRouter();
   const t = useTranslations('customers.list');
-  const tCommon = useTranslations('common');
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission(PERMISSIONS.CUSTOMERS_WRITE);
 
@@ -173,8 +172,9 @@ export default function CustomersPage() {
         <ConfirmDialog
           open={!!deleteId}
           onOpenChange={(open) => !open && setDeleteId(null)}
-          title={tCommon('confirmDelete.title')}
-          description={tCommon('confirmDelete.description')}
+          title="Deactivate Customer"
+          description="Are you sure you want to deactivate this customer? They will no longer appear in customer lists and cannot make bookings."
+          confirmText="Deactivate"
           variant="destructive"
           onConfirm={confirmDelete}
           isLoading={deleteCustomer.isPending}

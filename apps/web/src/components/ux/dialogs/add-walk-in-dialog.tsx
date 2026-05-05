@@ -83,7 +83,7 @@ export function AddWalkInDialog({ open, onOpenChange, onSuccess }: AddWalkInDial
   });
 
   // Customer search query
-  const { data: customerSearchData } = useCustomerSearch({
+  const { data: customerSearchData, isFetching: isSearchingCustomers } = useCustomerSearch({
     q: customerSearchQuery,
     limit: 10,
   });
@@ -316,6 +316,7 @@ export function AddWalkInDialog({ open, onOpenChange, onSuccess }: AddWalkInDial
                     onChange={handleCustomerSelect}
                     customers={customerOptions}
                     onSearchChange={setCustomerSearchQuery}
+                    isLoading={isSearchingCustomers}
                     placeholder="Search customer..."
                     hasError={!!errors.customerName && !selectedCustomer}
                   />

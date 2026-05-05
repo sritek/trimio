@@ -215,6 +215,22 @@ export function useReactivateCustomer() {
   });
 }
 
+/**
+ * Unblock customer from booking restrictions (reset no-show count)
+ */
+export function useUnblockCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post<Customer>(`/customers/${id}/unblock`, { reason }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(id) });
+    },
+  });
+}
+
 // ============================================
 // Customer Notes Hooks
 // ============================================

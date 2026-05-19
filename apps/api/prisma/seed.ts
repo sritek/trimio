@@ -460,50 +460,6 @@ async function seedStaffData(
 
   await prisma.staffProfile.createMany({ data: staffProfiles });
 
-  // Shifts
-  const shiftsData = [
-    {
-      tenantId,
-      branchId: branches[0].id,
-      name: 'Morning Shift',
-      startTime: '09:00',
-      endTime: '17:00',
-      breakDurationMinutes: 60,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-    {
-      tenantId,
-      branchId: branches[0].id,
-      name: 'Evening Shift',
-      startTime: '13:00',
-      endTime: '21:00',
-      breakDurationMinutes: 60,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-    {
-      tenantId,
-      branchId: branches[1].id,
-      name: 'Full Day',
-      startTime: '10:00',
-      endTime: '22:00',
-      breakDurationMinutes: 90,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-  ];
-
-  const shifts = await prisma.shift.createManyAndReturn({ data: shiftsData });
-
-  // Shift Assignments
-  const shiftAssignments = staffUsers.slice(0, 6).map((user, idx) => ({
-    tenantId,
-    userId: user.id,
-    branchId: idx < 4 ? branches[0].id : branches[1].id,
-    shiftId: idx < 4 ? shifts[idx % 2].id : shifts[2].id,
-    effectiveFrom: new Date(2024, 0, 1),
-  }));
-
-  await prisma.staffShiftAssignment.createMany({ data: shiftAssignments });
-
   // Attendance (last 30 days)
   const attendanceData: Prisma.AttendanceCreateManyInput[] = [];
   const today = new Date();
@@ -1250,7 +1206,7 @@ async function seedCustomers(tenantId: string, branchId: string) {
       firstVisitBranchId: branchId,
       marketingConsent: true,
       preferences: {},
-      source: ['manual', 'phone'][Math.floor(Math.random() * 2)] as 'manual' | 'phone',
+      source: ['manual', 'create_appointment'][Math.floor(Math.random() * 2)] as 'manual' | 'create_appointment',
     })),
   });
 
@@ -1619,8 +1575,8 @@ async function seedAppointments(
       totalAmount: new Prisma.Decimal(price + taxAmount),
       durationMinutes: service.durationMinutes,
       activeTimeMinutes: service.activeTimeMinutes,
-      stylistId: item.stylistId,
-      status: appointment.status === 'completed' ? 'completed' : 'pending',
+      assignedStylistId: item.stylistId,
+      status: appointment.status === 'completed' ? 'completed' : 'waiting',
       commissionRate: service.commissionValue,
       commissionAmount: new Prisma.Decimal((price * Number(service.commissionValue)) / 100),
     };
@@ -2745,6 +2701,8 @@ async function seedBranchSubscriptions(
         currency: 'INR',
         discountPercentage: new Prisma.Decimal(0),
         autoRenew: true,
+        trialDaysGranted: 30,
+        gracePeriodDaysGranted: 7,
       },
     });
 

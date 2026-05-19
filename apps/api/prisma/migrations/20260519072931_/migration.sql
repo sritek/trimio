@@ -2,7 +2,7 @@
 CREATE TYPE "UserRole" AS ENUM ('super_owner', 'regional_manager', 'branch_manager', 'receptionist', 'stylist', 'accountant');
 
 -- CreateEnum
-CREATE TYPE "AppointmentStatus" AS ENUM ('booked', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show', 'rescheduled', 'scheduled');
+CREATE TYPE "AppointmentStatus" AS ENUM ('booked', 'confirmed', 'checked_in', 'in_progress', 'ready_for_checkout', 'completed', 'cancelled', 'no_show', 'rescheduled', 'scheduled');
 
 -- CreateEnum
 CREATE TYPE "AppointmentType" AS ENUM ('online', 'phone', 'walk_in');

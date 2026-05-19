@@ -98,6 +98,7 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
     appointmentId: string;
     currentStationId: string;
     nextService: UpNextService;
+    allNextServices: UpNextService[];
   } | null>(null);
 
   // State for complete service confirmation dialog
@@ -105,6 +106,14 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
   const [completeServiceData, setCompleteServiceData] = useState<{
     appointmentId: string;
     serviceId: string;
+    serviceName: string;
+  } | null>(null);
+
+  // State for complete & checkout confirmation dialog
+  const [completeAndCheckoutDialogOpen, setCompleteAndCheckoutDialogOpen] = useState(false);
+  const [completeAndCheckoutData, setCompleteAndCheckoutData] = useState<{
+    appointmentId: string;
+    serviceIds: string[];
     serviceName: string;
   } | null>(null);
 
@@ -182,7 +191,8 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
       appointmentId: string,
       currentStationId: string,
       _currentStationName: string,
-      nextService: UpNextService | null
+      nextService: UpNextService | null,
+      allNextServices?: UpNextService[]
     ) => {
       if (!nextService) return;
 
@@ -190,6 +200,7 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
         appointmentId,
         currentStationId,
         nextService,
+        allNextServices: allNextServices || [nextService],
       });
       setMoveDialogOpen(true);
     },
@@ -205,6 +216,15 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
     []
   );
 
+  // Handle completing last service and proceeding to checkout
+  const handleCompleteAndCheckout = useCallback(
+    (appointmentId: string, serviceIds: string[], serviceName: string) => {
+      setCompleteAndCheckoutData({ appointmentId, serviceIds, serviceName });
+      setCompleteAndCheckoutDialogOpen(true);
+    },
+    []
+  );
+
   // Confirm complete service
   const confirmCompleteService = useCallback(() => {
     if (completeServiceData) {
@@ -216,6 +236,29 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
       setCompleteServiceData(null);
     }
   }, [completeServiceData, completeServiceMutation]);
+
+  // Confirm complete service and checkout
+  const confirmCompleteAndCheckout = useCallback(async () => {
+    if (completeAndCheckoutData) {
+      try {
+        // Complete all in-progress services (for parallel services)
+        for (const serviceId of completeAndCheckoutData.serviceIds) {
+          await completeServiceMutation.mutateAsync({
+            appointmentId: completeAndCheckoutData.appointmentId,
+            serviceId,
+          });
+        }
+        // After completing all, open checkout
+        openAppointmentDetails(completeAndCheckoutData.appointmentId, {
+          isCheckoutMode: true,
+        });
+      } catch {
+        // Error toast is shown by the mutation
+      }
+      setCompleteAndCheckoutDialogOpen(false);
+      setCompleteAndCheckoutData(null);
+    }
+  }, [completeAndCheckoutData, completeServiceMutation, openAppointmentDetails]);
 
   // Handle serve from walk-in queue - opens new appointment panel with pre-filled data
   const handleServeWalkIn = useCallback(
@@ -250,6 +293,7 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
           onCheckout={handleCheckout}
           onStartNextService={handleStartNextService}
           onCompleteService={handleCompleteService}
+          onCompleteAndCheckout={handleCompleteAndCheckout}
         />
 
         {/* Move to Station Dialog */}
@@ -259,6 +303,7 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
             onOpenChange={setMoveDialogOpen}
             appointmentId={moveDialogData.appointmentId}
             service={moveDialogData.nextService}
+            allServices={moveDialogData.allNextServices}
             currentStationId={moveDialogData.currentStationId}
             onSuccess={() => {
               setMoveDialogData(null);
@@ -278,6 +323,21 @@ export function OwnerDashboard({ branchId }: OwnerDashboardProps) {
           }
           confirmText="Complete"
           onConfirm={confirmCompleteService}
+          isLoading={completeServiceMutation.isPending}
+        />
+
+        {/* Complete & Checkout Confirmation Dialog */}
+        <ConfirmDialog
+          open={completeAndCheckoutDialogOpen}
+          onOpenChange={setCompleteAndCheckoutDialogOpen}
+          title="Complete & Checkout"
+          description={
+            completeAndCheckoutData
+              ? `Are you sure you want to mark "${completeAndCheckoutData.serviceName}" as completed and proceed to checkout?`
+              : 'Are you sure you want to complete this service and proceed to checkout?'
+          }
+          confirmText="Complete & Checkout"
+          onConfirm={confirmCompleteAndCheckout}
           isLoading={completeServiceMutation.isPending}
         />
 

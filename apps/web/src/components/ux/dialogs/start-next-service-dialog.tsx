@@ -3,10 +3,9 @@
 /**
  * Start Next Service Dialog
  *
- * Dialog for starting the next service in a multi-service appointment.
- * Allows station selection and optional stylist override.
- * Shows station grid with status badges (consistent with StartServiceDialog).
- * Shows stylist availability when overriding.
+ * Dialog for starting the next service(s) in a multi-service appointment.
+ * Supports parallel services with per-service stylist override.
+ * Allows station selection and optional stylist override for each service.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -16,10 +15,6 @@ import {
   AlertCircle,
   Loader2,
   Scissors,
-  Clock,
-  User,
-  CheckCircle,
-  XCircle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -43,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useFloorView } from '@/hooks/queries/use-stations';
-import { useStartService, useStylistAvailability } from '@/hooks/queries/use-appointments';
+import { useStartService } from '@/hooks/queries/use-appointments';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { cn } from '@/lib/utils';
@@ -55,12 +50,22 @@ interface StartNextServiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appointmentId: string;
+  /** Primary service (backward compat) */
   service: UpNextService;
+  /** All parallel services to start together */
+  allServices?: UpNextService[];
   currentStationId?: string;
   onSuccess?: () => void;
 }
 
-// Station status configuration (consistent with StartServiceDialog)
+// Per-service stylist override state
+interface ServiceStylistOverride {
+  serviceId: string;
+  override: boolean;
+  selectedStylistId: string | null;
+}
+
+// Station status configuration
 const statusConfig: Record<FloorViewStatus, { bg: string; text?: string; label: string }> = {
   available: {
     bg: 'bg-green-400',
@@ -86,16 +91,21 @@ export function StartNextServiceDialog({
   onOpenChange,
   appointmentId,
   service,
+  allServices,
   currentStationId,
   onSuccess,
 }: StartNextServiceDialogProps) {
   const { branchId } = useBranchContext();
+
+  // Determine the services to start (parallel services or single)
+  const servicesToStart = useMemo(
+    () => (allServices && allServices.length > 0 ? allServices : [service]),
+    [allServices, service]
+  );
+  const isParallel = servicesToStart.length > 1;
+
   const [selectedStationId, setSelectedStationId] = useState<string | null>(
     currentStationId || null
-  );
-  const [overrideStylist, setOverrideStylist] = useState(false);
-  const [selectedStylistId, setSelectedStylistId] = useState<string | null>(
-    service.assignedStylistId
   );
   const [showPendingWarning, setShowPendingWarning] = useState(false);
   const [pendingStationData, setPendingStationData] = useState<{
@@ -103,6 +113,15 @@ export function StartNextServiceDialog({
     stationName: string;
     appointment: any;
   } | null>(null);
+
+  // Per-service stylist overrides
+  const [stylistOverrides, setStylistOverrides] = useState<ServiceStylistOverride[]>(() =>
+    servicesToStart.map((s) => ({
+      serviceId: s.id,
+      override: false,
+      selectedStylistId: s.assignedStylistId,
+    }))
+  );
 
   const { data: floorViewData, isLoading: stationsLoading } = useFloorView(branchId || '');
   const { data: staffData, isLoading: stylistsLoading } = useStaffList({
@@ -112,29 +131,6 @@ export function StartNextServiceDialog({
   });
   const startServiceMutation = useStartService();
 
-  // Check stylist availability when override is enabled
-  const stylistToCheck = overrideStylist ? selectedStylistId : null;
-
-  // For conflict detection when starting a service, we check availability for NOW
-  // because the service will start immediately when the user clicks "Start Service"
-  // The estimatedStartTime is only used for display purposes
-  // We use useMemo with `open` dependency to recalculate when dialog opens
-  const { availabilityDate, availabilityTime } = useMemo(() => {
-    const now = new Date();
-    return {
-      availabilityDate: now.toLocaleDateString('en-CA'), // YYYY-MM-DD format
-      availabilityTime: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
-    };
-  }, [open]); // Recalculate when dialog opens
-
-  const { data: availabilityData, isLoading: availabilityLoading } = useStylistAvailability(
-    stylistToCheck || '',
-    availabilityDate,
-    availabilityTime,
-    service.durationMinutes,
-    { enabled: !!stylistToCheck && open }
-  );
-
   const isLoading = startServiceMutation.isPending;
 
   // Handle station selection with pending appointment check
@@ -143,7 +139,6 @@ export function StartNextServiceDialog({
       const station = floorViewData?.stations.find((s) => s.id === stationId);
       if (!station) return;
 
-      // Check if station has a pending appointment
       if (station.appointment && isPendingAppointment(station.appointment)) {
         setPendingStationData({
           stationId,
@@ -154,148 +149,140 @@ export function StartNextServiceDialog({
         return;
       }
 
-      // If no pending appointment, select the station
       setSelectedStationId(stationId);
     },
     [floorViewData?.stations]
   );
 
-  const handleStart = useCallback(() => {
+  // Update stylist override for a specific service
+  const handleOverrideChange = useCallback((serviceId: string, override: boolean) => {
+    setStylistOverrides((prev) =>
+      prev.map((s) => (s.serviceId === serviceId ? { ...s, override } : s))
+    );
+  }, []);
+
+  const handleStylistChange = useCallback((serviceId: string, stylistId: string) => {
+    setStylistOverrides((prev) =>
+      prev.map((s) => (s.serviceId === serviceId ? { ...s, selectedStylistId: stylistId } : s))
+    );
+  }, []);
+
+  // Start all services sequentially
+  const handleStart = useCallback(async () => {
     if (!selectedStationId) {
       toast.error('Please select a station');
       return;
     }
 
-    startServiceMutation.mutate(
-      {
-        appointmentId,
-        serviceId: service.id,
-        stationId: selectedStationId,
-        actualStylistId: overrideStylist ? selectedStylistId || undefined : undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success(`Started ${service.serviceName}`);
-          onOpenChange(false);
-          setSelectedStationId(null);
-          setOverrideStylist(false);
-          onSuccess?.();
-        },
-        onError: (error: Error & { response?: { data?: { error?: { message?: string } } } }) => {
-          const message = error?.response?.data?.error?.message || 'Failed to start service';
-          toast.error(message);
-        },
+    try {
+      // Start each service sequentially
+      for (const svc of servicesToStart) {
+        const overrideData = stylistOverrides.find((o) => o.serviceId === svc.id);
+        const actualStylistId =
+          overrideData?.override && overrideData.selectedStylistId
+            ? overrideData.selectedStylistId
+            : undefined;
+
+        await startServiceMutation.mutateAsync({
+          appointmentId,
+          serviceId: svc.id,
+          stationId: selectedStationId,
+          actualStylistId,
+        });
       }
-    );
+
+      const message =
+        servicesToStart.length > 1
+          ? `Started ${servicesToStart.length} parallel services`
+          : `Started ${servicesToStart[0].serviceName}`;
+      toast.success(message);
+      onOpenChange(false);
+      setSelectedStationId(null);
+      setStylistOverrides(
+        servicesToStart.map((s) => ({
+          serviceId: s.id,
+          override: false,
+          selectedStylistId: s.assignedStylistId,
+        }))
+      );
+      onSuccess?.();
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.error?.message || error?.message || 'Failed to start service';
+      toast.error(message);
+    }
   }, [
     appointmentId,
-    service.id,
-    service.serviceName,
+    servicesToStart,
     selectedStationId,
-    overrideStylist,
-    selectedStylistId,
+    stylistOverrides,
     startServiceMutation,
     onOpenChange,
     onSuccess,
   ]);
 
   const handleClose = useCallback(() => {
-    // Don't allow closing while operation is in progress
-    if (isLoading) {
-      return;
-    }
+    if (isLoading) return;
     setSelectedStationId(currentStationId || null);
-    setOverrideStylist(false);
-    setSelectedStylistId(service.assignedStylistId);
+    setStylistOverrides(
+      servicesToStart.map((s) => ({
+        serviceId: s.id,
+        override: false,
+        selectedStylistId: s.assignedStylistId,
+      }))
+    );
     setShowPendingWarning(false);
     setPendingStationData(null);
     onOpenChange(false);
-  }, [onOpenChange, currentStationId, service.assignedStylistId, isLoading]);
+  }, [onOpenChange, currentStationId, servicesToStart, isLoading]);
 
-  // Reset state when dialog opens
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
-      // Don't allow closing while operation is in progress
-      if (!newOpen && isLoading) {
-        return;
-      }
+      if (!newOpen && isLoading) return;
       if (newOpen) {
         setSelectedStationId(currentStationId || null);
-        setOverrideStylist(false);
-        setSelectedStylistId(service.assignedStylistId);
+        setStylistOverrides(
+          servicesToStart.map((s) => ({
+            serviceId: s.id,
+            override: false,
+            selectedStylistId: s.assignedStylistId,
+          }))
+        );
         setShowPendingWarning(false);
         setPendingStationData(null);
       }
       onOpenChange(newOpen);
     },
-    [onOpenChange, currentStationId, service.assignedStylistId, isLoading]
+    [onOpenChange, currentStationId, servicesToStart, isLoading]
   );
 
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
-          className="sm:max-w-2xl"
+          className="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => {
-            // Prevent closing by clicking outside while pending
-            if (isLoading) {
-              e.preventDefault();
-            }
+            if (isLoading) e.preventDefault();
           }}
           onEscapeKeyDown={(e) => {
-            // Prevent closing by escape key while pending
-            if (isLoading) {
-              e.preventDefault();
-            }
+            if (isLoading) e.preventDefault();
           }}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PlayCircle className="h-5 w-5 text-primary" />
-              Start Next Service
+              {isParallel
+                ? `Start ${servicesToStart.length} Parallel Services`
+                : 'Start Next Service'}
             </DialogTitle>
             <DialogDescription>
-              Start the next service in this multi-service appointment
+              {isParallel
+                ? 'Start multiple services simultaneously on the same station'
+                : 'Start the next service in this multi-service appointment'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-4 space-y-6">
-            {/* Service Info */}
-            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Scissors className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{service.serviceName}</span>
-                </div>
-                <Badge variant="outline">{service.durationMinutes} min</Badge>
-              </div>
-
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5" />
-                  <span>{service.customerName}</span>
-                </div>
-                {service.assignedStylistName && (
-                  <div className="flex items-center gap-1.5">
-                    <Scissors className="h-3.5 w-3.5" />
-                    <span>Assigned: {service.assignedStylistName}</span>
-                  </div>
-                )}
-                {service.estimatedStartTime && (
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>
-                      Est.{' '}
-                      {new Date(service.estimatedStartTime).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Station Selection */}
             <div>
               <div className="flex items-center gap-2 mb-3">
@@ -316,7 +303,7 @@ export function StartNextServiceDialog({
                   <p className="text-sm">No stations available</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto px-2 py-1">
+                <div className="grid grid-cols-3 gap-3 px-2 py-1">
                   {floorViewData.stations.map((station) => {
                     const config = statusConfig[station.status];
                     const isCurrent = station.id === currentStationId;
@@ -334,15 +321,11 @@ export function StartNextServiceDialog({
                             : 'border-border hover:border-primary/50 hover:bg-accent/50'
                         )}
                       >
-                        {/* Station Name */}
                         <p className="font-medium text-sm truncate">{station.name}</p>
-
                         <div className="flex justify-between items-center mt-1">
-                          {/* Station Type */}
                           <p className="text-xs text-muted-foreground truncate">
                             {station.stationType?.name}
                           </p>
-                          {/* Status Badge */}
                           <div className="flex items-center gap-1">
                             {isCurrent && (
                               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
@@ -357,8 +340,6 @@ export function StartNextServiceDialog({
                             </Badge>
                           </div>
                         </div>
-
-                        {/* Selection Indicator */}
                         {selectedStationId === station.id && (
                           <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary" />
                         )}
@@ -369,103 +350,80 @@ export function StartNextServiceDialog({
               )}
             </div>
 
-            {/* Stylist Override */}
-            <div className="border-t pt-4">
-              <div className="flex items-center space-x-2 mb-3">
-                <Checkbox
-                  id="override-stylist"
-                  checked={overrideStylist}
-                  onCheckedChange={(checked) => setOverrideStylist(checked === true)}
-                  disabled={isLoading}
-                />
-                <Label
-                  htmlFor="override-stylist"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Override assigned stylist
-                </Label>
+            {/* Per-Service Stylist Override */}
+            <div className="border-t pt-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <Scissors className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">Stylist Override</span>
+                <span className="text-xs text-muted-foreground">(optional)</span>
               </div>
 
-              {overrideStylist && (
-                <div className="ml-6 space-y-3">
-                  <div>
-                    <Label
-                      htmlFor="stylist-select"
-                      className="text-xs text-muted-foreground mb-1.5 block"
-                    >
-                      Select different stylist
-                    </Label>
-                    <Select
-                      value={selectedStylistId || ''}
-                      onValueChange={setSelectedStylistId}
-                      disabled={isLoading || stylistsLoading}
-                    >
-                      <SelectTrigger id="stylist-select" className="w-full">
-                        <SelectValue placeholder="Select stylist" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffData?.data?.map((stylist) => (
-                          <SelectItem key={stylist.id} value={stylist.userId}>
-                            {stylist.user?.name || 'Unknown'}
-                            {stylist.userId === service.assignedStylistId &&
-                              ' (Originally Assigned)'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              {servicesToStart.map((svc) => {
+                const overrideData = stylistOverrides.find((o) => o.serviceId === svc.id);
+                if (!overrideData) return null;
 
-                  {/* Stylist Availability Feedback */}
-                  {selectedStylistId && selectedStylistId !== service.assignedStylistId && (
-                    <div
-                      className={cn(
-                        'p-3 rounded-lg border flex items-start gap-2',
-                        availabilityLoading
-                          ? 'bg-gray-50 border-gray-200'
-                          : availabilityData?.available
-                            ? 'bg-green-50 border-green-200'
-                            : 'bg-red-50 border-red-200'
-                      )}
-                    >
-                      {availabilityLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin text-gray-500 mt-0.5" />
-                          <span className="text-sm text-gray-600">Checking availability...</span>
-                        </>
-                      ) : availabilityData?.available ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-green-900">
-                              Stylist is available
-                            </p>
-                            <p className="text-xs text-green-700">
-                              No conflicting appointments during this time slot
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-red-900">Stylist is busy</p>
-                            <p className="text-xs text-red-700">
-                              {availabilityData?.conflictReason ||
-                                'Has a conflicting appointment during this time'}
-                            </p>
-                            {availabilityData?.conflictingAppointment && (
-                              <p className="text-xs text-red-600 mt-1">
-                                Conflict: {availabilityData.conflictingAppointment.customerName} at{' '}
-                                {availabilityData.conflictingAppointment.scheduledTime}
-                              </p>
-                            )}
-                          </div>
-                        </>
+                return (
+                  <div
+                    key={svc.id}
+                    className={cn(
+                      'rounded-lg p-3 space-y-2',
+                      overrideData.override
+                        ? 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800'
+                        : 'bg-muted/30'
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`override-${svc.id}`}
+                          checked={overrideData.override}
+                          onCheckedChange={(checked) =>
+                            handleOverrideChange(svc.id, checked === true)
+                          }
+                          disabled={isLoading}
+                        />
+                        <Label
+                          htmlFor={`override-${svc.id}`}
+                          className="text-sm leading-none cursor-pointer"
+                        >
+                          {svc.serviceName}
+                          <span className="text-xs text-muted-foreground ml-1.5">
+                            ({svc.durationMinutes} min)
+                          </span>
+                        </Label>
+                      </div>
+                      {svc.assignedStylistName && !overrideData.override && (
+                        <span className="text-xs text-muted-foreground">
+                          {svc.assignedStylistName}
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {overrideData.override && (
+                      <div className="ml-6">
+                        <Select
+                          value={overrideData.selectedStylistId || ''}
+                          onValueChange={(value) => handleStylistChange(svc.id, value)}
+                          disabled={isLoading || stylistsLoading}
+                        >
+                          <SelectTrigger className="w-full h-9">
+                            <SelectValue placeholder="Select stylist" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {staffData?.data?.map((stylist) => (
+                              <SelectItem key={stylist.id} value={stylist.userId}>
+                                {stylist.user?.name || 'Unknown'}
+                                {stylist.userId === svc.assignedStylistId &&
+                                  ' (Originally Assigned)'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -482,7 +440,9 @@ export function StartNextServiceDialog({
               ) : (
                 <>
                   <PlayCircle className="h-4 w-4 mr-2" />
-                  Start Service
+                  {isParallel
+                    ? `Start ${servicesToStart.length} Services`
+                    : 'Start Service'}
                 </>
               )}
             </Button>

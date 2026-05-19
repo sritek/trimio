@@ -69,7 +69,16 @@ export class AppointmentsService {
 
     if (branchId) where.branchId = branchId;
     if (stylistId) {
-      where.stylistId = Array.isArray(stylistId) ? { in: stylistId } : stylistId;
+      // Include appointments where this stylist is:
+      // 1. The primary stylist (appointment.stylistId)
+      // 2. Assigned to any service (appointmentService.assignedStylistId)
+      // 3. The actual stylist on any service (appointmentService.actualStylistId)
+      const stylistIds = Array.isArray(stylistId) ? stylistId : [stylistId];
+      where.OR = [
+        { stylistId: { in: stylistIds } },
+        { services: { some: { assignedStylistId: { in: stylistIds } } } },
+        { services: { some: { actualStylistId: { in: stylistIds } } } },
+      ];
     }
     if (customerId) where.customerId = customerId;
 
@@ -1786,6 +1795,8 @@ export class AppointmentsService {
     }
 
     // Check if station is already occupied by another active appointment
+    // For multi-service appointments, check if there's actually an in-progress service
+    // on this station (not just the appointment.stationId pointing here)
     const existingAppointment = await this.prisma.appointment.findFirst({
       where: {
         stationId,
@@ -1793,12 +1804,32 @@ export class AppointmentsService {
         status: { in: ['checked_in', 'in_progress'] },
         deletedAt: null,
       },
+      include: {
+        services: {
+          where: { stationId },
+          select: { id: true, status: true },
+        },
+      },
     });
 
     if (existingAppointment) {
-      throw new AppError('STATION_ALREADY_OCCUPIED', 'Station is already occupied', 409, {
-        existingAppointmentId: existingAppointment.id,
-      });
+      // For multi-service appointments, the appointment.stationId might still point here
+      // even though all services have moved to other stations.
+      // Only block if there's actually an in-progress service on this station,
+      // OR if the appointment has no services with station assignments yet (initial assignment).
+      const hasInProgressServiceOnStation = existingAppointment.services.some(
+        (s) => s.status === 'in_progress'
+      );
+      const hasAnyServiceOnStation = existingAppointment.services.length > 0;
+
+      // Block if: there's an in-progress service here, OR no services have been assigned yet
+      // (meaning the appointment is waiting to start on this station)
+      if (hasInProgressServiceOnStation || !hasAnyServiceOnStation) {
+        throw new AppError('STATION_ALREADY_OCCUPIED', 'Station is already occupied', 409, {
+          existingAppointmentId: existingAppointment.id,
+        });
+      }
+      // Otherwise, the appointment's stationId is stale - all services have moved away
     }
 
     // Get the first service in sequence order to start it

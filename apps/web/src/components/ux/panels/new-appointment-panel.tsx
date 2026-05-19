@@ -46,7 +46,6 @@ import {
   X,
   Plus,
   UserPlus,
-  UserX,
   CheckCircle2,
   PlayCircle,
   GripVertical,
@@ -283,7 +282,6 @@ export function NewAppointmentPanel({
   const watchedTime = watch('time');
   const watchedStylistId = watch('stylistId');
   const watchedBookingType = watch('bookingType');
-  const watchedAssignLater = watch('assignLater');
   const watchedCustomerPhone = watch('customerPhone');
 
   // Extract working hours for the selected date from branch data
@@ -899,41 +897,9 @@ export function NewAppointmentPanel({
                 <User className="h-4 w-4 text-muted-foreground" />
                 Stylist
               </Label>
-              {/* Assign Later Toggle - disabled for walk-in */}
-              {watchedBookingType !== 'walk_in' && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-sm text-muted-foreground">Assign Later</span>
-                  <Switch
-                    checked={watchedAssignLater}
-                    onCheckedChange={(checked) => {
-                      setValue('assignLater', checked);
-                      if (checked) {
-                        setValue('stylistId', '');
-                        setCustomizeStylistsPerService(false);
-                        setValue('customizeStylistsPerService', false);
-                        setPerServiceStylists(new Map());
-                      }
-                    }}
-                  />
-                </label>
-              )}
             </div>
 
-            {/* Assign Later Info */}
-            {watchedAssignLater && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-dashed">
-                <UserX className="h-5 w-5 text-muted-foreground" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">No stylist assigned</p>
-                  <p className="text-xs text-muted-foreground">
-                    Stylist can be assigned later from the unassigned appointments panel
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Stylist Selection - hidden when assignLater is true */}
-            {!watchedAssignLater && (
+            {/* Stylist Selection */}
               <>
                 {/* Per-service customization toggle - only show when multiple services selected */}
                 {selectedServices.length > 1 && (
@@ -1066,10 +1032,6 @@ export function NewAppointmentPanel({
                   </div>
                 )}
               </>
-            )}
-            {errors.assignLater && (
-              <p className="text-xs text-destructive">{errors.assignLater.message}</p>
-            )}
           </div>
 
           {/* Date & Time Section */}

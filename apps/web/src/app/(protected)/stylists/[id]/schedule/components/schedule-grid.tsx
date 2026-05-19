@@ -22,6 +22,9 @@ interface ScheduleAppointment {
   customerName: string;
   services: string[];
   status: string;
+  isMultiService?: boolean;
+  totalServices?: number;
+  stylistServices?: number;
 }
 
 interface ScheduleGridProps {
@@ -175,6 +178,11 @@ export function ScheduleGrid({
                     <div className="text-blue-500 dark:text-blue-400 truncate">
                       {apt.services.join(', ')}
                     </div>
+                    {apt.isMultiService && (
+                      <div className="text-[10px] text-blue-400 dark:text-blue-500 mt-0.5">
+                        Your {apt.stylistServices} of {apt.totalServices} services
+                      </div>
+                    )}
                     <Badge
                       variant="outline"
                       className={cn(

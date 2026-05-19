@@ -40,9 +40,11 @@ interface StationCardProps {
     appointmentId: string,
     currentStationId: string,
     currentStationName: string,
-    nextService: StationCardType['upNext']
+    nextService: StationCardType['upNext'],
+    allNextServices?: StationCardType['upNextServices']
   ) => void;
   onCompleteService?: (appointmentId: string, serviceId: string, serviceName: string) => void;
+  onCompleteAndCheckout?: (appointmentId: string, serviceIds: string[], serviceName: string) => void;
 }
 
 const statusConfig: Record<
@@ -81,9 +83,39 @@ export function StationCard({
   onCheckout,
   onStartNextService,
   onCompleteService,
+  onCompleteAndCheckout,
 }: StationCardProps) {
   const config = statusConfig[station.status];
   const appointment = station.appointment;
+
+  // Determine if this is the last/only service that needs completing before checkout
+  // True when: single-service in progress, OR multi-service with last service in progress
+  const isLastService = (() => {
+    if (!appointment) return false;
+    // Single-service appointment that is in progress
+    if (!appointment.isMultiService) {
+      return appointment.progressPercent !== null; // has started (in progress)
+    }
+    // Multi-service: check no upNext and no waiting services
+    const hasUpNext = station.upNextServices && station.upNextServices.length > 0;
+    if (hasUpNext) return false;
+    const hasWaiting = appointment.currentServices?.some((s) => s.status === 'waiting');
+    if (hasWaiting) return false;
+    // Only in-progress or completed services remain
+    const inProgressServices = appointment.currentServices?.filter(
+      (s) => s.status === 'in_progress'
+    );
+    return (inProgressServices?.length ?? 0) >= 1;
+  })();
+
+  // Check if any service is currently in progress (used to disable "Start Next Service")
+  const hasServiceInProgress = (() => {
+    if (!appointment) return false;
+    if (appointment.currentServices && appointment.currentServices.length > 0) {
+      return appointment.currentServices.some((s) => s.status === 'in_progress');
+    }
+    return appointment.currentService?.status === 'in_progress';
+  })();
 
   return (
     <Card className={cn('transition-all', config.bg, config.border)}>
@@ -217,7 +249,7 @@ export function StationCard({
                           In Progress
                         </span>
                       </div>
-                      {onCompleteService && (
+                      {!isLastService && onCompleteService && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -293,7 +325,7 @@ export function StationCard({
                       In Progress
                     </span>
                   </div>
-                  {onCompleteService && (
+                  {!isLastService && onCompleteService && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -393,7 +425,41 @@ export function StationCard({
 
             {/* Actions */}
             <div className="flex gap-2 pt-1">
-              {onCheckout && (
+              {isLastService && onCompleteAndCheckout ? (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    // Collect all in-progress service IDs (for parallel services)
+                    const inProgressServices = appointment.isMultiService
+                      ? appointment.currentServices?.filter((s) => s.status === 'in_progress') || []
+                      : [];
+                    
+                    let serviceIds: string[];
+                    let serviceName: string;
+
+                    if (inProgressServices.length > 0) {
+                      serviceIds = inProgressServices.map((s) => s.id);
+                      serviceName = inProgressServices.length > 1
+                        ? `${inProgressServices.length} services`
+                        : inProgressServices[0].serviceName;
+                    } else {
+                      // Single-service fallback
+                      const id = appointment.currentServices?.[0]?.id || appointment.currentService?.id;
+                      serviceIds = id ? [id] : [];
+                      serviceName = appointment.services[0] || 'Service';
+                    }
+
+                    if (serviceIds.length > 0) {
+                      onCompleteAndCheckout(appointment.id, serviceIds, serviceName);
+                    }
+                  }}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1.5" />
+                  Complete & Checkout
+                </Button>
+              ) : onCheckout ? (
                 <Button
                   variant="default"
                   size="sm"
@@ -419,7 +485,7 @@ export function StationCard({
                 >
                   Checkout
                 </Button>
-              )}
+              ) : null}
             </div>
           </>
         )}
@@ -487,19 +553,23 @@ export function StationCard({
                     }
                     size="sm"
                     className="w-full mt-2"
+                    disabled={hasServiceInProgress}
                     onClick={() =>
                       onStartNextService(
                         appointment.id,
                         station.id,
                         station.name,
-                        station.upNextServices[0]
+                        station.upNextServices[0],
+                        station.upNextServices
                       )
                     }
                   >
                     <Play className="h-3.5 w-3.5 mr-1.5" />
-                    {station.upNextServices.length > 1
-                      ? `Start ${station.upNextServices.length} Parallel Services`
-                      : 'Start Next Service'}
+                    {hasServiceInProgress
+                      ? 'Complete current service first'
+                      : station.upNextServices.length > 1
+                        ? `Start ${station.upNextServices.length} Parallel Services`
+                        : 'Start Next Service'}
                   </Button>
                 )}
               </div>

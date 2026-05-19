@@ -392,15 +392,41 @@ export function getServicesSummary(services: ServiceForStatusDerivation[]): {
  * @returns Object with canStart flag and error details if not
  */
 export function canStartService(
-  serviceToStart: { id: string; sequence: number },
-  allServices: { id: string; sequence: number; status: string }[]
+  serviceToStart: { id: string; sequence: number; runParallel?: boolean | null },
+  allServices: { id: string; sequence: number; status: string; runParallel?: boolean | null }[]
 ): { canStart: boolean; errorCode?: string; errorMessage?: string } {
   // Sequence 1 can always start (no prerequisites)
   if (serviceToStart.sequence <= 1) {
     return { canStart: true };
   }
 
-  // Check if any service with sequence N-1 is still waiting or in_progress
+  // If this service has runParallel: true, it's designed to run alongside the previous sequence
+  // So it only needs the sequence BEFORE the previous one to be done
+  if (serviceToStart.runParallel) {
+    // Find the first non-parallel service before this one to determine the real prerequisite
+    // A parallel service runs with the service immediately before it, so we need to check
+    // if the service that the parallel group depends on is at least started
+    const previousSequence = serviceToStart.sequence - 1;
+    const previousServices = allServices.filter(
+      (s) => s.sequence === previousSequence && s.id !== serviceToStart.id
+    );
+
+    // For parallel services, the previous sequence service can be in_progress (that's the point)
+    // We only block if the previous service is still 'waiting'
+    const hasWaitingPrerequisite = previousServices.some((s) => s.status === 'waiting');
+
+    if (hasWaitingPrerequisite) {
+      return {
+        canStart: false,
+        errorCode: 'PREREQUISITE_NOT_COMPLETE',
+        errorMessage: `Cannot start service: previous service(s) in sequence ${previousSequence} must be started first`,
+      };
+    }
+
+    return { canStart: true };
+  }
+
+  // Non-parallel service: previous sequence must be completed or skipped
   const previousSequence = serviceToStart.sequence - 1;
   const previousServices = allServices.filter(
     (s) => s.sequence === previousSequence && s.id !== serviceToStart.id

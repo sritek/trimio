@@ -29,9 +29,11 @@ interface FloorViewTabProps {
     appointmentId: string,
     currentStationId: string,
     currentStationName: string,
-    nextService: StationCardType['upNext']
+    nextService: StationCardType['upNext'],
+    allNextServices?: StationCardType['upNextServices']
   ) => void;
   onCompleteService?: (appointmentId: string, serviceId: string, serviceName: string) => void;
+  onCompleteAndCheckout?: (appointmentId: string, serviceIds: string[], serviceName: string) => void;
 }
 
 export function FloorViewTab({
@@ -40,6 +42,7 @@ export function FloorViewTab({
   onCheckout,
   onStartNextService,
   onCompleteService,
+  onCompleteAndCheckout,
 }: FloorViewTabProps) {
   const { data, isLoading, refetch, isRefetching } = useFloorView(branchId, {
     refetchInterval: 30000, // Auto-refresh every 30 seconds
@@ -84,6 +87,7 @@ export function FloorViewTab({
             onCheckout={onCheckout}
             onStartNextService={onStartNextService}
             onCompleteService={onCompleteService}
+            onCompleteAndCheckout={onCompleteAndCheckout}
           />
         ))}
       </div>

@@ -14,6 +14,7 @@ import {
   deriveAppointmentStatus,
   validateServiceStatusTransition,
   canStartService,
+  calculateTotalPrice,
   type ServiceForStylistValidation,
   type StylistAvailabilityResult,
   type StylistConflict,
@@ -200,7 +201,8 @@ export class MultiServiceAppointmentService {
     stationId: string,
     appointmentId?: string,
     serviceSequence?: number,
-    excludeServiceId?: string
+    excludeServiceId?: string,
+    isRunParallel?: boolean
   ): Promise<StationAvailabilityResult> {
     // Check if station exists and is active
     const station = await this.prisma.station.findFirst({
@@ -246,16 +248,22 @@ export class MultiServiceAppointmentService {
       return { isAvailable: true };
     }
 
-    // Check if all occupying services are from the same appointment AND same sequence
-    // (parallel services can share the same station)
-    if (appointmentId && serviceSequence !== undefined) {
-      const allSameAppointmentAndSequence = occupyingServices.every(
-        (s) => s.appointmentId === appointmentId && s.sequence === serviceSequence
+    // Check if all occupying services are from the same appointment
+    if (appointmentId) {
+      const allSameAppointment = occupyingServices.every(
+        (s) => s.appointmentId === appointmentId
       );
 
-      if (allSameAppointmentAndSequence) {
-        // This is a parallel service from the same appointment - allow it
-        return { isAvailable: true };
+      if (allSameAppointment) {
+        // Same appointment - allow if same sequence (true parallel) OR if runParallel is true
+        const allSameSequence = occupyingServices.every(
+          (s) => s.sequence === serviceSequence
+        );
+
+        if (allSameSequence || isRunParallel) {
+          // This is a parallel service from the same appointment - allow it
+          return { isAvailable: true };
+        }
       }
     }
 
@@ -336,7 +344,9 @@ export class MultiServiceAppointmentService {
       tenantId,
       stationId,
       appointmentId,
-      serviceToStart.sequence
+      serviceToStart.sequence,
+      undefined,
+      serviceToStart.runParallel === true
     );
     if (!stationResult.isAvailable) {
       throw new ConflictError(
@@ -697,13 +707,24 @@ export class MultiServiceAppointmentService {
         appointment.status
       );
 
-      // Update appointment status if changed
+      // Recalculate totals excluding skipped services
+      const billableServices = allServices.filter((s) => s.status !== 'skipped');
+      const { subtotal, taxAmount, totalAmount } = calculateTotalPrice(billableServices);
+
+      // Update appointment status and totals
       let updatedAppointment = appointment;
-      if (derivedStatus !== appointment.status) {
+      const needsUpdate = derivedStatus !== appointment.status ||
+        Number(appointment.subtotal) !== subtotal ||
+        Number(appointment.taxAmount) !== taxAmount;
+
+      if (needsUpdate) {
         updatedAppointment = await tx.appointment.update({
           where: { id: appointmentId },
           data: {
-            status: derivedStatus,
+            ...(derivedStatus !== appointment.status ? { status: derivedStatus } : {}),
+            subtotal,
+            taxAmount,
+            totalAmount,
           },
           include: {
             services: {
@@ -721,17 +742,19 @@ export class MultiServiceAppointmentService {
           },
         });
 
-        // Create status history
-        await tx.appointmentStatusHistory.create({
-          data: {
-            tenantId,
-            appointmentId,
-            fromStatus: appointment.status,
-            toStatus: derivedStatus,
-            changedBy: userId,
-            notes: `${waitingServices.length} waiting service(s) skipped for early checkout${reason ? `: ${reason}` : ''}`,
-          },
-        });
+        // Create status history if status changed
+        if (derivedStatus !== appointment.status) {
+          await tx.appointmentStatusHistory.create({
+            data: {
+              tenantId,
+              appointmentId,
+              fromStatus: appointment.status,
+              toStatus: derivedStatus,
+              changedBy: userId,
+              notes: `${waitingServices.length} waiting service(s) skipped for early checkout${reason ? `: ${reason}` : ''}`,
+            },
+          });
+        }
       }
 
       // Create audit log
@@ -843,13 +866,24 @@ export class MultiServiceAppointmentService {
         appointment.status
       );
 
-      // Update appointment status if changed
+      // Recalculate totals excluding skipped services
+      const billableServices = allServices.filter((s) => s.status !== 'skipped');
+      const { subtotal, taxAmount, totalAmount } = calculateTotalPrice(billableServices);
+
+      // Update appointment status and totals
       let updatedAppointment = appointment;
-      if (derivedStatus !== appointment.status) {
+      const needsUpdate = derivedStatus !== appointment.status ||
+        Number(appointment.subtotal) !== subtotal ||
+        Number(appointment.taxAmount) !== taxAmount;
+
+      if (needsUpdate) {
         updatedAppointment = await tx.appointment.update({
           where: { id: appointmentId },
           data: {
-            status: derivedStatus,
+            ...(derivedStatus !== appointment.status ? { status: derivedStatus } : {}),
+            subtotal,
+            taxAmount,
+            totalAmount,
           },
           include: {
             services: {
@@ -867,17 +901,19 @@ export class MultiServiceAppointmentService {
           },
         });
 
-        // Create status history
-        await tx.appointmentStatusHistory.create({
-          data: {
-            tenantId,
-            appointmentId,
-            fromStatus: appointment.status,
-            toStatus: derivedStatus,
-            changedBy: userId,
-            notes: `Service "${serviceToSkip.serviceName}" skipped${reason ? `: ${reason}` : ''}`,
-          },
-        });
+        // Create status history if status changed
+        if (derivedStatus !== appointment.status) {
+          await tx.appointmentStatusHistory.create({
+            data: {
+              tenantId,
+              appointmentId,
+              fromStatus: appointment.status,
+              toStatus: derivedStatus,
+              changedBy: userId,
+              notes: `Service "${serviceToSkip.serviceName}" skipped${reason ? `: ${reason}` : ''}`,
+            },
+          });
+        }
       }
 
       // Create audit log

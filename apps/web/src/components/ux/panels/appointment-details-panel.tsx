@@ -26,7 +26,6 @@ import {
   CreditCard,
   RefreshCw,
   Pencil,
-  Armchair,
   Receipt,
   ExternalLink,
   Loader2,
@@ -218,7 +217,7 @@ export function AppointmentDetailsPanel({
       'ready_for_checkout',
     ] as AppointmentStatus[]
   ).includes(appointment.status);
-  const canReschedule = (['booked', 'confirmed', 'checked_in'] as AppointmentStatus[]).includes(
+  const canReschedule = (['booked', 'confirmed'] as AppointmentStatus[]).includes(
     appointment.status
   );
 
@@ -289,8 +288,8 @@ export function AppointmentDetailsPanel({
             // Get unique stylists from services
             const serviceStylists = new Map<string, string>();
             appointment.services?.forEach((service) => {
-              const stylistId = service.assignedStylistId || service.actualStylistId;
-              const stylistName = service.assignedStylist?.name || service.actualStylist?.name;
+              const stylistId = service.actualStylistId || service.assignedStylistId;
+              const stylistName = service.actualStylist?.name || service.assignedStylist?.name;
               if (stylistId && stylistName) {
                 serviceStylists.set(stylistId, stylistName);
               }
@@ -334,26 +333,6 @@ export function AppointmentDetailsPanel({
             );
           })()}
 
-          {/* Station (if assigned) */}
-          {appointment.station && (
-            <div className="flex items-center gap-3">
-              <Armchair className="h-5 w-5 text-muted-foreground" />
-              <div className="flex items-center gap-2">
-                <span>{appointment.station.name}</span>
-                {appointment.station.stationType && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded-full border"
-                    style={{
-                      borderColor: appointment.station.stationType.color || undefined,
-                      color: appointment.station.stationType.color || undefined,
-                    }}
-                  >
-                    {appointment.station.stationType.name}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <Separator />
@@ -445,8 +424,10 @@ export function AppointmentDetailsPanel({
                               duration={service.durationMinutes}
                               quantity={service.quantity}
                               stylistName={
-                                service.assignedStylist?.name || service.actualStylist?.name
+                                service.actualStylist?.name || service.assignedStylist?.name
                               }
+                              stationName={service.station?.name}
+                              stationTypeName={service.station?.stationType?.name}
                               status={service.status}
                               isParallel
                             />
@@ -465,7 +446,9 @@ export function AppointmentDetailsPanel({
                       price={service.unitPrice}
                       duration={service.durationMinutes}
                       quantity={service.quantity}
-                      stylistName={service.assignedStylist?.name || service.actualStylist?.name}
+                      stylistName={service.actualStylist?.name || service.assignedStylist?.name}
+                      stationName={service.station?.name}
+                      stationTypeName={service.station?.stationType?.name}
                       status={service.status}
                     />
                   );
@@ -475,13 +458,21 @@ export function AppointmentDetailsPanel({
               <p className="text-muted-foreground text-sm">No services added</p>
             )}
           </div>
-          {appointment.totalAmount != null && appointment.totalAmount > 0 && (
+          {appointment.services && appointment.services.some((s: { status: string; unitPrice: number }) => s.status !== 'skipped' && Number(s.unitPrice) > 0) && (
             <div className="mt-8 pt-3 border-t space-y-2">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>Subtotal</span>
-                <span>₹{appointment.subtotal?.toLocaleString('en-IN') || 0}</span>
+                <span>₹{(appointment.services
+                  ? appointment.services
+                      .filter((s: { status: string }) => s.status !== 'skipped')
+                      .reduce((sum: number, s: { unitPrice: number; quantity: number }) => sum + Number(s.unitPrice) * s.quantity, 0)
+                  : appointment.subtotal || 0
+                ).toLocaleString('en-IN')}</span>
               </div>
-              {appointment.taxAmount > 0 && (
+              {appointment.services &&
+                appointment.services
+                  .filter((s: { status: string }) => s.status !== 'skipped')
+                  .reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0) > 0 && (
                 <div className="flex justify-between items-center text-sm text-muted-foreground">
                   <span>
                     Tax (GST{' '}
@@ -490,7 +481,12 @@ export function AppointmentDetailsPanel({
                       : '18%'}
                     )
                   </span>
-                  <span>₹{appointment.taxAmount.toLocaleString('en-IN')}</span>
+                  <span>₹{(appointment.services
+                    ? appointment.services
+                        .filter((s: { status: string }) => s.status !== 'skipped')
+                        .reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0)
+                    : appointment.taxAmount
+                  ).toLocaleString('en-IN')}</span>
                 </div>
               )}
               {appointment.discountAmount > 0 && (
@@ -502,7 +498,15 @@ export function AppointmentDetailsPanel({
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold">Total</span>
                 <span className="text-lg font-bold text-primary">
-                  ₹{appointment.totalAmount.toLocaleString('en-IN')}
+                  ₹{(appointment.services
+                    ? (() => {
+                        const billable = appointment.services.filter((s: { status: string }) => s.status !== 'skipped');
+                        const sub = billable.reduce((sum: number, s: { unitPrice: number; quantity: number }) => sum + Number(s.unitPrice) * s.quantity, 0);
+                        const tax = billable.reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0);
+                        return sub + tax - (appointment.discountAmount || 0);
+                      })()
+                    : appointment.totalAmount
+                  ).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -759,6 +763,8 @@ interface ServiceCardProps {
   price?: number;
   duration?: number;
   stylistName?: string;
+  stationName?: string;
+  stationTypeName?: string;
   quantity?: number;
   status?: string;
   isParallel?: boolean;
@@ -779,6 +785,8 @@ function ServiceCard({
   price,
   duration,
   stylistName,
+  stationName,
+  stationTypeName,
   quantity = 1,
   status,
   isParallel = false,
@@ -835,6 +843,17 @@ function ServiceCard({
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
                   {stylistName}
+                </span>
+              </>
+            )}
+            {stationName && (status === 'in_progress' || status === 'completed') && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  {stationName}
+                  {stationTypeName && (
+                    <span className="text-[10px] text-muted-foreground/70">({stationTypeName})</span>
+                  )}
                 </span>
               </>
             )}

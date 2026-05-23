@@ -32,8 +32,20 @@ interface FloorViewTabProps {
     nextService: StationCardType['upNext'],
     allNextServices?: StationCardType['upNextServices']
   ) => void;
-  onCompleteService?: (appointmentId: string, serviceId: string, serviceName: string) => void;
-  onCompleteAndCheckout?: (appointmentId: string, serviceIds: string[], serviceName: string) => void;
+  onCompleteService?: (
+    appointmentId: string,
+    serviceId: string,
+    serviceName: string,
+    appointmentDate?: string,
+    appointmentTime?: string
+  ) => void;
+  onCompleteAndCheckout?: (
+    appointmentId: string,
+    serviceIds: string[],
+    serviceName: string,
+    appointmentDate?: string,
+    appointmentTime?: string
+  ) => void;
 }
 
 export function FloorViewTab({

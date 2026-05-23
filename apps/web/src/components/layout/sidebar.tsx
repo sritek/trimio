@@ -67,6 +67,7 @@ import { useSubscriptionAccess, type FeatureKey } from '@/hooks/use-feature-acce
 import { useLocale } from 'next-intl';
 import { locales, localeNames, type Locale } from '@/i18n/config';
 import Image from 'next/image';
+import { ThemeToggleSimple } from '@/components/common/theme-toggle';
 
 interface NavItem {
   titleKey: string;
@@ -624,6 +625,9 @@ function UserProfileCard({ isCollapsed }: { isCollapsed: boolean }) {
             </TooltipContent>
           </Tooltip>
 
+          {/* Theme Toggle */}
+          <ThemeToggleSimple />
+
           {/* Logout */}
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
@@ -694,6 +698,9 @@ function UserProfileCard({ isCollapsed }: { isCollapsed: boolean }) {
           </TooltipContent>
         </Tooltip>
 
+        {/* Theme Toggle */}
+        <ThemeToggleSimple />
+
         {/* Logout Button */}
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
@@ -738,6 +745,15 @@ export function Sidebar({ className }: SidebarProps) {
   const { access: subscriptionAccess } = useSubscriptionAccess();
   const resetAppointmentsToToday = useAppointmentsUIStore((state) => state.resetToToday);
 
+  // Hydration fix: wait for client-side mount before using persisted state
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Use false (expanded) as default during SSR, then use persisted state after mount
+  const isCollapsed = mounted ? sidebarCollapsed : false;
+
   // Check if user has subscription access to a feature
   const hasSubscriptionAccess = useCallback(
     (feature: FeatureKey | undefined): boolean => {
@@ -779,7 +795,7 @@ export function Sidebar({ className }: SidebarProps) {
       <aside
         className={cn(
           'flex h-screen flex-col border-r bg-card transition-[width] duration-300 ease-in-out',
-          sidebarCollapsed ? 'w-16' : 'w-56',
+          isCollapsed ? 'w-16' : 'w-56',
           className
         )}
       >
@@ -787,11 +803,11 @@ export function Sidebar({ className }: SidebarProps) {
         <div
           className={cn(
             'flex h-14 items-center border-b px-3',
-            sidebarCollapsed ? 'justify-center' : 'justify-between'
+            isCollapsed ? 'justify-center' : 'justify-between'
           )}
         >
           <Link href="/today" className="flex items-center gap-2 font-bold text-lg">
-            {sidebarCollapsed ? (
+            {isCollapsed ? (
               <span className="text-lg font-bold">t.</span>
             ) : (
               <>
@@ -811,7 +827,7 @@ export function Sidebar({ className }: SidebarProps) {
               </>
             )}
           </Link>
-          {!sidebarCollapsed && (
+          {!isCollapsed && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleSidebarCollapse}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -820,7 +836,7 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Branch Selector */}
         <div className="border-b px-2 py-2">
-          <SidebarBranchSelector isCollapsed={sidebarCollapsed} />
+          <SidebarBranchSelector isCollapsed={isCollapsed} />
         </div>
 
         {/* Main Navigation */}
@@ -833,7 +849,7 @@ export function Sidebar({ className }: SidebarProps) {
                   {item.children ? (
                     <NavGroup
                       item={item}
-                      isCollapsed={sidebarCollapsed}
+                      isCollapsed={isCollapsed}
                       t={t}
                       onNavigate={handleNavigate}
                       hasPermission={hasPermission}
@@ -842,7 +858,7 @@ export function Sidebar({ className }: SidebarProps) {
                   ) : (
                     <NavLink
                       item={item}
-                      isCollapsed={sidebarCollapsed}
+                      isCollapsed={isCollapsed}
                       t={t}
                       onNavigate={handleNavigate}
                       isLocked={isLocked}
@@ -857,7 +873,7 @@ export function Sidebar({ className }: SidebarProps) {
         {/* Bottom Section */}
         <div className="border-t p-2 space-y-1 flex flex-col items-center">
           {/* Settings */}
-          {!sidebarCollapsed && (
+          {!isCollapsed && (
             <div className="flex items-center gap-2 w-full">
               <Avatar className="h-9 w-9 shrink-0">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
@@ -874,7 +890,7 @@ export function Sidebar({ className }: SidebarProps) {
           )}
 
           {/* Expand toggle when collapsed */}
-          {sidebarCollapsed && (
+          {isCollapsed && (
             <Button
               variant="ghost"
               size="icon"
@@ -886,7 +902,7 @@ export function Sidebar({ className }: SidebarProps) {
           )}
 
           {/* User Profile */}
-          <UserProfileCard isCollapsed={sidebarCollapsed} />
+          <UserProfileCard isCollapsed={isCollapsed} />
         </div>
       </aside>
     </TooltipProvider>

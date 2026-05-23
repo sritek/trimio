@@ -848,6 +848,9 @@ export class FloorViewService {
         progressPercent: serviceProgress,
         elapsedMinutes: serviceElapsed,
         isOvertime: serviceIsOvertime,
+        // Stylist info for tooltip
+        assignedStylistName: s.assignedStylist?.name || null,
+        actualStylistName: s.actualStylist?.name || null,
       };
     });
 

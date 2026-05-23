@@ -111,6 +111,10 @@ export interface ServiceProgressInfo {
   elapsedMinutes: number;
   /** Whether this service is overtime */
   isOvertime: boolean;
+  /** Assigned stylist name (who was supposed to do it) */
+  assignedStylistName: string | null;
+  /** Actual stylist name (who actually did/is doing it) */
+  actualStylistName: string | null;
 }
 
 // "Up Next" service for multi-service appointments

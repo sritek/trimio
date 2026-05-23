@@ -17,6 +17,7 @@ import { useCompleteService, useSkipAllWaitingServices } from '@/hooks/queries/u
 import { ConfirmDialog } from '@/components/common';
 import { FloorViewTab } from './floor-view-tab';
 import { StartNextServiceDialog } from '@/components/ux/dialogs/start-next-service-dialog';
+import { CompleteServiceDialog } from '@/components/ux/dialogs/complete-service-dialog';
 import type { AttentionItem, CommandCenterData } from '@/types/dashboard';
 import type { UpNextService, StationCard as StationCardType } from '@/types/stations';
 
@@ -126,6 +127,8 @@ export function OperationalDashboard({
     appointmentId: string;
     serviceId: string;
     serviceName: string;
+    appointmentDate?: string;
+    appointmentTime?: string;
   } | null>(null);
 
   // State for complete & checkout confirmation dialog
@@ -134,6 +137,8 @@ export function OperationalDashboard({
     appointmentId: string;
     serviceIds: string[];
     serviceName: string;
+    appointmentDate?: string;
+    appointmentTime?: string;
   } | null>(null);
 
   // State for incomplete services warning dialog
@@ -228,8 +233,20 @@ export function OperationalDashboard({
 
   // Handle completing current service - shows confirmation dialog
   const handleCompleteService = useCallback(
-    (appointmentId: string, serviceId: string, serviceName: string) => {
-      setCompleteServiceData({ appointmentId, serviceId, serviceName });
+    (
+      appointmentId: string,
+      serviceId: string,
+      serviceName: string,
+      appointmentDate?: string,
+      appointmentTime?: string
+    ) => {
+      setCompleteServiceData({
+        appointmentId,
+        serviceId,
+        serviceName,
+        appointmentDate,
+        appointmentTime,
+      });
       setCompleteServiceDialogOpen(true);
     },
     []
@@ -237,47 +254,67 @@ export function OperationalDashboard({
 
   // Handle completing last service and proceeding to checkout
   const handleCompleteAndCheckout = useCallback(
-    (appointmentId: string, serviceIds: string[], serviceName: string) => {
-      setCompleteAndCheckoutData({ appointmentId, serviceIds, serviceName });
+    (
+      appointmentId: string,
+      serviceIds: string[],
+      serviceName: string,
+      appointmentDate?: string,
+      appointmentTime?: string
+    ) => {
+      setCompleteAndCheckoutData({
+        appointmentId,
+        serviceIds,
+        serviceName,
+        appointmentDate,
+        appointmentTime,
+      });
       setCompleteAndCheckoutDialogOpen(true);
     },
     []
   );
 
   // Confirm complete service
-  const confirmCompleteService = useCallback(() => {
-    if (completeServiceData) {
-      completeServiceMutation.mutate({
-        appointmentId: completeServiceData.appointmentId,
-        serviceId: completeServiceData.serviceId,
-      });
-      setCompleteServiceDialogOpen(false);
-      setCompleteServiceData(null);
-    }
-  }, [completeServiceData, completeServiceMutation]);
+  const confirmCompleteService = useCallback(
+    (completedAt: string) => {
+      if (completeServiceData) {
+        completeServiceMutation.mutate({
+          appointmentId: completeServiceData.appointmentId,
+          serviceId: completeServiceData.serviceId,
+          actualEndTime: completedAt,
+        });
+        setCompleteServiceDialogOpen(false);
+        setCompleteServiceData(null);
+      }
+    },
+    [completeServiceData, completeServiceMutation]
+  );
 
   // Confirm complete service and checkout
-  const confirmCompleteAndCheckout = useCallback(async () => {
-    if (completeAndCheckoutData) {
-      try {
-        // Complete all in-progress services (for parallel services)
-        for (const serviceId of completeAndCheckoutData.serviceIds) {
-          await completeServiceMutation.mutateAsync({
-            appointmentId: completeAndCheckoutData.appointmentId,
-            serviceId,
+  const confirmCompleteAndCheckout = useCallback(
+    async (completedAt: string) => {
+      if (completeAndCheckoutData) {
+        try {
+          // Complete all in-progress services (for parallel services)
+          for (const serviceId of completeAndCheckoutData.serviceIds) {
+            await completeServiceMutation.mutateAsync({
+              appointmentId: completeAndCheckoutData.appointmentId,
+              serviceId,
+              actualEndTime: completedAt,
+            });
+          }
+          // After completing all, open checkout
+          openAppointmentDetails(completeAndCheckoutData.appointmentId, {
+            isCheckoutMode: true,
           });
+        } catch {
+          // Error toast is shown by the mutation
         }
-        // After completing all, open checkout
-        openAppointmentDetails(completeAndCheckoutData.appointmentId, {
-          isCheckoutMode: true,
-        });
-      } catch {
-        // Error toast is shown by the mutation
+        setCompleteAndCheckoutDialogOpen(false);
+        setCompleteAndCheckoutData(null);
       }
-      setCompleteAndCheckoutDialogOpen(false);
-      setCompleteAndCheckoutData(null);
-    }
-  }, [completeAndCheckoutData, completeServiceMutation, openAppointmentDetails]);
+    },
+    [completeAndCheckoutData, completeServiceMutation, openAppointmentDetails]
+  );
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -358,35 +395,32 @@ export function OperationalDashboard({
         />
       )}
 
-      {/* Complete Service Confirmation Dialog */}
-      <ConfirmDialog
-        open={completeServiceDialogOpen}
-        onOpenChange={setCompleteServiceDialogOpen}
-        title="Complete Service"
-        description={
-          completeServiceData
-            ? `Are you sure you want to mark "${completeServiceData.serviceName}" as completed?`
-            : 'Are you sure you want to complete this service?'
-        }
-        confirmText="Complete"
-        onConfirm={confirmCompleteService}
-        isLoading={completeServiceMutation.isPending}
-      />
+      {/* Complete Service Dialog */}
+      {completeServiceData && (
+        <CompleteServiceDialog
+          open={completeServiceDialogOpen}
+          onOpenChange={setCompleteServiceDialogOpen}
+          serviceName={completeServiceData.serviceName}
+          appointmentDate={completeServiceData.appointmentDate}
+          appointmentTime={completeServiceData.appointmentTime}
+          onConfirm={confirmCompleteService}
+          isLoading={completeServiceMutation.isPending}
+        />
+      )}
 
-      {/* Complete & Checkout Confirmation Dialog */}
-      <ConfirmDialog
-        open={completeAndCheckoutDialogOpen}
-        onOpenChange={setCompleteAndCheckoutDialogOpen}
-        title="Complete & Checkout"
-        description={
-          completeAndCheckoutData
-            ? `Are you sure you want to mark "${completeAndCheckoutData.serviceName}" as completed and proceed to checkout?`
-            : 'Are you sure you want to complete this service and proceed to checkout?'
-        }
-        confirmText="Complete & Checkout"
-        onConfirm={confirmCompleteAndCheckout}
-        isLoading={completeServiceMutation.isPending}
-      />
+      {/* Complete & Checkout Dialog */}
+      {completeAndCheckoutData && (
+        <CompleteServiceDialog
+          open={completeAndCheckoutDialogOpen}
+          onOpenChange={setCompleteAndCheckoutDialogOpen}
+          serviceName={completeAndCheckoutData.serviceName}
+          appointmentDate={completeAndCheckoutData.appointmentDate}
+          appointmentTime={completeAndCheckoutData.appointmentTime}
+          onConfirm={confirmCompleteAndCheckout}
+          isLoading={completeServiceMutation.isPending}
+          isCheckoutMode
+        />
+      )}
 
       {/* Incomplete Services Warning Dialog */}
       <ConfirmDialog

@@ -43,8 +43,20 @@ interface StationCardProps {
     nextService: StationCardType['upNext'],
     allNextServices?: StationCardType['upNextServices']
   ) => void;
-  onCompleteService?: (appointmentId: string, serviceId: string, serviceName: string) => void;
-  onCompleteAndCheckout?: (appointmentId: string, serviceIds: string[], serviceName: string) => void;
+  onCompleteService?: (
+    appointmentId: string,
+    serviceId: string,
+    serviceName: string,
+    appointmentDate?: string,
+    appointmentTime?: string
+  ) => void;
+  onCompleteAndCheckout?: (
+    appointmentId: string,
+    serviceIds: string[],
+    serviceName: string,
+    appointmentDate?: string,
+    appointmentTime?: string
+  ) => void;
 }
 
 const statusConfig: Record<
@@ -170,15 +182,16 @@ export function StationCard({
             )}
 
             {/* Customer & Stylist Info */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
+                <User className="h-4 w-4 text-slate-500" />
                 <span className="text-sm font-medium truncate">{appointment.customerName}</span>
               </div>
-              {appointment.stylistName && (
+              {/* Show stylist only for single-service appointments - multi-service shows stylist per service */}
+              {!appointment.isMultiService && appointment.stylistName && (
                 <div className="flex items-center gap-2">
-                  <Scissors className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground truncate">
+                  <Scissors className="h-4 w-4 text-slate-500" />
+                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
                     {appointment.stylistName}
                     {appointment.assistantNames.length > 0 &&
                       ` +${appointment.assistantNames.length}`}
@@ -255,7 +268,13 @@ export function StationCard({
                           size="sm"
                           className="w-full bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900"
                           onClick={() =>
-                            onCompleteService(appointment.id, service.id, service.serviceName)
+                            onCompleteService(
+                              appointment.id,
+                              service.id,
+                              service.serviceName,
+                              appointment.scheduledDate,
+                              appointment.scheduledTime
+                            )
                           }
                         >
                           <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
@@ -334,7 +353,9 @@ export function StationCard({
                         onCompleteService(
                           appointment.id,
                           appointment.currentService!.id,
-                          appointment.currentService!.serviceName
+                          appointment.currentService!.serviceName,
+                          appointment.scheduledDate,
+                          appointment.scheduledTime
                         )
                       }
                     >
@@ -424,7 +445,7 @@ export function StationCard({
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 pt-1">
+            <div className="flex flex-col gap-2 pt-1">
               {isLastService && onCompleteAndCheckout ? (
                 <Button
                   variant="default"
@@ -435,24 +456,32 @@ export function StationCard({
                     const inProgressServices = appointment.isMultiService
                       ? appointment.currentServices?.filter((s) => s.status === 'in_progress') || []
                       : [];
-                    
+
                     let serviceIds: string[];
                     let serviceName: string;
 
                     if (inProgressServices.length > 0) {
                       serviceIds = inProgressServices.map((s) => s.id);
-                      serviceName = inProgressServices.length > 1
-                        ? `${inProgressServices.length} services`
-                        : inProgressServices[0].serviceName;
+                      serviceName =
+                        inProgressServices.length > 1
+                          ? `${inProgressServices.length} services`
+                          : inProgressServices[0].serviceName;
                     } else {
                       // Single-service fallback
-                      const id = appointment.currentServices?.[0]?.id || appointment.currentService?.id;
+                      const id =
+                        appointment.currentServices?.[0]?.id || appointment.currentService?.id;
                       serviceIds = id ? [id] : [];
                       serviceName = appointment.services[0] || 'Service';
                     }
 
                     if (serviceIds.length > 0) {
-                      onCompleteAndCheckout(appointment.id, serviceIds, serviceName);
+                      onCompleteAndCheckout(
+                        appointment.id,
+                        serviceIds,
+                        serviceName,
+                        appointment.scheduledDate,
+                        appointment.scheduledTime
+                      );
                     }
                   }}
                 >
@@ -460,31 +489,39 @@ export function StationCard({
                   Complete & Checkout
                 </Button>
               ) : onCheckout ? (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    // Check if there are incomplete services (upNextServices exists or services not completed)
-                    const hasIncompleteServices =
-                      appointment.isMultiService &&
-                      ((station.upNextServices && station.upNextServices.length > 0) || // There are next services waiting
-                        appointment.currentServices?.some(
-                          (s) => s.status === 'waiting' || s.status === 'in_progress'
-                        ) ||
-                        appointment.currentService?.status === 'waiting' ||
-                        appointment.currentService?.status === 'in_progress');
-                    onCheckout(
-                      appointment.id,
-                      isPendingAppointment(appointment),
-                      appointment.scheduledDate,
-                      appointment.scheduledTime,
-                      hasIncompleteServices
-                    );
-                  }}
-                >
-                  Checkout
-                </Button>
+                <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    disabled={hasServiceInProgress}
+                    onClick={() => {
+                      // Check if there are incomplete services (upNextServices exists or services not completed)
+                      const hasIncompleteServices =
+                        appointment.isMultiService &&
+                        ((station.upNextServices && station.upNextServices.length > 0) || // There are next services waiting
+                          appointment.currentServices?.some(
+                            (s) => s.status === 'waiting' || s.status === 'in_progress'
+                          ) ||
+                          appointment.currentService?.status === 'waiting' ||
+                          appointment.currentService?.status === 'in_progress');
+                      onCheckout(
+                        appointment.id,
+                        isPendingAppointment(appointment),
+                        appointment.scheduledDate,
+                        appointment.scheduledTime,
+                        hasIncompleteServices
+                      );
+                    }}
+                  >
+                    Checkout
+                  </Button>
+                  {hasServiceInProgress && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+                      Complete the ongoing service first
+                    </p>
+                  )}
+                </>
               ) : null}
             </div>
           </>

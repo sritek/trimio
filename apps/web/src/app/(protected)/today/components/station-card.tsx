@@ -167,6 +167,9 @@ export function StationCard({
                 <div>
                   <p className="text-xs font-medium text-red-900">Pending Appointment</p>
                   <p className="text-xs text-red-700">From {appointment.scheduledDate}</p>
+                  <p className="text-xs text-red-600 mt-1">
+                    Complete current service(s) and checkout
+                  </p>
                 </div>
               </div>
             )}
@@ -527,8 +530,10 @@ export function StationCard({
           </>
         )}
 
-        {/* Up Next Section - for multi-service appointments */}
+        {/* Up Next Section - for multi-service appointments (hidden for pending appointments) */}
         {station.status === 'occupied' &&
+          appointment &&
+          !isPendingAppointment(appointment) &&
           station.upNextServices &&
           station.upNextServices.length > 0 && (
             <div className="border-t border-dashed pt-3 mt-3">

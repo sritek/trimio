@@ -1246,7 +1246,9 @@ async function seedAppointments(
     return [];
   }
 
-  const today = new Date();
+  // Use UTC dates to avoid timezone issues (IST offset causes date mismatch)
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
   const appointmentsData: Prisma.AppointmentCreateManyInput[] = [];
   const appointmentServicesData: {
@@ -1282,11 +1284,12 @@ async function seedAppointments(
 
   // Generate appointments for past 7 days and next 7 days
   for (let dayOffset = -7; dayOffset <= 7; dayOffset++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
-    const dayOfWeek = date.getDay();
+    const date = new Date(todayUTC);
+    date.setUTCDate(date.getUTCDate() + dayOffset);
+    const dayOfWeek = date.getUTCDay();
 
-    if (dayOfWeek === 0) continue; // Skip Sundays
+    // Skip Sundays unless it's today (for debugging purposes)
+    if (dayOfWeek === 0 && dayOffset !== 0) continue;
 
     // More appointments per day: 8-15 per stylist, distributed throughout the day
     // This ensures each stylist has a good number of appointments
@@ -1324,7 +1327,7 @@ async function seedAppointments(
           status = rand < 0.7 ? 'completed' : rand < 0.85 ? 'cancelled' : 'no_show';
         } else if (dayOffset === 0) {
           // Today - more variety in statuses
-          const currentHour = today.getHours();
+          const currentHour = now.getHours();
           if (startHour < currentHour - 1) {
             // Past appointments today
             status = Math.random() < 0.8 ? 'completed' : 'no_show';
@@ -1376,10 +1379,10 @@ async function seedAppointments(
   // This demonstrates the conflict visualization feature
   const conflictDays = [0, 1]; // Today and tomorrow
   for (const dayOffset of conflictDays) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
+    const date = new Date(todayUTC);
+    date.setUTCDate(date.getUTCDate() + dayOffset);
 
-    if (date.getDay() === 0) continue; // Skip Sunday
+    if (date.getUTCDay() === 0 && dayOffset !== 0) continue; // Skip Sunday unless today
 
     // Create 2-3 overlapping appointments for the first stylist
     const primaryStylist = stylists[0];

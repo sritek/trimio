@@ -230,18 +230,18 @@ export function StationCard({
                           <span className="font-medium text-green-900 dark:text-green-100">
                             {service.serviceName}
                           </span>
-                          {service.actualStylistName &&
-                            service.actualStylistName !== appointment.stylistName && (
-                              <span className="text-green-600 ml-1">
-                                (by {service.actualStylistName})
-                              </span>
-                            )}
                         </div>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 font-medium flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           Completed
                         </span>
                       </div>
+                      {(service.actualStylistName || service.assignedStylistName) && (
+                        <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                          <Scissors className="h-3 w-3" />
+                          <span>{service.actualStylistName || service.assignedStylistName}</span>
+                        </div>
+                      )}
                     </div>
                   ) : service.status === 'in_progress' ? (
                     /* Service in progress - show with complete button */
@@ -254,17 +254,17 @@ export function StationCard({
                           <span className="font-medium text-amber-900 dark:text-amber-100">
                             {service.serviceName}
                           </span>
-                          {service.actualStylistName &&
-                            service.actualStylistName !== appointment.stylistName && (
-                              <span className="text-amber-600 ml-1">
-                                (by {service.actualStylistName})
-                              </span>
-                            )}
                         </div>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
                           In Progress
                         </span>
                       </div>
+                      {(service.actualStylistName || service.assignedStylistName) && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                          <Scissors className="h-3 w-3" />
+                          <span>{service.actualStylistName || service.assignedStylistName}</span>
+                        </div>
+                      )}
                       {!isLastService && onCompleteService && (
                         <Button
                           variant="outline"
@@ -301,6 +301,12 @@ export function StationCard({
                           Waiting
                         </span>
                       </div>
+                      {service.assignedStylistName && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          <Scissors className="h-3 w-3" />
+                          <span>{service.assignedStylistName}</span>
+                        </div>
+                      )}
                     </div>
                   )
                 )}
@@ -314,19 +320,18 @@ export function StationCard({
                       <span className="font-medium text-green-900 dark:text-green-100">
                         {appointment.currentService.serviceName}
                       </span>
-                      {appointment.currentService.actualStylistName &&
-                        appointment.currentService.actualStylistName !==
-                          appointment.stylistName && (
-                          <span className="text-green-600 ml-1">
-                            (by {appointment.currentService.actualStylistName})
-                          </span>
-                        )}
                     </div>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 font-medium flex items-center gap-1">
                       <CheckCircle className="h-3 w-3" />
                       Completed
                     </span>
                   </div>
+                  {(appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName) && (
+                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                      <Scissors className="h-3 w-3" />
+                      <span>{appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName}</span>
+                    </div>
+                  )}
                 </div>
               ) : appointment.currentService.status === 'in_progress' ? (
                 <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-2 space-y-2">
@@ -335,18 +340,17 @@ export function StationCard({
                       <span className="font-medium text-amber-900 dark:text-amber-100">
                         {appointment.currentService.serviceName}
                       </span>
-                      {appointment.currentService.actualStylistName &&
-                        appointment.currentService.actualStylistName !==
-                          appointment.stylistName && (
-                          <span className="text-amber-600 ml-1">
-                            (by {appointment.currentService.actualStylistName})
-                          </span>
-                        )}
                     </div>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
                       In Progress
                     </span>
                   </div>
+                  {(appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName) && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                      <Scissors className="h-3 w-3" />
+                      <span>{appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName}</span>
+                    </div>
+                  )}
                   {!isLastService && onCompleteService && (
                     <Button
                       variant="outline"
@@ -379,6 +383,12 @@ export function StationCard({
                       Waiting
                     </span>
                   </div>
+                  {appointment.currentService.assignedStylistName && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <Scissors className="h-3 w-3" />
+                      <span>{appointment.currentService.assignedStylistName}</span>
+                    </div>
+                  )}
                 </div>
               )
             ) : (

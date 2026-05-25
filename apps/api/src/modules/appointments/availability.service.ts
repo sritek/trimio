@@ -911,14 +911,18 @@ export class AvailabilityService {
       if (block.isFullDay) {
         return {
           available: false,
-          conflictReason: block.reason || 'Stylist is blocked for the entire day',
+          conflictReason: block.reason
+            ? `${block.reason} (full day)`
+            : 'Blocked for the entire day',
         };
       }
       if (block.startTime && block.endTime) {
         if (this.timesOverlap(time, endTime, block.startTime, block.endTime)) {
           return {
             available: false,
-            conflictReason: block.reason || 'Stylist has a blocked time slot',
+            conflictReason: block.reason
+              ? `${block.reason} (${block.startTime} - ${block.endTime})`
+              : `Blocked from ${block.startTime} to ${block.endTime}`,
           };
         }
       }
@@ -939,7 +943,7 @@ export class AvailabilityService {
       if (this.timesOverlap(time, endTime, brk.startTime, brk.endTime)) {
         return {
           available: false,
-          conflictReason: brk.name || 'Stylist is on a break',
+          conflictReason: `On ${brk.name || 'break'} (${brk.startTime} - ${brk.endTime})`,
         };
       }
     }
@@ -1029,7 +1033,7 @@ export class AvailabilityService {
         const customerName = apt.customerName || apt.customer?.name || 'Customer';
         return {
           available: false,
-          conflictReason: `Has appointment with ${customerName}`,
+          conflictReason: `Appointment with ${customerName} (${aptStartTime} - ${aptEndTime})`,
           conflictingAppointment: {
             id: apt.id,
             customerName,

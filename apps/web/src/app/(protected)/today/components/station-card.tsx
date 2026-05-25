@@ -237,8 +237,8 @@ export function StationCard({
                         </span>
                       </div>
                       {(service.actualStylistName || service.assignedStylistName) && (
-                        <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                          <Scissors className="h-3 w-3" />
+                        <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                          <Scissors className="h-3 w-3 text-slate-500" />
                           <span>{service.actualStylistName || service.assignedStylistName}</span>
                         </div>
                       )}
@@ -327,8 +327,8 @@ export function StationCard({
                     </span>
                   </div>
                   {(appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName) && (
-                    <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                      <Scissors className="h-3 w-3" />
+                    <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                      <Scissors className="h-3 w-3 text-slate-500" />
                       <span>{appointment.currentService.actualStylistName || appointment.currentService.assignedStylistName}</span>
                     </div>
                   )}
@@ -421,24 +421,24 @@ export function StationCard({
                 isOvertime={appointment.isOvertime}
               />
             ) : (
-              /* Single-service progress bar (original) */
+              /* Single-service progress bar */
               appointment.progressPercent !== null && (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
                       <Clock className="h-3 w-3" />
                       {appointment.elapsedMinutes}m elapsed
                     </span>
                     {appointment.isOvertime ? (
-                      <span className="flex items-center gap-1 text-red-600">
+                      <span className="flex items-center gap-1 text-red-600 font-medium">
                         <AlertTriangle className="h-3 w-3" />
                         Overtime
                       </span>
                     ) : (
-                      <span>{appointment.remainingMinutes}m left</span>
+                      <span className="text-slate-700 dark:text-slate-300">{appointment.remainingMinutes}m left</span>
                     )}
                   </div>
-                  <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+                  <div className="relative h-4 w-full overflow-hidden rounded-md border border-slate-300 dark:border-slate-600 bg-slate-200 dark:bg-slate-700">
                     <div
                       className={cn(
                         'h-full transition-all',
@@ -458,12 +458,12 @@ export function StationCard({
             )}
 
             {/* Actions */}
-            <div className="flex flex-col gap-2 pt-1">
+            <div className="flex flex-col gap-2 pt-2">
               {isLastService && onCompleteAndCheckout ? (
                 <Button
                   variant="default"
                   size="sm"
-                  className="flex-1"
+                  className="w-full"
                   onClick={() => {
                     // Collect all in-progress service IDs (for parallel services)
                     const inProgressServices = appointment.isMultiService
@@ -506,7 +506,7 @@ export function StationCard({
                   <Button
                     variant="default"
                     size="sm"
-                    className="flex-1"
+                    className="w-full"
                     disabled={hasServiceInProgress}
                     onClick={() => {
                       // Check if there are incomplete services (upNextServices exists or services not completed)

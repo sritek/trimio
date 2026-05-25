@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Loader2,
   Scissors,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -38,11 +40,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useFloorView } from '@/hooks/queries/use-stations';
-import { useStartService } from '@/hooks/queries/use-appointments';
+import { useStartService, useStylistAvailability } from '@/hooks/queries/use-appointments';
 import { useStaffList } from '@/hooks/queries/use-staff';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { cn } from '@/lib/utils';
 import { isPendingAppointment } from '@/lib/appointment-helpers';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { UpNextService, FloorViewStatus } from '@/types/stations';
 
@@ -63,6 +66,71 @@ interface ServiceStylistOverride {
   serviceId: string;
   override: boolean;
   selectedStylistId: string | null;
+}
+
+// Availability indicator for overridden stylist
+function StylistAvailabilityIndicator({
+  stylistId,
+  duration,
+}: {
+  stylistId: string;
+  duration: number;
+}) {
+  const now = new Date();
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const currentTime = format(now, 'HH:mm');
+
+  const { data: availability, isLoading } = useStylistAvailability(
+    stylistId,
+    todayStr,
+    currentTime,
+    duration,
+    { enabled: !!stylistId && duration > 0 }
+  );
+
+  if (isLoading) {
+    return (
+      <p className="text-xs text-muted-foreground mt-1.5 ml-6">
+        Checking availability...
+      </p>
+    );
+  }
+
+  if (!availability) return null;
+
+  if (availability.available) {
+    return (
+      <div className="flex items-center gap-1.5 mt-1.5 ml-6">
+        <CheckCircle className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+        <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+          Available now
+        </p>
+      </div>
+    );
+  }
+
+  // Not available — show detailed reason
+  const reason = availability.conflictReason || 'Not available';
+  const conflicting = availability.conflictingAppointment;
+
+  return (
+    <div className="mt-1.5 ml-6 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded px-2.5 py-2 space-y-0.5">
+      <div className="flex items-start gap-1.5">
+        <AlertTriangle className="h-3.5 w-3.5 text-red-600 flex-shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="text-xs font-medium text-red-800 dark:text-red-300">
+            Not available right now
+          </p>
+          <p className="text-xs text-red-700 dark:text-red-400">
+            {reason}
+            {conflicting && (
+              <span> ({conflicting.scheduledTime})</span>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Station status configuration
@@ -420,6 +488,14 @@ export function StartNextServiceDialog({
                           </SelectContent>
                         </Select>
                       </div>
+                    )}
+
+                    {/* Availability check for overridden stylist */}
+                    {overrideData.override && overrideData.selectedStylistId && (
+                      <StylistAvailabilityIndicator
+                        stylistId={overrideData.selectedStylistId}
+                        duration={svc.durationMinutes}
+                      />
                     )}
                   </div>
                 );

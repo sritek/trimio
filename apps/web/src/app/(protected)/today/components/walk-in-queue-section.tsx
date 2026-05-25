@@ -244,6 +244,7 @@ export function WalkInQueueSection({ onServe, className }: WalkInQueueSectionPro
   );
 
   // Handle successful add to queue
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAddSuccess = useCallback((_tokenNumber: number, _estimatedWait: number) => {
     // Toast is already shown in the dialog
   }, []);

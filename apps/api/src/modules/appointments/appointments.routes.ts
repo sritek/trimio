@@ -1037,7 +1037,7 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       }>,
       reply
     ) => {
-      const { tenantId, sub: _userId } = request.user!;
+      const { tenantId } = request.user!;
       const { id: appointmentId, serviceId } = request.params;
 
       // For now, we'll implement a simple update - this can be enhanced later

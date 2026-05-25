@@ -208,7 +208,7 @@ export class AppointmentsService {
     }
 
     // Calculate derived status and services summary for multi-service appointments
-    const services = appointment.services;
+    const services = appointment.services || [];
     const isMultiService = services.length > 1;
 
     // Calculate services summary

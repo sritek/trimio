@@ -375,11 +375,22 @@ export class AvailabilityService {
     });
 
     for (const apt of appointments) {
+      const aptServices = apt.services || [];
+
+      // If no per-service data, fall back to full appointment time range
+      if (aptServices.length === 0) {
+        const aptEnd = apt.scheduledEndTime || (apt as any).endTime;
+        if (aptEnd && this.timesOverlap(startTime, endTime, apt.scheduledTime, aptEnd)) {
+          return false;
+        }
+        continue;
+      }
+
       // Calculate per-stylist time slots
-      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, apt.services);
+      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, aptServices);
 
       // Find services assigned to this stylist
-      const stylistServiceIds = apt.services
+      const stylistServiceIds = aptServices
         .filter(
           (s) =>
             s.assignedStylistId === stylistId ||
@@ -539,12 +550,26 @@ export class AvailabilityService {
     // Process each appointment
     for (const apt of appointments) {
       const customerName = apt.customerName || 'Appointment';
+      const aptServices = apt.services || [];
+
+      // If no per-service data, fall back to full appointment time range
+      if (aptServices.length === 0) {
+        if (apt.stylistId === stylistId) {
+          busySlots.push({
+            startTime: apt.scheduledTime,
+            endTime: apt.scheduledEndTime,
+            type: 'appointment',
+            label: customerName,
+          });
+        }
+        continue;
+      }
 
       // Calculate scheduled times for ALL services based on sequence and runParallel
-      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, apt.services);
+      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, aptServices);
 
       // Find services assigned to this stylist
-      const stylistServiceIds = apt.services
+      const stylistServiceIds = aptServices
         .filter(
           (s) =>
             s.assignedStylistId === stylistId ||
@@ -670,9 +695,9 @@ export class AvailabilityService {
       sequence: number;
       runParallel: boolean;
       durationMinutes: number;
-    }>
+    }> | undefined | null
   ): Array<{ id: string; startTime: string; endTime: string }> {
-    if (services.length === 0) return [];
+    if (!services || services.length === 0) return [];
 
     // Sort by sequence
     const sortedServices = [...services].sort((a, b) => a.sequence - b.sequence);
@@ -989,11 +1014,13 @@ export class AvailabilityService {
     });
 
     for (const apt of appointments) {
+      const aptServices = apt.services || [];
+
       // Calculate per-stylist time slots
-      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, apt.services);
+      const serviceSchedules = this.calculateServiceSchedules(apt.scheduledTime, aptServices);
 
       // Find services assigned to this stylist
-      const stylistServiceIds = apt.services
+      const stylistServiceIds = aptServices
         .filter(
           (s) =>
             s.assignedStylistId === stylistId ||

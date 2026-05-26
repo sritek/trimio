@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronsUpDown, Star, X } from 'lucide-react';
+import { ChevronsUpDown, Loader2, Search, Star, UserX, X } from 'lucide-react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,8 @@ export interface CustomerComboboxProps {
   customers: CustomerOption[];
   /** Callback when search input changes - for async search */
   onSearchChange?: (search: string) => void;
+  /** Loading state - show spinner while searching */
+  isLoading?: boolean;
   /** Debounce delay in ms (default: 300) */
   debounceMs?: number;
   /** Placeholder text */
@@ -122,6 +124,7 @@ export function CustomerCombobox({
   onChange,
   customers,
   onSearchChange,
+  isLoading = false,
   debounceMs = 300,
   placeholder = 'Search customer...',
   disabled = false,
@@ -151,6 +154,40 @@ export function CustomerCombobox({
     },
     [customers, onChange]
   );
+
+  // Determine empty state message
+  const getEmptyContent = () => {
+    // Still typing (input doesn't match debounced yet) or loading
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+          <p className="text-sm text-muted-foreground">Searching customers...</p>
+        </div>
+      );
+    }
+
+    // No search query yet
+    if (!debouncedSearch || debouncedSearch.length < 2) {
+      return (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <Search className="h-6 w-6 text-muted-foreground mb-2" />
+          <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
+        </div>
+      );
+    }
+
+    // Search performed but no results
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center">
+        <UserX className="h-6 w-6 text-muted-foreground mb-2" />
+        <p className="text-sm font-medium">No customers found</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          No results for &quot;{debouncedSearch}&quot;
+        </p>
+      </div>
+    );
+  };
 
   // If a customer is selected, show the card
   if (value) {
@@ -182,41 +219,49 @@ export function CustomerCombobox({
         // onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Command shouldFilter={!onSearchChange}>
-          <CommandInput
-            placeholder={placeholder}
-            value={inputValue}
-            onValueChange={setInputValue}
-          />
+          <div className="relative">
+            <CommandInput
+              placeholder={placeholder}
+              value={inputValue}
+              onValueChange={setInputValue}
+            />
+            {isLoading && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
           <CommandList className="max-h-[250px]">
-            <CommandEmpty>
-              {customers.length === 0 ? 'Type to search customers...' : 'No customers found.'}
-            </CommandEmpty>
-            <CommandGroup>
-              {customers.map((customer) => (
-                <CommandItem
-                  key={customer.id}
-                  value={customer.id}
-                  onSelect={handleSelect}
-                  className="py-2 cursor-pointer"
-                >
-                  <Avatar className="h-8 w-8 mr-2">
-                    <AvatarFallback className="text-xs">
-                      {customer.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate text-sm">{customer.name}</p>
-                    <p className="text-xs text-muted-foreground">{customer.phone}</p>
-                  </div>
-                  {customer.loyaltyPoints !== undefined && customer.loyaltyPoints > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Star className="h-3 w-3 text-amber-500" />
-                      {customer.loyaltyPoints}
-                    </span>
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {customers.length === 0 ? (
+              <CommandEmpty className="py-0">{getEmptyContent()}</CommandEmpty>
+            ) : (
+              <CommandGroup>
+                {customers.map((customer) => (
+                  <CommandItem
+                    key={customer.id}
+                    value={customer.id}
+                    onSelect={handleSelect}
+                    className="py-2 cursor-pointer"
+                  >
+                    <Avatar className="h-8 w-8 mr-2">
+                      <AvatarFallback className="text-xs">
+                        {customer.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate text-sm">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.phone}</p>
+                    </div>
+                    {customer.loyaltyPoints !== undefined && customer.loyaltyPoints > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star className="h-3 w-3 text-amber-500" />
+                        {customer.loyaltyPoints}
+                      </span>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -11,12 +11,15 @@ export type StatusType =
   | 'confirmed'
   | 'checked_in'
   | 'in_progress'
+  | 'ready_for_checkout'
   | 'completed'
   | 'cancelled'
   | 'no_show'
   | 'rescheduled'
   | 'scheduled'
   | 'pending'
+  // Service statuses
+  | 'skipped'
   // Invoice statuses
   | 'draft'
   | 'finalized'
@@ -82,6 +85,11 @@ const STATUS_CONFIG: Record<StatusType, { label: string; variant: string; dotCol
     variant: 'bg-amber-100 text-amber-800 hover:bg-amber-100',
     dotColor: 'bg-amber-500',
   },
+  ready_for_checkout: {
+    label: 'Ready for Checkout',
+    variant: 'bg-orange-100 text-orange-800 hover:bg-orange-100',
+    dotColor: 'bg-orange-500',
+  },
   completed: {
     label: 'Completed',
     variant: 'bg-slate-100 text-slate-600 hover:bg-slate-100',
@@ -111,6 +119,13 @@ const STATUS_CONFIG: Record<StatusType, { label: string; variant: string; dotCol
     label: 'Pending',
     variant: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
     dotColor: 'bg-yellow-500',
+  },
+
+  // Service statuses
+  skipped: {
+    label: 'Skipped',
+    variant: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
+    dotColor: 'bg-gray-500',
   },
 
   // Invoice statuses

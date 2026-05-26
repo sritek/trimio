@@ -40,6 +40,12 @@ export interface ConflictInfo {
   severity: 'warning' | 'severe';
 }
 
+export interface LinkedServiceInfo {
+  stylistId: string;
+  serviceName: string;
+  sequence: number;
+}
+
 export interface CalendarAppointment {
   id: string;
   stylistId: string | null;
@@ -56,6 +62,19 @@ export interface CalendarAppointment {
   conflictInfo: ConflictInfo | null;
   /** Flag for optimistic updates - appointment is being created */
   isOptimistic?: boolean;
+  // Multi-service appointment fields
+  /** Whether this appointment has multiple services */
+  isMultiService: boolean;
+  /** Total number of services in the appointment */
+  serviceCount: number;
+  /** Current service index for this stylist (1-based) */
+  currentServiceIndex?: number;
+  /** Total services assigned to this stylist */
+  totalServicesForStylist?: number;
+  /** Services assigned to other stylists in this appointment */
+  linkedServiceInfo?: LinkedServiceInfo[];
+  /** Full customer journey - all services in sequence order across all stylists */
+  fullJourney?: string[];
 }
 
 export interface ResourceCalendarData {
@@ -118,6 +137,7 @@ export function useResourceCalendar(
 
 /**
  * Move appointment (drag-drop) with optimistic update
+ * For multi-service appointments, this updates ALL blocks for the appointment
  */
 export function useMoveAppointment() {
   const queryClient = useQueryClient();
@@ -149,19 +169,53 @@ export function useMoveAppointment() {
             old
           );
 
+          // Find the appointment being moved to calculate time offset
+          const movedAppointment = old.appointments.find((apt) => apt.id === appointmentId);
+          if (!movedAppointment) return old;
+
+          // Calculate time offset in minutes
+          const oldStartMins =
+            parseInt(movedAppointment.startTime.split(':')[0]) * 60 +
+            parseInt(movedAppointment.startTime.split(':')[1]);
+          const newStartMins =
+            parseInt(newTime.split(':')[0]) * 60 + parseInt(newTime.split(':')[1]);
+          const timeOffsetMins = newStartMins - oldStartMins;
+
+          // Update ALL blocks with the same appointment ID (for multi-service appointments)
           return {
             ...old,
-            appointments: old.appointments.map((apt) =>
-              apt.id === appointmentId
-                ? {
-                    ...apt,
-                    stylistId: newStylistId ?? apt.stylistId,
-                    date: newDate,
-                    startTime: newTime,
-                    // Note: endTime will be recalculated by server
-                  }
-                : apt
-            ),
+            appointments: old.appointments.map((apt) => {
+              if (apt.id !== appointmentId) return apt;
+
+              // Calculate new times for this block
+              const blockStartMins =
+                parseInt(apt.startTime.split(':')[0]) * 60 + parseInt(apt.startTime.split(':')[1]);
+              const blockEndMins =
+                parseInt(apt.endTime.split(':')[0]) * 60 + parseInt(apt.endTime.split(':')[1]);
+
+              const newBlockStartMins = blockStartMins + timeOffsetMins;
+              const newBlockEndMins = blockEndMins + timeOffsetMins;
+
+              const newBlockStartTime = `${Math.floor(newBlockStartMins / 60)
+                .toString()
+                .padStart(2, '0')}:${(newBlockStartMins % 60).toString().padStart(2, '0')}`;
+              const newBlockEndTime = `${Math.floor(newBlockEndMins / 60)
+                .toString()
+                .padStart(2, '0')}:${(newBlockEndMins % 60).toString().padStart(2, '0')}`;
+
+              // Only update stylistId for the specific block that was dragged
+              // (identified by matching the original startTime)
+              const shouldUpdateStylist =
+                newStylistId && apt.startTime === movedAppointment.startTime;
+
+              return {
+                ...apt,
+                stylistId: shouldUpdateStylist ? newStylistId : apt.stylistId,
+                date: newDate,
+                startTime: newBlockStartTime,
+                endTime: newBlockEndTime,
+              };
+            }),
           };
         }
       );
@@ -170,7 +224,7 @@ export function useMoveAppointment() {
     },
 
     onSuccess: () => {
-      // Invalidate to get fresh data with correct endTime
+      // Invalidate to get fresh data with correct times from server
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       toast.success('Appointment moved successfully');

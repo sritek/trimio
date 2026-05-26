@@ -108,7 +108,7 @@ export const dashboardService = {
 
     const appointmentsCompleted = appointments.filter((a) => a.status === 'completed').length;
     const appointmentsRemaining = appointments.filter((a) =>
-      ['booked', 'confirmed', 'checked_in', 'in_progress'].includes(a.status)
+      ['booked', 'confirmed', 'checked_in', 'in_progress', 'ready_for_checkout'].includes(a.status)
     ).length;
     const noShows = appointments.filter((a) => a.status === 'no_show').length;
 

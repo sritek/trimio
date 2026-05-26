@@ -66,18 +66,36 @@ export function CancelAppointmentDialog({
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
+      // Don't allow closing while mutation is pending
+      if (!newOpen && cancelMutation.isPending) {
+        return;
+      }
       if (!newOpen) {
         setReason('');
         setIsSalonCancelled(false);
       }
       onOpenChange(newOpen);
     },
-    [onOpenChange]
+    [onOpenChange, cancelMutation.isPending]
   );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onPointerDownOutside={(e) => {
+          // Prevent closing by clicking outside while pending
+          if (cancelMutation.isPending) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing by escape key while pending
+          if (cancelMutation.isPending) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-destructive" />

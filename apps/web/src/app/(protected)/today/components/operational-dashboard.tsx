@@ -13,8 +13,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useOpenPanel } from '@/components/ux/slide-over';
+import { useCompleteService, useSkipAllWaitingServices } from '@/hooks/queries/use-appointments';
+import { ConfirmDialog } from '@/components/common';
 import { FloorViewTab } from './floor-view-tab';
+import { StartNextServiceDialog } from '@/components/ux/dialogs/start-next-service-dialog';
+import { CompleteServiceDialog } from '@/components/ux/dialogs/complete-service-dialog';
 import type { AttentionItem, CommandCenterData } from '@/types/dashboard';
+import type { UpNextService, StationCard as StationCardType } from '@/types/stations';
 
 interface CollapsibleSectionProps {
   title: string;
@@ -107,6 +112,47 @@ export function OperationalDashboard({
   const { openStationAssignment, openAppointmentDetails } = useOpenPanel();
   const [activeTab, setActiveTab] = useState('timeline');
 
+  // State for start next service dialog
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveDialogData, setMoveDialogData] = useState<{
+    appointmentId: string;
+    currentStationId: string;
+    nextService: UpNextService;
+    allNextServices: UpNextService[];
+  } | null>(null);
+
+  // State for complete service confirmation dialog
+  const [completeServiceDialogOpen, setCompleteServiceDialogOpen] = useState(false);
+  const [completeServiceData, setCompleteServiceData] = useState<{
+    appointmentId: string;
+    serviceId: string;
+    serviceName: string;
+    appointmentDate?: string;
+    appointmentTime?: string;
+  } | null>(null);
+
+  // State for complete & checkout confirmation dialog
+  const [completeAndCheckoutDialogOpen, setCompleteAndCheckoutDialogOpen] = useState(false);
+  const [completeAndCheckoutData, setCompleteAndCheckoutData] = useState<{
+    appointmentId: string;
+    serviceIds: string[];
+    serviceName: string;
+    appointmentDate?: string;
+    appointmentTime?: string;
+  } | null>(null);
+
+  // State for incomplete services warning dialog
+  const [incompleteServicesDialogOpen, setIncompleteServicesDialogOpen] = useState(false);
+  const [pendingCheckoutData, setPendingCheckoutData] = useState<{
+    appointmentId: string;
+  } | null>(null);
+
+  // Complete service mutation
+  const completeServiceMutation = useCompleteService();
+
+  // Skip all waiting services mutation
+  const skipAllWaitingServicesMutation = useSkipAllWaitingServices();
+
   // Floor view action handlers
   const handleAssign = useCallback(
     (stationId: string) => {
@@ -116,12 +162,158 @@ export function OperationalDashboard({
   );
 
   const handleCheckout = useCallback(
-    (appointmentId: string) => {
-      openAppointmentDetails(appointmentId, {
-        isCheckoutMode: true,
-      });
+    (
+      appointmentId: string,
+      _isPending: boolean,
+      _scheduledDate?: string,
+      _scheduledTime?: string,
+      hasIncompleteServices?: boolean
+    ) => {
+      if (hasIncompleteServices) {
+        // Show warning dialog before proceeding to checkout
+        setPendingCheckoutData({ appointmentId });
+        setIncompleteServicesDialogOpen(true);
+      } else {
+        // Proceed directly to checkout
+        openAppointmentDetails(appointmentId, {
+          isCheckoutMode: true,
+        });
+      }
     },
     [openAppointmentDetails]
+  );
+
+  // Confirm checkout with incomplete services - skip waiting services first, then open checkout
+  const confirmCheckoutWithIncompleteServices = useCallback(async () => {
+    if (pendingCheckoutData) {
+      // Skip all waiting services first
+      try {
+        await skipAllWaitingServicesMutation.mutateAsync({
+          appointmentId: pendingCheckoutData.appointmentId,
+          reason: 'Early checkout',
+        });
+      } catch {
+        // If skipping fails (e.g., in_progress services exist), the error toast is shown by the mutation
+        // Don't proceed to checkout
+        setIncompleteServicesDialogOpen(false);
+        setPendingCheckoutData(null);
+        return;
+      }
+
+      // Now open checkout panel
+      openAppointmentDetails(pendingCheckoutData.appointmentId, {
+        isCheckoutMode: true,
+      });
+      setIncompleteServicesDialogOpen(false);
+      setPendingCheckoutData(null);
+    }
+  }, [pendingCheckoutData, skipAllWaitingServicesMutation, openAppointmentDetails]);
+
+  // Handle starting next service - opens start next service dialog
+  const handleStartNextService = useCallback(
+    (
+      appointmentId: string,
+      currentStationId: string,
+      _currentStationName: string,
+      nextService: StationCardType['upNext'],
+      allNextServices?: StationCardType['upNextServices']
+    ) => {
+      if (!nextService) return;
+
+      setMoveDialogData({
+        appointmentId,
+        currentStationId,
+        nextService,
+        allNextServices: allNextServices || [nextService],
+      });
+      setMoveDialogOpen(true);
+    },
+    []
+  );
+
+  // Handle completing current service - shows confirmation dialog
+  const handleCompleteService = useCallback(
+    (
+      appointmentId: string,
+      serviceId: string,
+      serviceName: string,
+      appointmentDate?: string,
+      appointmentTime?: string
+    ) => {
+      setCompleteServiceData({
+        appointmentId,
+        serviceId,
+        serviceName,
+        appointmentDate,
+        appointmentTime,
+      });
+      setCompleteServiceDialogOpen(true);
+    },
+    []
+  );
+
+  // Handle completing last service and proceeding to checkout
+  const handleCompleteAndCheckout = useCallback(
+    (
+      appointmentId: string,
+      serviceIds: string[],
+      serviceName: string,
+      appointmentDate?: string,
+      appointmentTime?: string
+    ) => {
+      setCompleteAndCheckoutData({
+        appointmentId,
+        serviceIds,
+        serviceName,
+        appointmentDate,
+        appointmentTime,
+      });
+      setCompleteAndCheckoutDialogOpen(true);
+    },
+    []
+  );
+
+  // Confirm complete service
+  const confirmCompleteService = useCallback(
+    (completedAt: string) => {
+      if (completeServiceData) {
+        completeServiceMutation.mutate({
+          appointmentId: completeServiceData.appointmentId,
+          serviceId: completeServiceData.serviceId,
+          actualEndTime: completedAt,
+        });
+        setCompleteServiceDialogOpen(false);
+        setCompleteServiceData(null);
+      }
+    },
+    [completeServiceData, completeServiceMutation]
+  );
+
+  // Confirm complete service and checkout
+  const confirmCompleteAndCheckout = useCallback(
+    async (completedAt: string) => {
+      if (completeAndCheckoutData) {
+        try {
+          // Complete all in-progress services (for parallel services)
+          for (const serviceId of completeAndCheckoutData.serviceIds) {
+            await completeServiceMutation.mutateAsync({
+              appointmentId: completeAndCheckoutData.appointmentId,
+              serviceId,
+              actualEndTime: completedAt,
+            });
+          }
+          // After completing all, open checkout
+          openAppointmentDetails(completeAndCheckoutData.appointmentId, {
+            isCheckoutMode: true,
+          });
+        } catch {
+          // Error toast is shown by the mutation
+        }
+        setCompleteAndCheckoutDialogOpen(false);
+        setCompleteAndCheckoutData(null);
+      }
+    },
+    [completeAndCheckoutData, completeServiceMutation, openAppointmentDetails]
   );
 
   return (
@@ -182,8 +374,65 @@ export function OperationalDashboard({
           branchId={branchId}
           onAssign={handleAssign}
           onCheckout={handleCheckout}
+          onStartNextService={handleStartNextService}
+          onCompleteService={handleCompleteService}
+          onCompleteAndCheckout={handleCompleteAndCheckout}
         />
       </TabsContent>
+
+      {/* Start Next Service Dialog */}
+      {moveDialogData && (
+        <StartNextServiceDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          appointmentId={moveDialogData.appointmentId}
+          service={moveDialogData.nextService}
+          allServices={moveDialogData.allNextServices}
+          currentStationId={moveDialogData.currentStationId}
+          onSuccess={() => {
+            setMoveDialogData(null);
+          }}
+        />
+      )}
+
+      {/* Complete Service Dialog */}
+      {completeServiceData && (
+        <CompleteServiceDialog
+          open={completeServiceDialogOpen}
+          onOpenChange={setCompleteServiceDialogOpen}
+          serviceName={completeServiceData.serviceName}
+          appointmentDate={completeServiceData.appointmentDate}
+          appointmentTime={completeServiceData.appointmentTime}
+          onConfirm={confirmCompleteService}
+          isLoading={completeServiceMutation.isPending}
+        />
+      )}
+
+      {/* Complete & Checkout Dialog */}
+      {completeAndCheckoutData && (
+        <CompleteServiceDialog
+          open={completeAndCheckoutDialogOpen}
+          onOpenChange={setCompleteAndCheckoutDialogOpen}
+          serviceName={completeAndCheckoutData.serviceName}
+          appointmentDate={completeAndCheckoutData.appointmentDate}
+          appointmentTime={completeAndCheckoutData.appointmentTime}
+          onConfirm={confirmCompleteAndCheckout}
+          isLoading={completeServiceMutation.isPending}
+          isCheckoutMode
+        />
+      )}
+
+      {/* Incomplete Services Warning Dialog */}
+      <ConfirmDialog
+        open={incompleteServicesDialogOpen}
+        onOpenChange={setIncompleteServicesDialogOpen}
+        title="Incomplete Services"
+        description="This appointment has services that are not yet completed. Are you sure you want to proceed to checkout? The remaining services will be marked as skipped."
+        confirmText="Proceed to Checkout"
+        cancelText="Go Back"
+        variant="destructive"
+        onConfirm={confirmCheckoutWithIncompleteServices}
+      />
     </Tabs>
   );
 }

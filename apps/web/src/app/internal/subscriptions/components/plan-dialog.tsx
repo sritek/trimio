@@ -239,9 +239,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="displayOrder"
                     type="number"
                     min={0}
-                    value={formData.displayOrder}
+                    value={formData.displayOrder === 0 ? '' : formData.displayOrder}
                     onChange={(e) =>
-                      setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        displayOrder: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                 </div>
@@ -306,9 +309,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="trialDays"
                     type="number"
                     min={0}
-                    value={formData.trialDays}
+                    value={formData.trialDays === 0 ? '' : formData.trialDays}
                     onChange={(e) =>
-                      setFormData({ ...formData, trialDays: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        trialDays: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                 </div>
@@ -318,9 +324,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="gracePeriodDays"
                     type="number"
                     min={0}
-                    value={formData.gracePeriodDays}
+                    value={formData.gracePeriodDays === 0 ? '' : formData.gracePeriodDays}
                     onChange={(e) =>
-                      setFormData({ ...formData, gracePeriodDays: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        gracePeriodDays: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                 </div>
@@ -359,9 +368,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="maxUsers"
                     type="number"
                     min={-1}
-                    value={formData.maxUsers}
+                    value={formData.maxUsers === 0 ? '' : formData.maxUsers}
                     onChange={(e) =>
-                      setFormData({ ...formData, maxUsers: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        maxUsers: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                   <p className="text-xs text-slate-500">
@@ -374,11 +386,13 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="maxAppointmentsPerDay"
                     type="number"
                     min={-1}
-                    value={formData.maxAppointmentsPerDay}
+                    value={
+                      formData.maxAppointmentsPerDay === 0 ? '' : formData.maxAppointmentsPerDay
+                    }
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        maxAppointmentsPerDay: parseInt(e.target.value) || 0,
+                        maxAppointmentsPerDay: e.target.value === '' ? 0 : parseInt(e.target.value),
                       })
                     }
                   />
@@ -397,9 +411,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="maxServices"
                     type="number"
                     min={-1}
-                    value={formData.maxServices}
+                    value={formData.maxServices === 0 ? '' : formData.maxServices}
                     onChange={(e) =>
-                      setFormData({ ...formData, maxServices: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        maxServices: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                   <p className="text-xs text-slate-500">
@@ -412,9 +429,12 @@ export function PlanDialog({ open, onOpenChange, plan, onSave, isLoading }: Plan
                     id="maxProducts"
                     type="number"
                     min={-1}
-                    value={formData.maxProducts}
+                    value={formData.maxProducts === 0 ? '' : formData.maxProducts}
                     onChange={(e) =>
-                      setFormData({ ...formData, maxProducts: parseInt(e.target.value) || 0 })
+                      setFormData({
+                        ...formData,
+                        maxProducts: e.target.value === '' ? 0 : parseInt(e.target.value),
+                      })
                     }
                   />
                   <p className="text-xs text-slate-500">

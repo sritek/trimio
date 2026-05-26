@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Power } from 'lucide-react';
 
 import { formatDate } from '@/lib/format';
 
@@ -48,13 +48,13 @@ function getPrimaryBranch(staffMember: StaffProfile): string {
 interface GetColumnsOptions {
   canWrite: boolean;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
 }
 
 export function getStaffColumns({
   canWrite,
   onEdit,
-  onDelete,
+  onToggleStatus,
 }: GetColumnsOptions): ColumnDef<StaffProfile>[] {
   return [
     {
@@ -107,7 +107,9 @@ export function getStaffColumns({
     {
       id: 'actions',
       cell: ({ row }) =>
-        canWrite ? <StaffActions staff={row.original} onEdit={onEdit} onDelete={onDelete} /> : null,
+        canWrite ? (
+          <StaffActions staff={row.original} onEdit={onEdit} onToggleStatus={onToggleStatus} />
+        ) : null,
     },
   ];
 }
@@ -137,10 +139,10 @@ function StaffStatusBadge({ isActive }: { isActive: boolean }) {
 interface StaffActionsProps {
   staff: StaffProfile;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
 }
 
-function StaffActions({ staff, onEdit, onDelete }: StaffActionsProps) {
+function StaffActions({ staff, onEdit, onToggleStatus }: StaffActionsProps) {
   const t = useTranslations('common');
 
   return (
@@ -156,9 +158,12 @@ function StaffActions({ staff, onEdit, onDelete }: StaffActionsProps) {
           {t('actions.edit')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onDelete(staff.userId)} className="text-destructive">
-          <Trash2 className="mr-2 h-4 w-4" />
-          Deactivate
+        <DropdownMenuItem
+          onClick={() => onToggleStatus(staff.userId, staff.isActive)}
+          className={staff.isActive ? 'text-destructive' : ''}
+        >
+          <Power className="mr-2 h-4 w-4" />
+          {staff.isActive ? 'Deactivate' : 'Activate'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -20,6 +20,8 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed-services": "tsx prisma/seed-services.ts",
+    "db:seed-customers": "tsx prisma/seed-customers.ts",
     "db:reset": "prisma migrate reset",
     "db:reset:skip-seed": "prisma migrate reset --force --skip-seed",
     "db:studio": "prisma studio",

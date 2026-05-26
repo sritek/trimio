@@ -130,7 +130,7 @@ export default function NewAppointmentPage() {
 
   // Queries
   const { data: customers } = useCustomerSearch({ q: customerSearch, limit: 5 });
-  const { data: servicesResult } = useServices({ isActive: true });
+  const { data: servicesResult } = useServices({ isActive: true, limit: -1 });
   const services = servicesResult?.data || [];
 
   const { data: slotsData } = useAvailableSlots({

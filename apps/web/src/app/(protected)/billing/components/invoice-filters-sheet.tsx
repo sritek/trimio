@@ -38,28 +38,6 @@ interface InvoiceFiltersSheetProps {
   onFiltersChange: (filters: InvoiceFiltersState) => void;
 }
 
-// ============================================
-// Constants
-// ============================================
-
-const INVOICE_STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft', color: 'bg-yellow-500' },
-  { value: 'finalized', label: 'Finalized', color: 'bg-green-500' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-500' },
-  { value: 'refunded', label: 'Refunded', color: 'bg-gray-500' },
-];
-
-const PAYMENT_STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending', color: 'bg-yellow-500' },
-  { value: 'partial', label: 'Partial', color: 'bg-orange-500' },
-  { value: 'paid', label: 'Paid', color: 'bg-green-500' },
-  { value: 'refunded', label: 'Refunded', color: 'bg-gray-500' },
-];
-
-// ============================================
-// Component
-// ============================================
-
 export function InvoiceFiltersSheet({
   open,
   onOpenChange,
@@ -112,21 +90,6 @@ export function InvoiceFiltersSheet({
     } else {
       setLocalFilters({ ...localFilters, dateTo: dateStr });
     }
-  };
-
-  // Toggle functions for multi-select
-  const toggleStatus = (status: string) => {
-    const newStatuses = localFilters.statuses.includes(status)
-      ? localFilters.statuses.filter((s) => s !== status)
-      : [...localFilters.statuses, status];
-    setLocalFilters({ ...localFilters, statuses: newStatuses });
-  };
-
-  const togglePaymentStatus = (status: string) => {
-    const newStatuses = localFilters.paymentStatuses.includes(status)
-      ? localFilters.paymentStatuses.filter((s) => s !== status)
-      : [...localFilters.paymentStatuses, status];
-    setLocalFilters({ ...localFilters, paymentStatuses: newStatuses });
   };
 
   const handleReset = () => {
@@ -195,66 +158,6 @@ export function InvoiceFiltersSheet({
             </div>
           </div>
 
-          {/* Invoice Status Filter */}
-          <div>
-            <Label className="text-sm font-medium mb-3 block">
-              Invoice Status
-              {localFilters.statuses.length > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({localFilters.statuses.length} selected)
-                </span>
-              )}
-            </Label>
-            <div className="space-y-2">
-              {INVOICE_STATUS_OPTIONS.map((status) => (
-                <div key={status.value} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`status-${status.value}`}
-                    checked={localFilters.statuses.includes(status.value)}
-                    onCheckedChange={() => toggleStatus(status.value)}
-                  />
-                  <Label
-                    htmlFor={`status-${status.value}`}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className={`w-3 h-3 rounded-full ${status.color}`} />
-                    {status.label}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Payment Status Filter */}
-          <div>
-            <Label className="text-sm font-medium mb-3 block">
-              Payment Status
-              {localFilters.paymentStatuses.length > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({localFilters.paymentStatuses.length} selected)
-                </span>
-              )}
-            </Label>
-            <div className="space-y-2">
-              {PAYMENT_STATUS_OPTIONS.map((status) => (
-                <div key={status.value} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`payment-${status.value}`}
-                    checked={localFilters.paymentStatuses.includes(status.value)}
-                    onCheckedChange={() => togglePaymentStatus(status.value)}
-                  />
-                  <Label
-                    htmlFor={`payment-${status.value}`}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className={`w-3 h-3 rounded-full ${status.color}`} />
-                    {status.label}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Staff Filter */}
           <div>
             <Label className="text-sm font-medium mb-3 block">
@@ -288,15 +191,19 @@ export function InvoiceFiltersSheet({
 }
 
 // Inline staff checkbox list for the filter sheet
-function StaffCheckboxList({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
+function StaffCheckboxList({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
   const { branchId } = useBranchContext();
   const { data } = useStaffList({ branchId: branchId || '', role: 'stylist' });
   const stylists = data?.data || [];
 
   const toggle = (id: string) => {
-    onChange(
-      selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]
-    );
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
   };
 
   if (stylists.length === 0) {

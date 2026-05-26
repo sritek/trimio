@@ -82,6 +82,9 @@ export const createServiceBodySchema = z.object({
   commissionType: z.enum(['percentage', 'fixed']).default('percentage'),
   commissionValue: z.number().min(0).default(0),
 
+  // Multi-service appointment settings
+  defaultRunParallel: z.enum(['always', 'never', 'optional']).default('optional'),
+
   // Display
   displayOrder: z.number().int().min(0).optional(),
   imageUrl: z.string().url().max(500).optional().nullable(),
@@ -94,7 +97,14 @@ export const updateServiceBodySchema = createServiceBodySchema.partial();
 
 export const serviceQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  // limit: -1 means fetch all (no pagination)
+  limit: z.coerce
+    .number()
+    .int()
+    .refine((val) => val === -1 || (val > 0 && val <= 100), {
+      message: 'Limit must be -1 (all) or between 1 and 100',
+    })
+    .default(20),
   categoryId: z.string().uuid().optional(),
   search: z.string().optional(),
   isActive: z.coerce.boolean().optional(),

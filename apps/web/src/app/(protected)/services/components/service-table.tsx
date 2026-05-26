@@ -28,6 +28,7 @@ interface ServiceTableProps {
   onPageSizeChange: (pageSize: number) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
   hasFilters: boolean;
 }
 
@@ -46,13 +47,14 @@ export function ServiceTable({
   onPageSizeChange,
   onEdit,
   onDelete,
+  onToggleStatus,
   hasFilters,
 }: ServiceTableProps) {
   const t = useTranslations('services');
 
   const columns = useMemo(
-    () => getServiceColumns({ canWrite, onEdit, onDelete }),
-    [canWrite, onEdit, onDelete]
+    () => getServiceColumns({ canWrite, onEdit, onDelete, onToggleStatus }),
+    [canWrite, onEdit, onDelete, onToggleStatus]
   );
 
   if (error) {

@@ -88,6 +88,9 @@ export function useOpenPanel() {
       date?: string;
       time?: string;
       customerId?: string;
+      serviceIds?: string[];
+      walkInQueueId?: string;
+      bookingType?: 'online' | 'phone' | 'walk_in';
     }) =>
       openPanel(PANEL_IDS.NEW_APPOINTMENT, options || {}, {
         title: 'New Appointment',

@@ -132,7 +132,13 @@ export function useCustomerPhoneLookup(phone: string) {
   return useQuery({
     queryKey: [...customerKeys.all, 'phone-lookup', phone],
     queryFn: () =>
-      api.get<{ id: string; name: string; phone: string } | null>('/customers/phone-lookup', {
+      api.get<{
+        id: string;
+        name: string;
+        phone: string;
+        loyaltyPoints: number;
+        tags: string[];
+      } | null>('/customers/phone-lookup', {
         phone,
       }),
     enabled: isValidPhone,
@@ -209,6 +215,22 @@ export function useReactivateCustomer() {
   return useMutation({
     mutationFn: (id: string) => api.post<Customer>(`/customers/${id}/reactivate`),
     onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(id) });
+    },
+  });
+}
+
+/**
+ * Unblock customer from booking restrictions (reset no-show count)
+ */
+export function useUnblockCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post<Customer>(`/customers/${id}/unblock`, { reason }),
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       queryClient.invalidateQueries({ queryKey: customerKeys.detail(id) });
     },

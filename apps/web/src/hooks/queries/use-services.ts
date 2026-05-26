@@ -27,7 +27,7 @@ export const serviceKeys = {
 /**
  * Get services with pagination
  */
-export function useServices(filters: ServiceFilters = {}) {
+export function useServices(filters: ServiceFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: serviceKeys.list(filters),
     queryFn: () =>
@@ -41,6 +41,7 @@ export function useServices(filters: ServiceFilters = {}) {
         sortBy: filters.sortBy,
         sortOrder: filters.sortOrder,
       }),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -111,6 +112,23 @@ export function useDeleteService() {
     mutationFn: (id: string) => api.delete<{ message: string }>(`/services/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: serviceKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: serviceKeys.catalog() });
+    },
+  });
+}
+
+/**
+ * Toggle service active status (activate/deactivate)
+ */
+export function useToggleServiceStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch<Service>(`/services/${id}`, { isActive }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: serviceKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: serviceKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: serviceKeys.catalog() });
     },
   });

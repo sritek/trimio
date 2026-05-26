@@ -257,7 +257,8 @@ export class CalendarService {
         // Check if stylist has full day blocked for the requested date
         // Since we already filtered blockedSlots by date range, just check isFullDay
         const isFullDayBlocked = stylistBlocked.some((bs) => bs.isFullDay);
-        const attendanceStatus = (attendanceMap.get(ub.user.id) ?? 'not_marked') as CalendarStylist['attendanceStatus'];
+        const attendanceStatus = (attendanceMap.get(ub.user.id) ??
+          'not_marked') as CalendarStylist['attendanceStatus'];
         const isAbsentOrOnLeave = attendanceStatus === 'absent' || attendanceStatus === 'on_leave';
 
         return {
@@ -287,7 +288,19 @@ export class CalendarService {
       },
       include: {
         services: {
-          select: { serviceName: true },
+          select: {
+            id: true,
+            serviceName: true,
+            sequence: true,
+            runParallel: true,
+            status: true,
+            assignedStylistId: true,
+            actualStylistId: true,
+            scheduledStartTime: true,
+            scheduledEndTime: true,
+            durationMinutes: true,
+          },
+          orderBy: { sequence: 'asc' },
         },
         customer: {
           select: { name: true, phone: true },
@@ -299,25 +312,183 @@ export class CalendarService {
     // Build conflict info for each appointment
     const appointmentConflicts = this.computeConflictInfo(appointments);
 
-    const calendarAppointments: CalendarAppointment[] = appointments.map((apt) => {
+    // For multi-stylist appointments, we need to create separate calendar entries
+    // for each stylist who has services assigned to them
+    // Each entry should show only the time slot for that stylist's services
+    const calendarAppointments: CalendarAppointment[] = [];
+
+    for (const apt of appointments) {
       const conflictData = appointmentConflicts.get(apt.id);
-      return {
-        id: apt.id,
-        stylistId: apt.stylistId,
-        date: format(apt.scheduledDate, 'yyyy-MM-dd'),
-        startTime: apt.scheduledTime,
-        endTime: apt.scheduledEndTime,
-        customerName: apt.customer?.name || apt.customerName || 'Guest',
-        customerPhone: apt.customer?.phone || apt.customerPhone,
-        services: apt.services.map((s) => s.serviceName),
-        status: apt.status,
-        bookingType: apt.bookingType,
-        totalAmount: Number(apt.totalAmount),
-        hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
-        conflictInfo:
-          conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
-      };
-    });
+      const isMultiService = apt.services.length > 1;
+
+      // Get unique stylist IDs from services (including primary stylist)
+      const stylistIdsInAppointment = new Set<string>();
+      if (apt.stylistId) {
+        stylistIdsInAppointment.add(apt.stylistId);
+      }
+      for (const service of apt.services) {
+        if (service.assignedStylistId) {
+          stylistIdsInAppointment.add(service.assignedStylistId);
+        }
+        if (service.actualStylistId) {
+          stylistIdsInAppointment.add(service.actualStylistId);
+        }
+      }
+
+      // If no stylists assigned, create one entry with null stylistId
+      if (stylistIdsInAppointment.size === 0) {
+        calendarAppointments.push({
+          id: apt.id,
+          stylistId: null,
+          date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+          startTime: apt.scheduledTime,
+          endTime: apt.scheduledEndTime,
+          customerName: apt.customer?.name || apt.customerName || 'Guest',
+          customerPhone: apt.customer?.phone || apt.customerPhone,
+          services: apt.services.map((s) => s.serviceName),
+          status: apt.status,
+          bookingType: apt.bookingType,
+          totalAmount: Number(apt.totalAmount),
+          hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+          conflictInfo:
+            conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+          isMultiService,
+          serviceCount: apt.services.length,
+        });
+        continue;
+      }
+
+      // Create a calendar entry for each stylist
+      for (const stylistId of stylistIdsInAppointment) {
+        // Get services assigned to this stylist
+        const stylistServices = apt.services.filter(
+          (s) => s.assignedStylistId === stylistId || s.actualStylistId === stylistId
+        );
+
+        // Calculate the time slot for this stylist based on their services
+        // Use per-service scheduledStartTime/scheduledEndTime if available
+        let stylistStartTime = apt.scheduledTime;
+        let stylistEndTime = apt.scheduledEndTime;
+
+        if (stylistServices.length > 0) {
+          // Find the earliest start time and latest end time for this stylist's services
+          const servicesWithTimes = stylistServices.filter(
+            (s) => s.scheduledStartTime && s.scheduledEndTime
+          );
+
+          if (servicesWithTimes.length > 0) {
+            // Get earliest start time
+            const earliestStart = servicesWithTimes.reduce(
+              (earliest, s) => {
+                if (!earliest || (s.scheduledStartTime && s.scheduledStartTime < earliest)) {
+                  return s.scheduledStartTime!;
+                }
+                return earliest;
+              },
+              null as Date | null
+            );
+
+            // Get latest end time
+            const latestEnd = servicesWithTimes.reduce(
+              (latest, s) => {
+                if (!latest || (s.scheduledEndTime && s.scheduledEndTime > latest)) {
+                  return s.scheduledEndTime!;
+                }
+                return latest;
+              },
+              null as Date | null
+            );
+
+            if (earliestStart) {
+              stylistStartTime = format(earliestStart, 'HH:mm');
+            }
+            if (latestEnd) {
+              stylistEndTime = format(latestEnd, 'HH:mm');
+            }
+          } else {
+            // Fallback: calculate from service durations if no scheduled times
+            // This handles legacy data without per-service times
+            const totalDuration = stylistServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+            // For now, use appointment start time + total duration
+            // This is a rough estimate for legacy data
+            const [startH, startM] = apt.scheduledTime.split(':').map(Number);
+            const endMinutes = startH * 60 + startM + totalDuration;
+            stylistEndTime = `${Math.floor(endMinutes / 60)
+              .toString()
+              .padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+          }
+        }
+
+        // Calculate per-stylist service info
+        let currentServiceIndex: number | undefined;
+        let totalServicesForStylist: number | undefined;
+        let linkedServiceInfo:
+          | { stylistId: string; serviceName: string; sequence: number }[]
+          | undefined;
+        let fullJourney: string[] | undefined;
+
+        if (isMultiService) {
+          totalServicesForStylist = stylistServices.length;
+
+          // Find current service index (first non-completed service)
+          const currentService = stylistServices.find(
+            (s) => s.status === 'waiting' || s.status === 'in_progress'
+          );
+          currentServiceIndex = currentService
+            ? stylistServices.findIndex((s) => s.id === currentService.id) + 1
+            : stylistServices.length;
+
+          // Get linked services (services assigned to other stylists) with sequence
+          linkedServiceInfo = apt.services
+            .filter(
+              (s) =>
+                s.assignedStylistId &&
+                s.assignedStylistId !== stylistId &&
+                s.actualStylistId !== stylistId
+            )
+            .map((s) => ({
+              stylistId: s.assignedStylistId!,
+              serviceName: s.serviceName,
+              sequence: s.sequence || 0,
+            }));
+
+          // Build full journey - all services in sequence order
+          fullJourney = apt.services
+            .slice()
+            .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+            .map((s) => s.serviceName);
+        }
+
+        calendarAppointments.push({
+          id: apt.id,
+          stylistId: stylistId,
+          date: format(apt.scheduledDate, 'yyyy-MM-dd'),
+          startTime: stylistStartTime,
+          endTime: stylistEndTime,
+          customerName: apt.customer?.name || apt.customerName || 'Guest',
+          customerPhone: apt.customer?.phone || apt.customerPhone,
+          // Show only services assigned to this stylist
+          services:
+            stylistServices.length > 0
+              ? stylistServices.map((s) => s.serviceName)
+              : apt.services.map((s) => s.serviceName),
+          status: apt.status,
+          bookingType: apt.bookingType,
+          totalAmount: Number(apt.totalAmount),
+          hasConflict: conflictData ? conflictData.conflictingAppointmentIds.length > 0 : false,
+          conflictInfo:
+            conflictData && conflictData.conflictingAppointmentIds.length > 0 ? conflictData : null,
+          // Multi-service fields
+          isMultiService,
+          serviceCount: apt.services.length,
+          currentServiceIndex,
+          totalServicesForStylist,
+          linkedServiceInfo:
+            linkedServiceInfo && linkedServiceInfo.length > 0 ? linkedServiceInfo : undefined,
+          fullJourney,
+        });
+      }
+    }
 
     return {
       date,
@@ -330,6 +501,8 @@ export class CalendarService {
 
   /**
    * Move an appointment to a new time/stylist (drag-drop)
+   * For multi-service appointments, this updates all per-service times
+   * while preserving sequence and parallel execution relationships
    */
   async moveAppointment(
     tenantId: string,
@@ -339,7 +512,7 @@ export class CalendarService {
   ) {
     const { newStylistId, newDate, newTime } = input;
 
-    // Get the appointment
+    // Get the appointment with services ordered by sequence
     const appointment = await this.prisma.appointment.findFirst({
       where: {
         id: appointmentId,
@@ -347,7 +520,9 @@ export class CalendarService {
         deletedAt: null,
       },
       include: {
-        services: true,
+        services: {
+          orderBy: { sequence: 'asc' },
+        },
       },
     });
 
@@ -383,33 +558,87 @@ export class CalendarService {
     // Calculate new end time
     const newScheduledEndTime = this.calculateEndTime(newTime, duration);
 
-    // Check for conflicts at new time/stylist
-    const targetStylistId = newStylistId || appointment.stylistId;
+    // For multi-service appointments, we need to check conflicts for ALL stylists involved
+    // Get unique stylist IDs from services
+    const stylistIdsInAppointment = new Set<string>();
+    if (newStylistId) {
+      stylistIdsInAppointment.add(newStylistId);
+    } else if (appointment.stylistId) {
+      stylistIdsInAppointment.add(appointment.stylistId);
+    }
+    for (const service of appointment.services) {
+      if (service.assignedStylistId) {
+        stylistIdsInAppointment.add(service.assignedStylistId);
+      }
+    }
 
-    if (targetStylistId) {
+    // Calculate the time offset (how much we're moving the appointment)
+    const oldStartMins =
+      parseInt(appointment.scheduledTime.split(':')[0]) * 60 +
+      parseInt(appointment.scheduledTime.split(':')[1]);
+    const newStartMins = parseInt(newTime.split(':')[0]) * 60 + parseInt(newTime.split(':')[1]);
+    const timeOffsetMins = newStartMins - oldStartMins;
+
+    // Check for conflicts for each stylist at their new times
+    for (const stylistId of stylistIdsInAppointment) {
+      // Get services for this stylist
+      const stylistServices = appointment.services.filter((s) => s.assignedStylistId === stylistId);
+
+      if (stylistServices.length === 0) continue;
+
+      // Calculate the new time range for this stylist's services
+      let stylistStartTime = newTime;
+      let stylistEndTime = newScheduledEndTime;
+
+      if (stylistServices.length > 0 && stylistServices[0].scheduledStartTime) {
+        // Calculate based on per-service times with offset
+        const firstServiceStart = stylistServices[0].scheduledStartTime;
+        const lastService = stylistServices[stylistServices.length - 1];
+        const lastServiceEnd = lastService.scheduledEndTime;
+
+        if (firstServiceStart && lastServiceEnd) {
+          // Apply time offset to get new times
+          const firstStartMins =
+            firstServiceStart.getHours() * 60 + firstServiceStart.getMinutes() + timeOffsetMins;
+          const lastEndMins =
+            lastServiceEnd.getHours() * 60 + lastServiceEnd.getMinutes() + timeOffsetMins;
+
+          stylistStartTime = `${Math.floor(firstStartMins / 60)
+            .toString()
+            .padStart(2, '0')}:${(firstStartMins % 60).toString().padStart(2, '0')}`;
+          stylistEndTime = `${Math.floor(lastEndMins / 60)
+            .toString()
+            .padStart(2, '0')}:${(lastEndMins % 60).toString().padStart(2, '0')}`;
+        }
+      }
+
+      // Calculate duration for this stylist's services
+      const stylistDuration = stylistServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+
       const conflicts = await this.checkConflicts(
         tenantId,
         appointment.branchId,
         newDate,
-        newTime,
-        duration,
-        targetStylistId,
+        stylistStartTime,
+        stylistDuration,
+        stylistId,
         appointmentId
       );
 
       if (conflicts.length > 0) {
         throw new AppError('CAL_CONFLICT', 'Time slot conflicts with existing appointments', 409, {
           conflicts,
+          stylistId,
         });
       }
 
       // Check if stylist is blocked at this time
       const isBlocked = await this.isStylistBlocked(
         tenantId,
-        targetStylistId,
+        stylistId,
         newDate,
-        newTime,
-        newScheduledEndTime
+        stylistStartTime,
+        stylistEndTime
       );
 
       if (isBlocked) {
@@ -417,25 +646,86 @@ export class CalendarService {
       }
     }
 
-    // Update the appointment
+    // Update the appointment and all service times
     return this.prisma.$transaction(async (tx) => {
       const oldDate = format(appointment.scheduledDate, 'yyyy-MM-dd');
       const oldTime = appointment.scheduledTime;
       const oldStylistId = appointment.stylistId;
 
-      const updated = await tx.appointment.update({
+      // Update main appointment
+      await tx.appointment.update({
         where: { id: appointmentId },
         data: {
           scheduledDate: parseToUTCDate(newDate),
           scheduledTime: newTime,
           scheduledEndTime: newScheduledEndTime,
-          stylistId: targetStylistId,
-          // Also update totalDuration if it was missing/incorrect
+          stylistId: newStylistId || appointment.stylistId,
           totalDuration: duration,
           updatedAt: new Date(),
         },
+      });
+
+      // Update per-service scheduled times
+      // We need to recalculate times based on the new start time while preserving
+      // sequence and parallel execution relationships
+      const baseDate = parseToUTCDate(newDate);
+      const [startHours, startMins] = newTime.split(':').map(Number);
+
+      // Sort services by sequence
+      const sortedServices = [...appointment.services].sort(
+        (a, b) => (a.sequence || 0) - (b.sequence || 0)
+      );
+
+      let currentOffset = 0;
+
+      for (let i = 0; i < sortedServices.length; i++) {
+        const service = sortedServices[i];
+
+        // For parallel services (except first), use the same offset as previous non-parallel service
+        if (service.runParallel && i > 0) {
+          // Find the previous non-parallel service's start offset
+          // Parallel services start at the same time as the previous service started
+          const prevService = sortedServices[i - 1];
+          const prevDuration = prevService.durationMinutes;
+          // Go back by the previous service's duration
+          currentOffset = currentOffset - prevDuration;
+          if (currentOffset < 0) currentOffset = 0;
+        }
+
+        const serviceStartMinutes = startHours * 60 + startMins + currentOffset;
+        const serviceEndMinutes = serviceStartMinutes + service.durationMinutes;
+
+        const scheduledStartTime = new Date(baseDate);
+        scheduledStartTime.setHours(
+          Math.floor(serviceStartMinutes / 60),
+          serviceStartMinutes % 60,
+          0,
+          0
+        );
+
+        const scheduledEndTime = new Date(baseDate);
+        scheduledEndTime.setHours(Math.floor(serviceEndMinutes / 60), serviceEndMinutes % 60, 0, 0);
+
+        // Update the service's scheduled times
+        await tx.appointmentService.update({
+          where: { id: service.id },
+          data: {
+            scheduledStartTime,
+            scheduledEndTime,
+          },
+        });
+
+        // Move offset forward by this service's duration (for next non-parallel service)
+        currentOffset += service.durationMinutes;
+      }
+
+      // Fetch the updated appointment with services
+      const finalAppointment = await tx.appointment.findUnique({
+        where: { id: appointmentId },
         include: {
-          services: true,
+          services: {
+            orderBy: { sequence: 'asc' },
+          },
           customer: {
             select: { id: true, name: true, phone: true },
           },
@@ -459,12 +749,12 @@ export class CalendarService {
           newValues: {
             scheduledDate: newDate,
             scheduledTime: newTime,
-            stylistId: targetStylistId,
+            stylistId: newStylistId || appointment.stylistId,
           },
         },
       });
 
-      return serializeDecimals(updated);
+      return serializeDecimals(finalAppointment);
     });
   }
 

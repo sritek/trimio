@@ -10,6 +10,7 @@ import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
 import { AvailabilityService } from './availability.service';
 import { StylistScheduleService } from './stylist-schedule.service';
+import { WalkInQueueService } from './walk-in-queue.service';
 import { authenticate } from '../../middleware/auth.middleware';
 import { requirePermission, requireAnyPermission } from '../../middleware/permission.guard';
 import { deleteResponse, successResponse } from '../../lib/response';
@@ -22,6 +23,7 @@ import {
   getAvailableSlotsSchema,
   getAvailableStylistsSchema,
   getStylistBusySlotsSchema,
+  checkStylistAvailabilitySchema,
   createWithConflictsSchema,
   updateAppointmentSchema,
   updateStatusSchema,
@@ -36,6 +38,10 @@ import {
   assignStationSchema,
   addServiceSchema,
   updateStylistsSchema,
+  // Walk-in queue schemas
+  addToQueueSchema,
+  getQueueSchema,
+  serveQueueBodySchema,
   // Response schemas
   successResponseSchema,
   paginatedResponseSchema,
@@ -50,12 +56,27 @@ import {
   CreateAppointmentInput,
   GetAvailableSlotsInput,
   GetCalendarInput,
+  // Multi-service schemas
+  serviceParamsSchema,
+  startServiceSchema,
+  completeServiceSchema,
+  skipServiceSchema,
+  skipAllWaitingServicesSchema,
+  updateServiceSchema,
+  type StartServiceInput,
+  type CompleteServiceInput,
+  type SkipServiceInput,
+  type SkipAllWaitingServicesInput,
+  type UpdateServiceInput,
 } from './appointments.schema';
+import { MultiServiceAppointmentService } from './multi-service.service';
 
 export async function appointmentsRoutes(fastify: FastifyInstance) {
   const appointmentsService = new AppointmentsService(prisma);
   const availabilityService = new AvailabilityService(prisma);
   const stylistScheduleService = new StylistScheduleService(prisma);
+  const walkInQueueService = new WalkInQueueService(prisma, appointmentsService);
+  const multiServiceService = new MultiServiceAppointmentService(prisma);
   const controller = new AppointmentsController(appointmentsService, availabilityService);
 
   // Cast to ZodTypeProvider for type inference
@@ -202,6 +223,92 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
         stylistId,
         branchId,
         date
+      );
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.get(
+    '/stylists/:stylistId/availability',
+    {
+      preHandler: [requirePermission('appointments:read')],
+      schema: {
+        tags: ['Availability'],
+        summary: 'Check stylist availability for a time slot',
+        description:
+          'Check if a stylist is available for a specific time slot. Returns availability status and conflict details if busy.',
+        params: stylistIdParamSchema,
+        querystring: checkStylistAvailabilitySchema,
+        response: {
+          200: successResponseSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { stylistId: string };
+        Querystring: { date: string; time: string; duration: number };
+      }>,
+      reply
+    ) => {
+      const { tenantId } = request.user!;
+      const { stylistId } = request.params;
+      const { date, time, duration } = request.query;
+
+      const result = await availabilityService.checkStylistAvailability(
+        tenantId,
+        stylistId,
+        date,
+        time,
+        duration
+      );
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.post(
+    '/availability/multi-service-stylists',
+    {
+      preHandler: [requirePermission('appointments:read')],
+      schema: {
+        tags: ['Availability'],
+        summary: 'Check stylist availability for multi-service appointments',
+        description:
+          'Check if stylists are available for each service in a multi-service appointment. Calculates correct time slots based on sequence and parallel flags.',
+        response: {
+          200: successResponseSchema,
+          401: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Body: {
+          date: string;
+          startTime: string;
+          services: Array<{
+            serviceId: string;
+            stylistId?: string;
+            sequence: number;
+            runParallel?: boolean;
+            durationMinutes: number;
+          }>;
+        };
+      }>,
+      reply
+    ) => {
+      const { tenantId } = request.user!;
+      const { date, startTime, services } = request.body;
+
+      const result = await availabilityService.checkMultiServiceStylistAvailability(
+        tenantId,
+        date,
+        startTime,
+        services
       );
       return reply.send({ success: true, data: result });
     }
@@ -733,6 +840,230 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
   );
 
   // =====================================================
+  // MULTI-SERVICE: INDIVIDUAL SERVICE EXECUTION
+  // =====================================================
+
+  app.post(
+    '/:id/services/:serviceId/start',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Start a service within an appointment',
+        description:
+          'Start a specific service within a multi-service appointment. Validates station availability and sequential prerequisites.',
+        params: serviceParamsSchema,
+        body: startServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+          409: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: StartServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { stationId, actualStylistId } = request.body;
+
+      const result = await multiServiceService.startService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        stationId,
+        actualStylistId,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.post(
+    '/:id/services/:serviceId/complete',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Complete a service within an appointment',
+        description:
+          'Mark a specific service as completed. Releases the station and returns next service info if available.',
+        params: serviceParamsSchema,
+        body: completeServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: CompleteServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { actualEndTime } = request.body;
+
+      const result = await multiServiceService.completeService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        actualEndTime,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.post(
+    '/:id/services/:serviceId/skip',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Skip a service within an appointment',
+        description: 'Skip a specific service. Does not affect other services in the appointment.',
+        params: serviceParamsSchema,
+        body: skipServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: SkipServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+      const { reason } = request.body;
+
+      const result = await multiServiceService.skipService(
+        tenantId,
+        appointmentId,
+        serviceId,
+        reason,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.post(
+    '/:id/services/skip-waiting',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Skip all waiting services for early checkout',
+        description:
+          'Skip all waiting services within an appointment. Used when checking out early. Will fail if any service is in_progress.',
+        params: idParamSchema,
+        body: skipAllWaitingServicesSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: SkipAllWaitingServicesInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id: appointmentId } = request.params;
+      const { reason } = request.body;
+
+      const result = await multiServiceService.skipAllWaitingServices(
+        tenantId,
+        appointmentId,
+        reason,
+        userId
+      );
+
+      return reply.send(successResponse(result));
+    }
+  );
+
+  app.patch(
+    '/:id/services/:serviceId',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Multi-Service'],
+        summary: 'Update a service within an appointment',
+        description:
+          'Update service configuration (stylist assignment, sequence, parallel flag) before service starts.',
+        params: serviceParamsSchema,
+        body: updateServiceSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { id: string; serviceId: string };
+        Body: UpdateServiceInput;
+      }>,
+      reply
+    ) => {
+      const { tenantId } = request.user!;
+      const { id: appointmentId, serviceId } = request.params;
+
+      // For now, we'll implement a simple update - this can be enhanced later
+      const updatedService = await prisma.appointmentService.update({
+        where: {
+          id: serviceId,
+          tenantId,
+          appointmentId,
+          status: 'waiting', // Can only update waiting services
+        },
+        data: {
+          assignedStylistId: request.body.assignedStylistId,
+          sequence: request.body.sequence,
+          runParallel: request.body.runParallel,
+        },
+        include: {
+          service: { select: { id: true, name: true, sku: true } },
+          assignedStylist: { select: { id: true, name: true } },
+        },
+      });
+
+      return reply.send(successResponse(updatedService));
+    }
+  );
+
+  // =====================================================
   // STYLIST SCHEDULE
   // =====================================================
 
@@ -878,6 +1209,161 @@ export async function appointmentsRoutes(fastify: FastifyInstance) {
       await stylistScheduleService.deleteBlockedSlot(tenantId, slotId);
 
       return reply.send(deleteResponse('Blocked slot removed successfully'));
+    }
+  );
+
+  // =====================================================
+  // WALK-IN QUEUE
+  // =====================================================
+
+  app.get(
+    '/walk-in/queue',
+    {
+      preHandler: [requirePermission('appointments:read')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Get walk-in queue',
+        description: 'Get the current walk-in queue for a branch.',
+        querystring: getQueueSchema,
+        response: {
+          200: successResponseSchema,
+          401: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId } = request.user!;
+      const { branchId, date } = request.query;
+      const result = await walkInQueueService.getQueue(tenantId, branchId, date);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.post(
+    '/walk-in/queue',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Add to walk-in queue',
+        description: 'Add a customer to the walk-in queue.',
+        body: addToQueueSchema,
+        response: {
+          201: successResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { branchId } = request.body;
+      const result = await walkInQueueService.addToQueue(tenantId, branchId, request.body, userId);
+      return reply.code(201).send({ success: true, data: result });
+    }
+  );
+
+  app.patch(
+    '/walk-in/queue/:id/call',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Call customer from queue',
+        description: 'Call a customer from the walk-in queue.',
+        params: idParamSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id } = request.params;
+      const result = await walkInQueueService.callCustomer(tenantId, id, userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.patch(
+    '/walk-in/queue/:id/serve',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Start serving customer',
+        description: 'Start serving a customer from the queue. Creates an appointment.',
+        params: idParamSchema,
+        body: serveQueueBodySchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId, sub: userId } = request.user!;
+      const { id } = request.params;
+      const { stylistId } = request.body;
+      const result = await walkInQueueService.startServing(tenantId, id, stylistId, userId);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.patch(
+    '/walk-in/queue/:id/complete',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Mark queue entry as complete',
+        description: 'Mark a queue entry as completed.',
+        params: idParamSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId } = request.user!;
+      const { id } = request.params;
+      const result = await walkInQueueService.markComplete(tenantId, id);
+      return reply.send({ success: true, data: result });
+    }
+  );
+
+  app.patch(
+    '/walk-in/queue/:id/left',
+    {
+      preHandler: [requirePermission('appointments:write')],
+      schema: {
+        tags: ['Walk-In Queue'],
+        summary: 'Mark customer as left',
+        description: 'Mark a customer as left without service.',
+        params: idParamSchema,
+        response: {
+          200: successResponseSchema,
+          400: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const { tenantId } = request.user!;
+      const { id } = request.params;
+      const result = await walkInQueueService.markLeft(tenantId, id);
+      return reply.send({ success: true, data: result });
     }
   );
 }

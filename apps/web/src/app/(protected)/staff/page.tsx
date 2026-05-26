@@ -7,7 +7,7 @@ import { Plus } from 'lucide-react';
 
 import { PERMISSIONS } from '@trimio/shared';
 
-import { useStaffList, useDeactivateStaff } from '@/hooks/queries/use-staff';
+import { useStaffList, useDeactivateStaff, useReactivateStaff } from '@/hooks/queries/use-staff';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useUserLimitStatus } from '@/hooks/use-limit-status';
 
@@ -31,7 +31,6 @@ import { StaffFilterSheet, type StaffFiltersState } from './components/staff-fil
 export default function StaffPage() {
   const router = useRouter();
   const t = useTranslations('staff');
-  const tCommon = useTranslations('common');
   const { hasPermission } = usePermissions();
 
   const [search, setSearch] = useState('');
@@ -43,7 +42,8 @@ export default function StaffPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [toggleStatusId, setToggleStatusId] = useState<string | null>(null);
+  const [toggleStatusIsActive, setToggleStatusIsActive] = useState(false);
 
   const { data, isLoading, error } = useStaffList({
     page,
@@ -55,8 +55,13 @@ export default function StaffPage() {
   });
 
   const deactivateStaff = useDeactivateStaff();
+  const reactivateStaff = useReactivateStaff();
   const canWrite = hasPermission(PERMISSIONS.USERS_WRITE);
   const { current: userCount, limit: userLimit, isAtLimit, isNearLimit } = useUserLimitStatus();
+
+  // Check if we're at limit considering pending mutations
+  const isPendingMutation = deactivateStaff.isPending || reactivateStaff.isPending;
+  const effectiveIsAtLimit = isAtLimit && !isPendingMutation;
 
   const hasFilters =
     !!search ||
@@ -86,16 +91,21 @@ export default function StaffPage() {
     [router]
   );
 
-  const handleDelete = useCallback((id: string) => {
-    setDeleteId(id);
+  const handleToggleStatus = useCallback((id: string, isActive: boolean) => {
+    setToggleStatusId(id);
+    setToggleStatusIsActive(isActive);
   }, []);
 
-  const confirmDelete = useCallback(async () => {
-    if (deleteId) {
-      await deactivateStaff.mutateAsync(deleteId);
-      setDeleteId(null);
+  const confirmToggleStatus = useCallback(async () => {
+    if (toggleStatusId) {
+      if (toggleStatusIsActive) {
+        await deactivateStaff.mutateAsync(toggleStatusId);
+      } else {
+        await reactivateStaff.mutateAsync(toggleStatusId);
+      }
+      setToggleStatusId(null);
     }
-  }, [deleteId, deactivateStaff]);
+  }, [toggleStatusId, toggleStatusIsActive, deactivateStaff, reactivateStaff]);
 
   return (
     <PermissionGuard permission={PERMISSIONS.USERS_READ} fallback={<AccessDenied />}>
@@ -110,10 +120,10 @@ export default function StaffPage() {
                   <TooltipTrigger asChild>
                     <span>
                       <Button
-                        disabled={isLoading || isAtLimit}
+                        disabled={isLoading || effectiveIsAtLimit}
                         isLoading={isLoading}
                         onClick={() => {
-                          !isAtLimit && router.push('/staff/new');
+                          !effectiveIsAtLimit && router.push('/staff/new');
                         }}
                         leftIcon={<Plus className="mr-2 h-4 w-4" />}
                       >
@@ -121,7 +131,7 @@ export default function StaffPage() {
                       </Button>
                     </span>
                   </TooltipTrigger>
-                  {isAtLimit && (
+                  {effectiveIsAtLimit && (
                     <TooltipContent>
                       <p>User limit reached. Upgrade your plan to add more staff.</p>
                     </TooltipContent>
@@ -160,7 +170,7 @@ export default function StaffPage() {
             onPageChange={setPage}
             onPageSizeChange={handlePageSizeChange}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onToggleStatus={handleToggleStatus}
             hasFilters={hasFilters}
           />
         </PageContent>
@@ -174,13 +184,18 @@ export default function StaffPage() {
         />
 
         <ConfirmDialog
-          open={!!deleteId}
-          onOpenChange={(open) => !open && setDeleteId(null)}
-          title={tCommon('confirmDelete.title')}
-          description={tCommon('confirmDelete.description')}
-          variant="destructive"
-          onConfirm={confirmDelete}
-          isLoading={deactivateStaff.isPending}
+          open={!!toggleStatusId}
+          onOpenChange={(open) => !open && setToggleStatusId(null)}
+          title={toggleStatusIsActive ? 'Deactivate Staff' : 'Activate Staff'}
+          description={
+            toggleStatusIsActive
+              ? 'Are you sure you want to deactivate this staff member? They will no longer be able to log in or be assigned to appointments.'
+              : 'Are you sure you want to activate this staff member? They will be able to log in and be assigned to appointments again.'
+          }
+          confirmText={toggleStatusIsActive ? 'Deactivate' : 'Activate'}
+          variant={toggleStatusIsActive ? 'destructive' : 'default'}
+          onConfirm={confirmToggleStatus}
+          isLoading={deactivateStaff.isPending || reactivateStaff.isPending}
         />
       </PageContainer>
     </PermissionGuard>

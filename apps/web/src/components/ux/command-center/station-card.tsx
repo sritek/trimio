@@ -37,6 +37,12 @@ const STATUS_STYLES: Record<
     indicator: 'bg-blue-500',
     label: 'Occupied',
   },
+  reserved: {
+    border: 'border-amber-200 dark:border-amber-800',
+    bg: 'bg-amber-50 dark:bg-amber-950/30',
+    indicator: 'bg-amber-500',
+    label: 'Reserved',
+  },
   out_of_service: {
     border: 'border-gray-200 dark:border-gray-700',
     bg: 'bg-gray-50 dark:bg-gray-900/30',
@@ -125,6 +131,20 @@ function StationCardComponent({ station, onClick, onQuickAction }: StationCardPr
             {appointment.scheduledTime}
             {appointment.estimatedEndTime ? ` - ${appointment.estimatedEndTime}` : ''}
           </p>
+        </div>
+      ) : station.status === 'reserved' && appointment ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium truncate">{appointment.customerName}</span>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {appointment.scheduledTime}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {appointment.services.join(', ')}
+          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-400">Upcoming appointment</p>
         </div>
       ) : station.status === 'out_of_service' ? (
         <div className="flex items-center justify-center py-4 text-muted-foreground">

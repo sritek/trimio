@@ -18,6 +18,7 @@ type MockPrismaClient = {
   appointmentService: {
     findMany: ReturnType<typeof vi.fn>;
     createMany: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
   appointmentStatusHistory: {
     create: ReturnType<typeof vi.fn>;
@@ -31,6 +32,10 @@ type MockPrismaClient = {
   };
   auditLog: {
     create: ReturnType<typeof vi.fn>;
+  };
+  walkInQueue: {
+    findFirst: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
   $transaction: ReturnType<typeof vi.fn>;
 };
@@ -48,6 +53,7 @@ const mockPrisma: MockPrismaClient = {
   appointmentService: {
     findMany: vi.fn(),
     createMany: vi.fn(),
+    update: vi.fn(),
   },
   appointmentStatusHistory: {
     create: vi.fn(),
@@ -61,6 +67,10 @@ const mockPrisma: MockPrismaClient = {
   },
   auditLog: {
     create: vi.fn(),
+  },
+  walkInQueue: {
+    findFirst: vi.fn(),
+    update: vi.fn(),
   },
   $transaction: vi.fn((callback: unknown) =>
     (callback as (tx: MockPrismaClient) => unknown)(mockPrisma)
@@ -174,7 +184,7 @@ describe('AppointmentsService', () => {
 
       const result = await service.getAppointmentById('tenant-1', 'apt-1');
 
-      expect(result).toEqual(mockAppointment);
+      expect(result).toMatchObject(mockAppointment);
       expect(mockPrisma.appointment.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
@@ -202,12 +212,14 @@ describe('AppointmentsService', () => {
       branchId: 'branch-1',
       status: 'booked',
       customerId: 'cust-1',
+      services: [],
     };
 
     beforeEach(() => {
       mockPrisma.appointment.findFirst.mockResolvedValue(mockAppointment);
       mockPrisma.appointment.findUnique.mockResolvedValue(mockAppointment);
-      mockPrisma.appointment.update.mockResolvedValue({ ...mockAppointment, status: 'checked_in' });
+      mockPrisma.appointment.update.mockResolvedValue({ ...mockAppointment, status: 'checked_in', services: [] });
+      mockPrisma.walkInQueue.findFirst.mockResolvedValue(null);
     });
 
     it('should allow check-in from booked status', async () => {
@@ -239,13 +251,14 @@ describe('AppointmentsService', () => {
       mockPrisma.appointment.update.mockResolvedValue({
         ...mockAppointment,
         status: 'in_progress',
+        services: [],
       });
 
       await service.start('tenant-1', 'apt-1', 'user-1');
 
       expect(mockPrisma.appointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: { status: 'in_progress' },
+          data: expect.objectContaining({ status: 'in_progress' }),
         })
       );
     });
@@ -264,13 +277,14 @@ describe('AppointmentsService', () => {
       mockPrisma.appointment.update.mockResolvedValue({
         ...mockAppointment,
         status: 'completed',
+        services: [],
       });
 
       await service.complete('tenant-1', 'apt-1', 'user-1');
 
       expect(mockPrisma.appointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: { status: 'completed' },
+          data: expect.objectContaining({ status: 'completed' }),
         })
       );
     });

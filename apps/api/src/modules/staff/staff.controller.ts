@@ -86,6 +86,15 @@ export async function deactivateStaff(
   return reply.send(deleteResponse('Staff deactivated successfully'));
 }
 
+export async function reactivateStaff(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  const { tenantId, sub: userId } = request.user!;
+  const staff = await staffService.reactivate(tenantId, request.params.id, userId);
+  return reply.send(successResponse(staff));
+}
+
 // ============================================
 // Attendance Controllers
 // ============================================

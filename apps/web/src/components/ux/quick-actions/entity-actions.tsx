@@ -121,7 +121,10 @@ export const APPOINTMENT_ACTIONS: QuickAction<AppointmentEntity>[] = [
     id: 'checkout',
     label: 'Checkout',
     icon: CreditCard,
-    isVisible: (apt) => apt.status === 'in_progress' || apt.status === 'completed',
+    isVisible: (apt) =>
+      apt.status === 'in_progress' ||
+      apt.status === 'ready_for_checkout' ||
+      apt.status === 'completed',
     execute: (apt, ctx) => {
       ctx.openPanel(
         'checkout-panel',

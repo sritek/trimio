@@ -22,6 +22,9 @@ interface ScheduleAppointment {
   customerName: string;
   services: string[];
   status: string;
+  isMultiService?: boolean;
+  totalServices?: number;
+  stylistServices?: number;
 }
 
 interface ScheduleGridProps {
@@ -175,6 +178,11 @@ export function ScheduleGrid({
                     <div className="text-blue-500 dark:text-blue-400 truncate">
                       {apt.services.join(', ')}
                     </div>
+                    {apt.isMultiService && (
+                      <div className="text-[10px] text-blue-400 dark:text-blue-500 mt-0.5">
+                        Your {apt.stylistServices} of {apt.totalServices} services
+                      </div>
+                    )}
                     <Badge
                       variant="outline"
                       className={cn(
@@ -183,6 +191,7 @@ export function ScheduleGrid({
                         apt.status === 'confirmed' && 'bg-emerald-100 text-emerald-700',
                         apt.status === 'checked_in' && 'bg-violet-100 text-violet-700',
                         apt.status === 'in_progress' && 'bg-amber-100 text-amber-700',
+                        apt.status === 'ready_for_checkout' && 'bg-orange-100 text-orange-700',
                         apt.status === 'completed' && 'bg-slate-100 text-slate-600',
                         apt.status === 'cancelled' && 'bg-red-100 text-red-600',
                         apt.status === 'no_show' && 'bg-rose-100 text-rose-600'

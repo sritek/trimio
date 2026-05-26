@@ -84,9 +84,34 @@ export function CompleteAppointmentDialog({
     }
   }, [appointmentId, endTime, completeAppointment, onOpenChange, onSuccess, handleError, t]);
 
+  // Prevent closing dialog while mutation is pending
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen && completeAppointment.isPending) {
+        return;
+      }
+      onOpenChange(newOpen);
+    },
+    [onOpenChange, completeAppointment.isPending]
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        onPointerDownOutside={(e) => {
+          // Prevent closing by clicking outside while pending
+          if (completeAppointment.isPending) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing by escape key while pending
+          if (completeAppointment.isPending) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>

@@ -27,6 +27,12 @@ export function FloorViewSummary({ summary }: FloorViewSummaryProps) {
       textColor: 'text-blue-700 dark:text-blue-400',
     },
     {
+      label: 'Reserved',
+      count: summary.reserved,
+      color: 'bg-amber-500',
+      textColor: 'text-amber-700 dark:text-amber-400',
+    },
+    {
       label: 'Out of Service',
       count: summary.outOfService,
       color: 'bg-gray-400',

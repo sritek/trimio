@@ -18,6 +18,7 @@ import { customerKeys } from './use-customers';
 import type {
   Appointment,
   AppointmentFilters,
+  AppointmentService,
   CreateAppointmentInput,
   UpdateAppointmentInput,
   CancelAppointmentInput,
@@ -142,6 +143,9 @@ export function useCreateAppointment() {
         hasConflict: false,
         conflictInfo: null,
         isOptimistic: true,
+        // Multi-service fields - default to single service for optimistic
+        isMultiService: (newAppointment.services?.length ?? 0) > 1,
+        serviceCount: newAppointment.services?.length ?? 1,
       };
 
       // Find and update matching calendar queries
@@ -173,7 +177,7 @@ export function useCreateAppointment() {
       return { toastId, optimisticId, previousCalendarData, calendarParams };
     },
 
-    onSuccess: (response, _newAppointment, context) => {
+    onSuccess: (response, newAppointment, context) => {
       // Update toast to success
       toast.success('Appointment created successfully!', { id: context?.toastId });
 
@@ -194,6 +198,9 @@ export function useCreateAppointment() {
         hasConflict: apt.hasConflict || false,
         conflictInfo: null,
         isOptimistic: false,
+        // Multi-service fields from server response
+        isMultiService: (apt.services?.length ?? 0) > 1,
+        serviceCount: apt.services?.length ?? 1,
       };
 
       // Replace optimistic appointment with real one in calendar
@@ -220,6 +227,11 @@ export function useCreateAppointment() {
       // If a new customer was created, invalidate customers list so it appears in Customers page
       if (response.customerCreated) {
         queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      }
+
+      // If created from walk-in queue, invalidate the queue so it updates
+      if (newAppointment.walkInQueueId) {
+        queryClient.invalidateQueries({ queryKey: queueKeys.all });
       }
     },
 
@@ -266,7 +278,13 @@ export function useUpdateAppointmentServices() {
       services,
     }: {
       id: string;
-      services: Array<{ serviceId: string; stylistId?: string; quantity?: number }>;
+      services: Array<{
+        serviceId: string;
+        stylistId?: string;
+        quantity?: number;
+        sequence?: number;
+        runParallel?: boolean;
+      }>;
     }) => api.put<Appointment>(`/appointments/${id}/services`, { services }),
 
     onMutate: async () => {
@@ -279,6 +297,8 @@ export function useUpdateAppointmentServices() {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      // Also invalidate floor view since service changes affect estimated end time
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
     },
 
     onError: (_, __, context) => {
@@ -392,6 +412,8 @@ export function useCompleteAppointment() {
       queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
       // Also invalidate floor view since station is now free
       queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+      // Also invalidate walk-in queue in case this was a walk-in appointment
+      queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
 
     onError: () => {
@@ -655,10 +677,14 @@ export function useAddToQueue() {
   return useMutation({
     mutationFn: (data: AddToQueueInput) =>
       api.post<AddToQueueResponse>('/appointments/walk-in/queue', data),
-    onSuccess: (_, data) => {
+    onSuccess: (response, data) => {
       queryClient.invalidateQueries({
         queryKey: queueKeys.list({ branchId: data.branchId }),
       });
+      // If a new customer was created, invalidate customers list
+      if (response.customerCreated) {
+        queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      }
     },
   });
 }
@@ -889,5 +915,333 @@ export function useAssignStylist() {
       queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: appointmentKeys.all });
     },
+  });
+}
+
+// ============================================
+// Multi-Service Appointment Hooks
+// ============================================
+
+export interface StartServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  stationId: string;
+  actualStylistId?: string;
+}
+
+export interface StartServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+  stylistOverride: boolean;
+}
+
+export interface CompleteServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  actualEndTime?: string;
+}
+
+export interface CompleteServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+  nextService?: {
+    id: string;
+    serviceName: string;
+    sequence: number;
+    assignedStylistId?: string | null;
+    durationMinutes: number;
+  };
+  allServicesComplete: boolean;
+}
+
+export interface SkipServiceInput {
+  appointmentId: string;
+  serviceId: string;
+  reason?: string;
+}
+
+export interface SkipServiceResponse {
+  service: AppointmentService;
+  appointment: Appointment;
+}
+
+/**
+ * Start a service within a multi-service appointment
+ */
+export function useStartService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, stationId, actualStylistId }: StartServiceInput) =>
+      api.post<StartServiceResponse>(`/appointments/${appointmentId}/services/${serviceId}/start`, {
+        stationId,
+        actualStylistId,
+      }),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Starting service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (_, { appointmentId }, context) => {
+      toast.success('Service started', { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to start service', {
+        id: context?.toastId,
+      });
+    },
+  });
+}
+
+/**
+ * Complete a service within a multi-service appointment
+ */
+export function useCompleteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, actualEndTime }: CompleteServiceInput) =>
+      api.post<CompleteServiceResponse>(
+        `/appointments/${appointmentId}/services/${serviceId}/complete`,
+        { actualEndTime }
+      ),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Completing service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (response, { appointmentId }, context) => {
+      const message = response.allServicesComplete
+        ? 'All services completed!'
+        : response.nextService
+          ? `Service completed. Next: ${response.nextService.serviceName}`
+          : 'Service completed';
+      toast.success(message, { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to complete service', {
+        id: context?.toastId,
+      });
+    },
+  });
+}
+
+/**
+ * Skip a service within a multi-service appointment
+ */
+export function useSkipService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, serviceId, reason }: SkipServiceInput) =>
+      api.post<SkipServiceResponse>(`/appointments/${appointmentId}/services/${serviceId}/skip`, {
+        reason,
+      }),
+
+    onMutate: async ({ appointmentId }) => {
+      const toastId = toast.loading('Skipping service...');
+      await queryClient.cancelQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      return { toastId, appointmentId };
+    },
+
+    onSuccess: (_, { appointmentId }, context) => {
+      toast.success('Service skipped', { id: context?.toastId });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error, _, context) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to skip service', {
+        id: context?.toastId,
+      });
+    },
+  });
+}
+
+// ============================================
+// Skip All Waiting Services (Early Checkout)
+// ============================================
+
+export interface SkipAllWaitingServicesInput {
+  appointmentId: string;
+  reason?: string;
+}
+
+export interface SkipAllWaitingServicesResponse {
+  appointment: Appointment;
+  skippedCount: number;
+  skippedServiceIds: string[];
+}
+
+/**
+ * Skip all waiting services within a multi-service appointment
+ * Used when checking out early - marks all waiting services as skipped
+ */
+export function useSkipAllWaitingServices() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointmentId, reason }: SkipAllWaitingServicesInput) =>
+      api.post<SkipAllWaitingServicesResponse>(
+        `/appointments/${appointmentId}/services/skip-waiting`,
+        { reason }
+      ),
+
+    onSuccess: (response, { appointmentId }) => {
+      if (response.skippedCount > 0) {
+        toast.success(`${response.skippedCount} service(s) marked as skipped`);
+      }
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.detail(appointmentId) });
+      queryClient.invalidateQueries({ queryKey: appointmentKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
+      queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+    },
+
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to skip waiting services');
+    },
+  });
+}
+
+// ============================================
+// Stylist Availability Check Hook
+// ============================================
+
+export interface StylistAvailabilityResponse {
+  available: boolean;
+  conflictReason?: string;
+  conflictingAppointment?: {
+    id: string;
+    customerName: string;
+    scheduledTime: string;
+    scheduledDate: string;
+  };
+}
+
+export const stylistAvailabilityKeys = {
+  all: ['stylistAvailability'] as const,
+  check: (stylistId: string, date: string, time: string, duration: number) =>
+    [...stylistAvailabilityKeys.all, stylistId, date, time, duration] as const,
+};
+
+/**
+ * Check if a stylist is available for a specific time slot
+ * Used when overriding stylist assignment to show availability feedback
+ */
+export function useStylistAvailability(
+  stylistId: string,
+  date: string,
+  time: string,
+  duration: number,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: stylistAvailabilityKeys.check(stylistId, date, time, duration),
+    queryFn: () =>
+      api.get<StylistAvailabilityResponse>(`/appointments/stylists/${stylistId}/availability`, {
+        date,
+        time,
+        duration,
+      }),
+    enabled: (options?.enabled ?? true) && !!stylistId && !!date && !!time && duration > 0,
+    staleTime: 30000, // Cache for 30 seconds
+  });
+}
+
+// ============================================
+// Multi-Service Stylist Availability Check
+// ============================================
+
+export interface MultiServiceStylistAvailabilityInput {
+  date: string;
+  startTime: string;
+  services: Array<{
+    serviceId: string;
+    stylistId?: string;
+    sequence: number;
+    runParallel?: boolean;
+    durationMinutes: number;
+  }>;
+}
+
+export interface MultiServiceStylistAvailabilityResponse {
+  valid: boolean;
+  conflicts: Array<{
+    serviceId: string;
+    stylistId: string;
+    stylistName?: string;
+    serviceName?: string;
+    conflictReason: string;
+    scheduledStartTime: string;
+    scheduledEndTime: string;
+  }>;
+  serviceSchedule: Array<{
+    serviceId: string;
+    scheduledStartTime: string;
+    scheduledEndTime: string;
+  }>;
+}
+
+export const multiServiceAvailabilityKeys = {
+  all: ['multiServiceAvailability'] as const,
+  check: (date: string, startTime: string, servicesHash: string) =>
+    [...multiServiceAvailabilityKeys.all, date, startTime, servicesHash] as const,
+};
+
+/**
+ * Check stylist availability for multi-service appointments
+ * Calculates correct time slots based on sequence and parallel flags
+ */
+export function useMultiServiceStylistAvailability(
+  input: MultiServiceStylistAvailabilityInput | null,
+  options?: { enabled?: boolean }
+) {
+  // Create a hash of services for cache key
+  const servicesHash = input
+    ? JSON.stringify(
+        input.services.map((s) => ({
+          id: s.serviceId,
+          stylist: s.stylistId,
+          seq: s.sequence,
+          par: s.runParallel,
+          dur: s.durationMinutes,
+        }))
+      )
+    : '';
+
+  return useQuery({
+    queryKey: multiServiceAvailabilityKeys.check(
+      input?.date || '',
+      input?.startTime || '',
+      servicesHash
+    ),
+    queryFn: () =>
+      api.post<MultiServiceStylistAvailabilityResponse>(
+        '/appointments/availability/multi-service-stylists',
+        input
+      ),
+    enabled:
+      (options?.enabled ?? true) &&
+      !!input?.date &&
+      !!input?.startTime &&
+      input.services.length > 0 &&
+      input.services.some((s) => s.stylistId), // Only check if at least one stylist is assigned
+    staleTime: 30000, // Cache for 30 seconds
   });
 }

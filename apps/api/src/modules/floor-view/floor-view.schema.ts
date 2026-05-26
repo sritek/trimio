@@ -11,6 +11,48 @@ import { z } from 'zod';
 
 export const floorViewStatusEnum = z.enum(['available', 'occupied', 'reserved', 'out_of_service']);
 
+// Schema for "Up Next" service information
+export const upNextServiceSchema = z.object({
+  id: z.string().uuid(),
+  serviceName: z.string(),
+  customerName: z.string(),
+  assignedStylistId: z.string().uuid().nullable(),
+  assignedStylistName: z.string().nullable(),
+  estimatedStartTime: z.string().nullable(), // ISO timestamp
+  durationMinutes: z.number(),
+  sequence: z.number(),
+});
+
+// Schema for current service in multi-service appointment
+export const currentServiceInfoSchema = z.object({
+  id: z.string().uuid(),
+  serviceName: z.string(),
+  sequence: z.number(),
+  status: z.string(),
+  assignedStylistId: z.string().uuid().nullable(),
+  assignedStylistName: z.string().nullable(),
+  actualStylistId: z.string().uuid().nullable(),
+  actualStylistName: z.string().nullable(),
+  // Timing fields for progress tracking
+  durationMinutes: z.number(),
+  actualStartTime: z.string().nullable(),
+  actualEndTime: z.string().nullable(),
+});
+
+// Schema for service progress info (for multi-service progress bar)
+export const serviceProgressInfoSchema = z.object({
+  id: z.string().uuid(),
+  serviceName: z.string(),
+  sequence: z.number(),
+  status: z.enum(['waiting', 'in_progress', 'completed', 'skipped']),
+  durationMinutes: z.number(),
+  actualStartTime: z.string().nullable(),
+  actualEndTime: z.string().nullable(),
+  progressPercent: z.number(),
+  elapsedMinutes: z.number(),
+  isOvertime: z.boolean(),
+});
+
 export const stationCardSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -32,12 +74,27 @@ export const stationCardSchema = z.object({
       estimatedEndTime: z.string().nullable(),
       scheduledTime: z.string(),
       scheduledDate: z.string(), // Date in YYYY-MM-DD format
+      delayMinutes: z.number(), // How late the appointment started
       elapsedMinutes: z.number().nullable(),
       remainingMinutes: z.number().nullable(),
       progressPercent: z.number().nullable(),
       isOvertime: z.boolean(),
+      // Multi-service fields
+      isMultiService: z.boolean(),
+      serviceCount: z.number(),
+      currentServiceIndex: z.number().nullable(), // 1-based index of current service
+      currentService: currentServiceInfoSchema.nullable(), // Details of current in-progress service (for backward compat)
+      currentServices: z.array(currentServiceInfoSchema), // All in-progress services on this station (for parallel services)
+      // Timer state
+      isPaused: z.boolean(), // Whether timer is paused (between services)
+      serviceProgress: z.array(serviceProgressInfoSchema), // Progress info for each service
     })
     .nullable(),
+  // "Up Next" service for this station (next service in sequence for multi-service appointments)
+  // For backward compatibility, upNext is the first service in the upNextServices array
+  upNext: upNextServiceSchema.nullable(),
+  // All "Up Next" services (supports parallel services with same sequence)
+  upNextServices: z.array(upNextServiceSchema),
 });
 
 export const floorViewResponseSchema = z.object({
@@ -63,6 +120,8 @@ export type FloorViewStatus = z.infer<typeof floorViewStatusEnum>;
 export type StationCard = z.infer<typeof stationCardSchema>;
 export type FloorViewResponse = z.infer<typeof floorViewResponseSchema>;
 export type BranchIdParam = z.infer<typeof branchIdParamSchema>;
+export type UpNextService = z.infer<typeof upNextServiceSchema>;
+export type CurrentServiceInfo = z.infer<typeof currentServiceInfoSchema>;
 
 // ============================================
 // Response Schemas

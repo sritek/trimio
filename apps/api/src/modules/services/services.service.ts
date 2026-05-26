@@ -33,6 +33,7 @@ function generateSku(categorySlug: string): string {
 export class ServicesService {
   /**
    * Get all services with filtering and pagination
+   * Use limit: -1 to fetch all services without pagination
    */
   async getServices(
     tenantId: string,
@@ -67,12 +68,16 @@ export class ServicesService {
     // Get total count
     const total = await prisma.service.count({ where });
 
-    // Get paginated data
+    // Handle limit: -1 (fetch all)
+    const fetchAll = query.limit === -1;
+    const effectiveLimit = fetchAll ? total : query.limit;
+    const effectivePage = fetchAll ? 1 : query.page;
+
+    // Get paginated data (or all if limit is -1)
     const data = await prisma.service.findMany({
       where,
       orderBy: { [query.sortBy]: query.sortOrder },
-      skip: (query.page - 1) * query.limit,
-      take: query.limit,
+      ...(fetchAll ? {} : { skip: (query.page - 1) * query.limit, take: query.limit }),
       include: {
         category: {
           select: { id: true, name: true, slug: true, color: true },
@@ -86,8 +91,8 @@ export class ServicesService {
     return {
       data,
       total,
-      page: query.page,
-      limit: query.limit,
+      page: effectivePage,
+      limit: effectiveLimit,
     };
   }
 

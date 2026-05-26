@@ -30,6 +30,8 @@ type MockPrisma = {
   };
   customer: {
     findUnique: ReturnType<typeof vi.fn>;
+    findFirst: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
   branch: {
@@ -80,6 +82,8 @@ const createMockPrisma = (): MockPrisma => ({
   },
   customer: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
     update: vi.fn(),
   },
   branch: {
@@ -179,6 +183,7 @@ describe('Appointments Integration Tests', () => {
       mockPrisma.service.findMany.mockResolvedValue([mockService]);
       mockPrisma.customer.findUnique.mockResolvedValue({ bookingStatus: 'normal' });
       mockPrisma.appointment.findFirst.mockResolvedValue(null);
+      mockPrisma.appointment.findMany.mockResolvedValue([]);
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         const tx = {
           appointment: {
@@ -230,11 +235,14 @@ describe('Appointments Integration Tests', () => {
         const tx = {
           appointment: {
             update: vi.fn().mockImplementation(({ data }) => {
-              currentStatus = data.status;
-              return Promise.resolve({ ...mockAppointment, status: currentStatus });
+              currentStatus = data.status || currentStatus;
+              return Promise.resolve({ ...mockAppointment, status: currentStatus, services: [] });
             }),
           },
+          appointmentService: { update: vi.fn() },
           appointmentStatusHistory: { create: vi.fn() },
+          walkInQueue: { findFirst: vi.fn().mockResolvedValue(null) },
+          auditLog: { create: vi.fn() },
         };
         return callback(tx);
       });
@@ -269,6 +277,7 @@ describe('Appointments Integration Tests', () => {
 
     it('should block online booking for blocked customers', async () => {
       mockPrisma.service.findMany.mockResolvedValue([mockService]);
+      mockPrisma.appointment.findMany.mockResolvedValue([]);
       mockPrisma.customer.findUnique.mockResolvedValue({ bookingStatus: 'blocked' });
 
       await expect(
@@ -450,6 +459,8 @@ describe('Appointments Integration Tests', () => {
       mockPrisma.walkInQueue.count.mockResolvedValue(0);
       mockPrisma.service.findMany.mockResolvedValue([{ durationMinutes: 30 }]);
       mockPrisma.user.count.mockResolvedValue(2);
+      mockPrisma.customer.findFirst.mockResolvedValue(null);
+      mockPrisma.customer.create.mockResolvedValue({ id: 'new-cust-1', name: 'John Doe', phone: '9876543210' });
       mockPrisma.walkInQueue.create.mockResolvedValue({
         ...mockQueueEntry,
         tokenNumber: 1,
@@ -545,6 +556,7 @@ describe('Appointments Integration Tests', () => {
       mockPrisma.service.findMany.mockResolvedValue([mockService]);
       mockPrisma.customer.findUnique.mockResolvedValue({ bookingStatus: 'normal' });
       mockPrisma.appointment.findFirst.mockResolvedValue(null);
+      mockPrisma.appointment.findMany.mockResolvedValue([]);
 
       const mockCreatedAppointment = {
         id: 'apt-walk-1',

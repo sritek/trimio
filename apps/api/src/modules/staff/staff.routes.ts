@@ -208,6 +208,12 @@ export async function staffRoutes(fastify: FastifyInstance) {
 
   app.delete('/:id', { schema: { tags: ['Staff'] } }, controller.deactivateStaff);
 
+  app.post(
+    '/:id/reactivate',
+    { schema: { tags: ['Staff'], description: 'Reactivate a deactivated staff member' } },
+    controller.reactivateStaff
+  );
+
   // ============================================
   // Parametric /:userId routes
   // ============================================

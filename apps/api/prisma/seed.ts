@@ -460,50 +460,6 @@ async function seedStaffData(
 
   await prisma.staffProfile.createMany({ data: staffProfiles });
 
-  // Shifts
-  const shiftsData = [
-    {
-      tenantId,
-      branchId: branches[0].id,
-      name: 'Morning Shift',
-      startTime: '09:00',
-      endTime: '17:00',
-      breakDurationMinutes: 60,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-    {
-      tenantId,
-      branchId: branches[0].id,
-      name: 'Evening Shift',
-      startTime: '13:00',
-      endTime: '21:00',
-      breakDurationMinutes: 60,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-    {
-      tenantId,
-      branchId: branches[1].id,
-      name: 'Full Day',
-      startTime: '10:00',
-      endTime: '22:00',
-      breakDurationMinutes: 90,
-      applicableDays: [1, 2, 3, 4, 5, 6],
-    },
-  ];
-
-  const shifts = await prisma.shift.createManyAndReturn({ data: shiftsData });
-
-  // Shift Assignments
-  const shiftAssignments = staffUsers.slice(0, 6).map((user, idx) => ({
-    tenantId,
-    userId: user.id,
-    branchId: idx < 4 ? branches[0].id : branches[1].id,
-    shiftId: idx < 4 ? shifts[idx % 2].id : shifts[2].id,
-    effectiveFrom: new Date(2024, 0, 1),
-  }));
-
-  await prisma.staffShiftAssignment.createMany({ data: shiftAssignments });
-
   // Attendance (last 30 days)
   const attendanceData: Prisma.AttendanceCreateManyInput[] = [];
   const today = new Date();
@@ -1250,7 +1206,7 @@ async function seedCustomers(tenantId: string, branchId: string) {
       firstVisitBranchId: branchId,
       marketingConsent: true,
       preferences: {},
-      source: ['manual', 'phone'][Math.floor(Math.random() * 2)] as 'manual' | 'phone',
+      source: ['manual', 'create_appointment'][Math.floor(Math.random() * 2)] as 'manual' | 'create_appointment',
     })),
   });
 
@@ -1290,7 +1246,9 @@ async function seedAppointments(
     return [];
   }
 
-  const today = new Date();
+  // Use UTC dates to avoid timezone issues (IST offset causes date mismatch)
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
   const appointmentsData: Prisma.AppointmentCreateManyInput[] = [];
   const appointmentServicesData: {
@@ -1326,11 +1284,12 @@ async function seedAppointments(
 
   // Generate appointments for past 7 days and next 7 days
   for (let dayOffset = -7; dayOffset <= 7; dayOffset++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
-    const dayOfWeek = date.getDay();
+    const date = new Date(todayUTC);
+    date.setUTCDate(date.getUTCDate() + dayOffset);
+    const dayOfWeek = date.getUTCDay();
 
-    if (dayOfWeek === 0) continue; // Skip Sundays
+    // Skip Sundays unless it's today (for debugging purposes)
+    if (dayOfWeek === 0 && dayOffset !== 0) continue;
 
     // More appointments per day: 8-15 per stylist, distributed throughout the day
     // This ensures each stylist has a good number of appointments
@@ -1368,7 +1327,7 @@ async function seedAppointments(
           status = rand < 0.7 ? 'completed' : rand < 0.85 ? 'cancelled' : 'no_show';
         } else if (dayOffset === 0) {
           // Today - more variety in statuses
-          const currentHour = today.getHours();
+          const currentHour = now.getHours();
           if (startHour < currentHour - 1) {
             // Past appointments today
             status = Math.random() < 0.8 ? 'completed' : 'no_show';
@@ -1420,10 +1379,10 @@ async function seedAppointments(
   // This demonstrates the conflict visualization feature
   const conflictDays = [0, 1]; // Today and tomorrow
   for (const dayOffset of conflictDays) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + dayOffset);
+    const date = new Date(todayUTC);
+    date.setUTCDate(date.getUTCDate() + dayOffset);
 
-    if (date.getDay() === 0) continue; // Skip Sunday
+    if (date.getUTCDay() === 0 && dayOffset !== 0) continue; // Skip Sunday unless today
 
     // Create 2-3 overlapping appointments for the first stylist
     const primaryStylist = stylists[0];
@@ -1619,8 +1578,8 @@ async function seedAppointments(
       totalAmount: new Prisma.Decimal(price + taxAmount),
       durationMinutes: service.durationMinutes,
       activeTimeMinutes: service.activeTimeMinutes,
-      stylistId: item.stylistId,
-      status: appointment.status === 'completed' ? 'completed' : 'pending',
+      assignedStylistId: item.stylistId,
+      status: appointment.status === 'completed' ? 'completed' : 'waiting',
       commissionRate: service.commissionValue,
       commissionAmount: new Prisma.Decimal((price * Number(service.commissionValue)) / 100),
     };
@@ -2745,6 +2704,8 @@ async function seedBranchSubscriptions(
         currency: 'INR',
         discountPercentage: new Prisma.Decimal(0),
         autoRenew: true,
+        trialDaysGranted: 30,
+        gracePeriodDaysGranted: 7,
       },
     });
 

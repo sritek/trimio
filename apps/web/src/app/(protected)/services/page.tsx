@@ -8,7 +8,11 @@ import { useTranslations } from 'next-intl';
 
 import { PERMISSIONS } from '@trimio/shared';
 
-import { useDeleteService, useServices } from '@/hooks/queries/use-services';
+import {
+  useDeleteService,
+  useServices,
+  useToggleServiceStatus,
+} from '@/hooks/queries/use-services';
 import { usePermissions } from '@/hooks/use-permissions';
 
 import {
@@ -44,6 +48,8 @@ export default function ServicesPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [toggleStatusId, setToggleStatusId] = useState<string | null>(null);
+  const [toggleStatusIsActive, setToggleStatusIsActive] = useState(false);
 
   const serviceFilters: ServiceFilters = {
     page,
@@ -57,6 +63,7 @@ export default function ServicesPage() {
 
   const { data: servicesData, isLoading, error } = useServices(serviceFilters);
   const deleteService = useDeleteService();
+  const toggleStatus = useToggleServiceStatus();
 
   const canWrite = hasPermission(PERMISSIONS.SERVICES_WRITE);
 
@@ -84,6 +91,18 @@ export default function ServicesPage() {
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
   }, []);
+
+  const handleToggleStatus = useCallback((id: string, isActive: boolean) => {
+    setToggleStatusId(id);
+    setToggleStatusIsActive(isActive);
+  }, []);
+
+  const confirmToggleStatus = useCallback(async () => {
+    if (toggleStatusId) {
+      await toggleStatus.mutateAsync({ id: toggleStatusId, isActive: !toggleStatusIsActive });
+      setToggleStatusId(null);
+    }
+  }, [toggleStatusId, toggleStatusIsActive, toggleStatus]);
 
   const confirmDelete = useCallback(async () => {
     if (deleteId) {
@@ -142,6 +161,7 @@ export default function ServicesPage() {
             onPageSizeChange={handlePageSizeChange}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onToggleStatus={handleToggleStatus}
             hasFilters={hasFilters}
           />
         </PageContent>
@@ -162,6 +182,21 @@ export default function ServicesPage() {
           variant="destructive"
           onConfirm={confirmDelete}
           isLoading={deleteService.isPending}
+        />
+
+        <ConfirmDialog
+          open={!!toggleStatusId}
+          onOpenChange={(open) => !open && setToggleStatusId(null)}
+          title={toggleStatusIsActive ? 'Deactivate Service' : 'Activate Service'}
+          description={
+            toggleStatusIsActive
+              ? 'Are you sure you want to deactivate this service? It will no longer be available for booking.'
+              : 'Are you sure you want to activate this service? It will become available for booking.'
+          }
+          confirmText={toggleStatusIsActive ? 'Deactivate' : 'Activate'}
+          variant={toggleStatusIsActive ? 'destructive' : 'default'}
+          onConfirm={confirmToggleStatus}
+          isLoading={toggleStatus.isPending}
         />
       </PageContainer>
     </PermissionGuard>

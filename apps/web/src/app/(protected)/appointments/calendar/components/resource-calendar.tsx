@@ -22,7 +22,7 @@ import { StylistColumnHeader } from './stylist-column-header';
 import { AppointmentBlock } from './appointment-block';
 import { DroppableSlot } from './droppable-slot';
 import { CurrentTimeIndicator } from './current-time-indicator';
-import { computeOverlapLayout } from './overlap-layout';
+import { computeOverlapLayout, getLayoutKey } from './overlap-layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/common';
@@ -620,11 +620,6 @@ export function ResourceCalendar({
                     ? checkSlotConflict(stylist.id, time, draggedAppointment.id)
                     : false;
 
-                  // Check if any appointments in this slot have conflicts
-                  const hasConflictingAppointments = appointmentsStartingInSlot.some(
-                    (apt) => apt.hasConflict
-                  );
-
                   // Check if slot overlaps with any break (for disabling click/drop)
                   const slotOverlapsBreak = stylist.breaks.some((b) => {
                     const breakStartMins =
@@ -654,7 +649,6 @@ export function ResourceCalendar({
                         isOutsideHours={isOutsideHours}
                         isAfterHours={isAfterHours}
                         hasConflict={hasConflict}
-                        hasConflictingAppointments={hasConflictingAppointments}
                         onClick={
                           !isOccupied &&
                           !slotOverlapsBreak &&
@@ -707,12 +701,16 @@ export function ResourceCalendar({
                             parseInt(appointment.endTime.split(':')[0]) * 60 +
                             parseInt(appointment.endTime.split(':')[1]);
                           const duration = endMins - startMins;
-                          const height = (duration / timeSlotInterval) * slotHeight;
+                          const calculatedHeight = (duration / timeSlotInterval) * slotHeight;
+                          // Minimum height of 40px for very short appointments to ensure readability
+                          // This ensures even 5-10 minute services have enough space for customer name
+                          const height = Math.max(calculatedHeight, 40);
                           const offsetMins = startMins - slotMins;
                           const topOffset = (offsetMins / timeSlotInterval) * slotHeight;
 
-                          // Use pre-computed overlap layout
-                          const layout = overlapLayout.get(appointment.id);
+                          // Use pre-computed overlap layout with composite key
+                          const layoutKey = getLayoutKey(appointment);
+                          const layout = overlapLayout.get(layoutKey);
                           const totalColumns = layout?.totalColumns ?? 1;
                           const column = layout?.column ?? 0;
                           const span = layout?.span ?? 1;
@@ -722,7 +720,7 @@ export function ResourceCalendar({
 
                           return (
                             <div
-                              key={appointment.id}
+                              key={layoutKey}
                               className="absolute z-10"
                               style={{
                                 height: `${height}px`,

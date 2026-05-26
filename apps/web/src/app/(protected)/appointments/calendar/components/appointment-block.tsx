@@ -2,12 +2,14 @@
  * Appointment Block Component
  * Visual representation of an appointment in the calendar
  * Supports drag-and-drop for rescheduling via explicit drag handle
+ * Enhanced for multi-service appointments with link indicators
  */
 
 'use client';
 
 import { useCallback } from 'react';
 import { useDraggable } from '@dnd-kit/core';
+import { Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { useAuthStore } from '@/stores/auth-store';
@@ -47,6 +49,11 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; accent: string }
     text: 'text-amber-900 dark:text-amber-100',
     accent: 'bg-amber-500',
   },
+  ready_for_checkout: {
+    bg: 'bg-orange-100 dark:bg-orange-900/60',
+    text: 'text-orange-900 dark:text-orange-100',
+    accent: 'bg-orange-500',
+  },
   completed: {
     bg: 'bg-slate-100 dark:bg-slate-800/60',
     text: 'text-slate-600 dark:text-slate-300',
@@ -62,6 +69,12 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; accent: string }
     text: 'text-rose-800 dark:text-rose-200',
     accent: 'bg-rose-500',
   },
+};
+
+// Multi-service appointment styling (applied as overlay/modifier)
+const MULTI_SERVICE_STYLES = {
+  border: 'ring-1 ring-indigo-400/50 dark:ring-indigo-500/50',
+  indicator: 'bg-indigo-500',
 };
 
 // Conflict severity styles
@@ -84,6 +97,7 @@ const STATUS_LABELS: Record<string, string> = {
   confirmed: 'Confirmed',
   checked_in: 'Checked In',
   in_progress: 'In Progress',
+  ready_for_checkout: 'Ready for Checkout',
   completed: 'Completed',
   cancelled: 'Cancelled',
   no_show: 'No Show',
@@ -101,6 +115,11 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
   const shouldMask = user?.role ? shouldMaskPhoneForRole(user.role) : false;
   const services = appointment.services || [];
 
+  // Build customer journey string for multi-service appointments
+  // Use fullJourney if available (contains all services in sequence order across all stylists)
+  // Otherwise fall back to current stylist's services
+  const customerJourney = appointment.fullJourney?.join(' → ') || services.join(' → ');
+
   return (
     <div className="space-y-2 text-sm text-gray-900">
       <div className="font-semibold">{appointment.customerName || 'Unknown Customer'}</div>
@@ -109,12 +128,64 @@ function AppointmentTooltip({ appointment }: { appointment: CalendarAppointment 
           {shouldMask ? maskPhoneNumber(appointment.customerPhone) : appointment.customerPhone}
         </div>
       )}
-      {services.length > 0 && (
+      {/* Multi-service indicator */}
+      {appointment.isMultiService && (
+        <div className="flex items-center gap-1.5 text-indigo-600 font-medium">
+          <Link2 className="h-3.5 w-3.5" />
+          <span>
+            {appointment.serviceCount} services
+            {appointment.totalServicesForStylist &&
+              appointment.totalServicesForStylist < appointment.serviceCount && (
+                <span className="text-gray-500 font-normal">
+                  {' '}
+                  ({appointment.totalServicesForStylist} for this stylist)
+                </span>
+              )}
+          </span>
+        </div>
+      )}
+      {/* This Stylist's Service(s) - shown prominently for multi-service appointments */}
+      {appointment.isMultiService && services.length > 0 && (
+        <div className="border-t border-gray-200 pt-2">
+          <div className="font-medium text-emerald-700">
+            This Stylist&apos;s Service{services.length > 1 ? 's' : ''}:
+          </div>
+          <ul className="text-emerald-600 mt-1 font-medium">
+            {services.map((service, idx) => (
+              <li key={idx}>• {service}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* Customer Journey - for multi-service appointments */}
+      {appointment.isMultiService &&
+        appointment.fullJourney &&
+        appointment.fullJourney.length > 0 && (
+          <div className="border-t border-gray-200 pt-2">
+            <div className="font-medium text-gray-600">Customer Journey:</div>
+            <div className="text-gray-700 mt-1 text-xs">{customerJourney}</div>
+          </div>
+        )}
+      {/* Services - for single-service appointments */}
+      {!appointment.isMultiService && services.length > 0 && (
         <div className="border-t border-gray-200 pt-2">
           <div className="font-medium">Services:</div>
           <ul className="list-disc list-inside text-gray-700">
             {services.map((service, idx) => (
               <li key={idx}>{service}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* Linked services (other stylists) */}
+      {appointment.linkedServiceInfo && appointment.linkedServiceInfo.length > 0 && (
+        <div className="border-t border-gray-200 pt-2">
+          <div className="font-medium text-gray-600">Other Stylists:</div>
+          <ul className="text-gray-700 mt-1 space-y-0.5">
+            {appointment.linkedServiceInfo.map((linked, idx) => (
+              <li key={idx} className="text-xs">
+                • {linked.serviceName}
+              </li>
             ))}
           </ul>
         </div>
@@ -182,8 +253,12 @@ export function AppointmentBlock({
   // Check if this is an optimistic (pending) appointment
   const isOptimistic = appointment.isOptimistic === true;
 
-  // Check if appointment can be moved (not optimistic ones)
-  const canMove = !isOptimistic && MOVABLE_STATUSES.includes(appointment.status);
+  // Check if appointment can be moved
+  // - Not optimistic (pending) appointments
+  // - Only certain statuses allow rescheduling
+  // - Multi-service appointments cannot be drag-and-dropped (too complex - would need to reschedule all services)
+  const canMove =
+    !isOptimistic && MOVABLE_STATUSES.includes(appointment.status) && !appointment.isMultiService;
 
   const {
     attributes,
@@ -214,9 +289,14 @@ export function AppointmentBlock({
     !isOptimistic && appointment.hasConflict && appointment.conflictInfo
       ? CONFLICT_STYLES[appointment.conflictInfo.severity]
       : null;
-  const isCompact = density === 'compact' || height < 40;
+
+  // Density thresholds:
+  // - chip: very narrow columns (4+ overlapping) - show initials only
+  // - compact: narrow columns or short height (< 50px) - show name + time on one line
+  // - full: normal display with services
+  const isCompact = density === 'compact' || height < 50;
   const isChip = density === 'chip';
-  const showServices = density === 'full' && height >= 40;
+  const showServices = density === 'full' && height >= 50;
   const services = appointment.services || [];
 
   // Get customer initials for chip mode
@@ -264,6 +344,8 @@ export function AppointmentBlock({
         // Conflict styling based on severity
         conflictStyle && conflictStyle.border,
         conflictStyle && conflictStyle.ring,
+        // Multi-service appointment indicator - subtle ring
+        !isOptimistic && appointment.isMultiService && MULTI_SERVICE_STYLES.border,
         // Unassigned appointment indicator - dashed border
         !isOptimistic &&
           !appointment.stylistId &&
@@ -289,9 +371,7 @@ export function AppointmentBlock({
       {isChip ? (
         /* Chip mode: initials + status dot, minimal footprint */
         <div className="px-1 py-0.5 h-full flex items-center gap-1 pl-2">
-          <span
-            className={cn('text-[10px] font-bold leading-none truncate', statusStyle.text)}
-          >
+          <span className={cn('text-[10px] font-bold leading-none truncate', statusStyle.text)}>
             {customerInitials}
           </span>
           {height >= 30 && (
@@ -314,16 +394,24 @@ export function AppointmentBlock({
             {appointment.customerName || 'Unknown Customer'}
           </div>
 
-          {/* Services — only in full mode with enough height */}
+          {/* Services — show in full mode, or in compact mode if there's room */}
           {showServices && services.length > 0 && (
             <div className={cn('text-xs truncate opacity-75', statusStyle.text)}>
               {services.join(', ')}
             </div>
           )}
 
+          {/* In compact mode with enough height, show first service */}
+          {isCompact && !showServices && services.length > 0 && height >= 45 && (
+            <div className={cn('text-[10px] truncate opacity-75', statusStyle.text)}>
+              {services[0]}
+              {services.length > 1 ? ` +${services.length - 1}` : ''}
+            </div>
+          )}
+
           {/* Time — shown in compact as single line, in full when tall enough */}
-          {isCompact && height >= 30 ? (
-            <div className={cn('text-[10px] opacity-60 truncate', statusStyle.text)}>
+          {isCompact && height >= 35 ? (
+            <div className={cn('text-[10px] opacity-60 truncate mt-auto', statusStyle.text)}>
               {appointment.startTime} - {appointment.endTime}
             </div>
           ) : (
@@ -339,6 +427,25 @@ export function AppointmentBlock({
 
       {/* Status indicator dot */}
       <div className={cn('absolute top-1.5 right-1.5 w-2 h-2 rounded-full', statusStyle.accent)} />
+
+      {/* Multi-service link icon indicator - positioned at bottom right, above walk-in badge if present */}
+      {!isOptimistic && appointment.isMultiService && (
+        <div
+          className={cn(
+            'absolute flex items-center gap-0.5',
+            isChip
+              ? 'bottom-0.5 right-0.5'
+              : appointment.bookingType === 'walk_in'
+                ? 'bottom-5 right-1'
+                : 'bottom-1 right-1'
+          )}
+        >
+          <Link2 className={cn('text-white', isChip ? 'h-2.5 w-2.5' : 'h-3 w-3')} />
+          {!isChip && height >= 50 && appointment.serviceCount > 1 && (
+            <span className="text-[9px] font-medium text-white">{appointment.serviceCount}</span>
+          )}
+        </div>
+      )}
 
       {/* Booking type indicator — hide in chip mode */}
       {!isChip && appointment.bookingType === 'walk_in' && (

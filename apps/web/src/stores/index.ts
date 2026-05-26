@@ -21,3 +21,4 @@ export {
   type CalendarFilters,
 } from './calendar-store';
 export * from './appointments-ui-store';
+export * from './multi-service-store';

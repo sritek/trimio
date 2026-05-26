@@ -150,6 +150,7 @@ interface ServiceItemProps {
   taxAmount: number;
   totalAmount: number;
   stylistName?: string;
+  status?: string;
 }
 
 function ServiceItem({
@@ -160,21 +161,35 @@ function ServiceItem({
   taxAmount,
   totalAmount,
   stylistName,
+  status,
 }: ServiceItemProps) {
+  const isSkipped = status === 'skipped';
+
   return (
-    <div className="flex justify-between items-start p-3">
+    <div className={`flex justify-between items-start p-3 ${isSkipped ? 'bg-muted/50' : ''}`}>
       <div className="flex-1 space-y-1">
-        <p className="font-medium">{name}</p>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>
-            ₹{unitPrice.toFixed(2)} × {quantity}
-          </span>
-          {taxAmount > 0 && (
-            <span className="text-xs">
-              (+ ₹{taxAmount.toFixed(2)} GST {taxRate}%)
-            </span>
+        <div className="flex items-center gap-2">
+          <p className={`font-medium ${isSkipped ? 'text-muted-foreground line-through' : ''}`}>
+            {name}
+          </p>
+          {isSkipped && (
+            <Badge variant="secondary" className="text-xs">
+              Skipped
+            </Badge>
           )}
         </div>
+        {!isSkipped && (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              ₹{unitPrice.toFixed(2)} × {quantity}
+            </span>
+            {taxAmount > 0 && (
+              <span className="text-xs">
+                (+ ₹{taxAmount.toFixed(2)} GST {taxRate}%)
+              </span>
+            )}
+          </div>
+        )}
         {stylistName && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Scissors className="h-3 w-3" />
@@ -182,7 +197,9 @@ function ServiceItem({
           </div>
         )}
       </div>
-      <p className="font-medium">₹{totalAmount.toFixed(2)}</p>
+      <p className={`font-medium ${isSkipped ? 'text-muted-foreground' : ''}`}>
+        {isSkipped ? '₹0.00' : `₹${totalAmount.toFixed(2)}`}
+      </p>
     </div>
   );
 }
@@ -432,17 +449,33 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
   } | null>(null);
 
   // Calculate totals using backend API when inputs change
+  // Only include completed services (not skipped or in_progress)
   useEffect(() => {
     if (!branchId || !appointment?.services || appointment.services.length === 0) {
       setCalculatedTotals(null);
       return;
     }
 
-    const items = appointment.services.map((service) => ({
+    // Filter to only completed services for billing
+    const completedServices = appointment.services.filter((s) => s.status === 'completed');
+
+    if (completedServices.length === 0) {
+      // No completed services to bill
+      setCalculatedTotals({
+        subtotal: 0,
+        taxAmount: 0,
+        discountAmount: 0,
+        loyaltyDiscount: 0,
+        grandTotal: 0,
+      });
+      return;
+    }
+
+    const items = completedServices.map((service) => ({
       itemType: 'service' as const,
       referenceId: service.serviceId,
       quantity: service.quantity,
-      stylistId: service.stylistId || undefined,
+      stylistId: service.actualStylistId || service.assignedStylistId || undefined,
     }));
 
     const discounts: DiscountInput[] = [];
@@ -482,6 +515,7 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
   }, [branchId, appointment?.services, discountType, discountValue, loyaltyPointsToRedeem]);
 
   // Use backend-calculated totals or fallback to local calculation
+  // Only include completed services (not skipped or in_progress)
   const totals = useMemo(() => {
     // If we have backend-calculated totals, use them
     if (calculatedTotals) {
@@ -493,11 +527,14 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
       return { subtotal: 0, taxAmount: 0, discountAmount: 0, loyaltyDiscount: 0, grandTotal: 0 };
     }
 
-    const subtotal = appointment.services.reduce(
+    // Filter to only completed services
+    const completedServices = appointment.services.filter((s) => s.status === 'completed');
+
+    const subtotal = completedServices.reduce(
       (sum, s) => sum + Number(s.unitPrice) * s.quantity,
       0
     );
-    const taxAmount = appointment.services.reduce((sum, s) => sum + Number(s.taxAmount), 0);
+    const taxAmount = completedServices.reduce((sum, s) => sum + Number(s.taxAmount), 0);
 
     // Calculate discount
     let discountAmount = 0;
@@ -546,12 +583,19 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
     try {
       setIsCompletingAppointment(true);
 
-      // Build items from appointment services
-      const items = (appointment.services || []).map((service) => ({
+      // Filter to only completed services for billing
+      const completedServices = (appointment.services || []).filter(
+        (s) => s.status === 'completed'
+      );
+
+      // Build items from completed services only
+      // Use actualStylistId (who actually performed the service) if available,
+      // otherwise fall back to assignedStylistId (who was assigned to perform it)
+      const items = completedServices.map((service) => ({
         itemType: 'service' as const,
         referenceId: service.serviceId,
         quantity: service.quantity,
-        stylistId: service.stylistId || undefined,
+        stylistId: service.actualStylistId || service.assignedStylistId || undefined,
       }));
 
       // Build discounts array if discount applied
@@ -629,15 +673,6 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
     handleError,
   ]);
 
-  // Get stylist names map (must be before early returns per rules-of-hooks)
-  const stylistMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (appointment?.stylist) {
-      map[appointment.stylistId || ''] = appointment.stylist.name;
-    }
-    return map;
-  }, [appointment]);
-
   // Loading state
   if (!branchId) {
     return (
@@ -686,12 +721,35 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
     );
   }
 
+  // Check for in_progress services - block checkout if any exist
+  const inProgressServices = (appointment.services || []).filter((s) => s.status === 'in_progress');
+  const hasInProgressServices = inProgressServices.length > 0;
+
+  // Check for completed services - need at least one to bill
+  const completedServices = (appointment.services || []).filter((s) => s.status === 'completed');
+  const hasCompletedServices = completedServices.length > 0;
+
+  // Check for skipped services - show them but don't bill
+  const skippedServices = (appointment.services || []).filter((s) => s.status === 'skipped');
+
   const canComplete =
-    isFullyPaid && (appointment.services || []).length > 0 && !calculateTotals.isPending;
+    isFullyPaid && hasCompletedServices && !hasInProgressServices && !calculateTotals.isPending;
 
   return (
     <div className="flex flex-col h-full">
       <SlideOverContent className="space-y-6">
+        {/* In-Progress Warning */}
+        {hasInProgressServices && (
+          <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+            <p className="text-sm text-destructive font-medium">
+              Cannot checkout: {inProgressServices.length} service(s) are still in progress.
+            </p>
+            <p className="text-xs text-destructive/80 mt-1">
+              Please complete or skip the in-progress services before checking out.
+            </p>
+          </div>
+        )}
+
         {/* Customer Info */}
         <CustomerInfoCard
           name={appointment.customer?.name || appointment.customerName || undefined}
@@ -716,13 +774,19 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
                 taxAmount={Number(service.taxAmount)}
                 totalAmount={Number(service.totalAmount)}
                 stylistName={
-                  service.stylistId
-                    ? stylistMap[service.stylistId] || appointment.stylist?.name
-                    : appointment.stylist?.name
+                  service.actualStylist?.name ||
+                  service.assignedStylist?.name ||
+                  appointment.stylist?.name
                 }
+                status={service.status}
               />
             ))}
           </div>
+          {skippedServices.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              {skippedServices.length} service(s) skipped - not included in total
+            </p>
+          )}
         </div>
 
         {/* Totals */}
@@ -804,9 +868,12 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
                     if (calculatedTotals?.discountAmount) {
                       return calculatedTotals.discountAmount.toFixed(2);
                     }
-                    // Local preview calculation
+                    // Local preview calculation - only from completed services
+                    const completedServicesForCalc = appointment?.services?.filter(
+                      (s) => s.status === 'completed'
+                    );
                     const subtotal =
-                      appointment?.services?.reduce(
+                      completedServicesForCalc?.reduce(
                         (sum, s) => sum + Number(s.unitPrice) * s.quantity,
                         0
                       ) || 0;
@@ -937,11 +1004,10 @@ export function CheckoutPanel({ appointmentId, onComplete }: CheckoutPanelProps)
             : undefined
         }
         appointmentTime={appointment.scheduledTime}
-        services={(appointment.services || []).map((s) => ({
+        services={completedServices.map((s) => ({
           name: s.serviceName,
-          stylistName: s.stylistId
-            ? stylistMap[s.stylistId] || appointment.stylist?.name
-            : appointment.stylist?.name,
+          stylistName:
+            s.actualStylist?.name || s.assignedStylist?.name || appointment.stylist?.name,
         }))}
         payments={payments}
         grandTotal={totals.grandTotal}

@@ -63,23 +63,43 @@ export class StylistScheduleService {
     });
 
     // Get appointments in date range
+    // Include appointments where this stylist is:
+    // 1. The primary stylist (appointment.stylistId)
+    // 2. Assigned to any service (appointmentService.assignedStylistId)
+    // 3. The actual stylist on any service (appointmentService.actualStylistId)
     const appointments = await this.prisma.appointment.findMany({
       where: {
         tenantId,
-        stylistId,
         scheduledDate: {
           gte: parseToUTCDate(dateFrom),
           lte: parseToUTCEndOfDay(dateTo),
         },
         status: { notIn: ['cancelled', 'no_show', 'rescheduled'] },
         deletedAt: null,
+        OR: [
+          { stylistId },
+          { services: { some: { assignedStylistId: stylistId } } },
+          { services: { some: { actualStylistId: stylistId } } },
+        ],
       },
       include: {
         customer: {
           select: { id: true, name: true },
         },
         services: {
-          select: { serviceName: true },
+          select: {
+            id: true,
+            serviceName: true,
+            sequence: true,
+            runParallel: true,
+            status: true,
+            durationMinutes: true,
+            assignedStylistId: true,
+            actualStylistId: true,
+            assignedStylist: { select: { name: true } },
+            actualStylist: { select: { name: true } },
+          },
+          orderBy: { sequence: 'asc' },
         },
       },
       orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
@@ -91,15 +111,34 @@ export class StylistScheduleService {
       dateTo,
       breaks,
       blockedSlots,
-      appointments: appointments.map((apt) => ({
-        id: apt.id,
-        scheduledDate: apt.scheduledDate.toISOString().split('T')[0],
-        scheduledTime: apt.scheduledTime,
-        endTime: apt.scheduledEndTime,
-        customerName: apt.customer?.name || apt.customerName || 'Guest',
-        services: apt.services.map((s) => s.serviceName),
-        status: apt.status,
-      })),
+      appointments: appointments.map((apt) => {
+        // Filter to only services this stylist is involved in
+        const stylistServices = apt.services.filter(
+          (s) =>
+            s.assignedStylistId === stylistId ||
+            s.actualStylistId === stylistId ||
+            apt.stylistId === stylistId
+        );
+
+        // For multi-service appointments, show only this stylist's services
+        const isMultiService = apt.services.length > 1;
+        const serviceNames = isMultiService
+          ? stylistServices.map((s) => s.serviceName)
+          : apt.services.map((s) => s.serviceName);
+
+        return {
+          id: apt.id,
+          scheduledDate: apt.scheduledDate.toISOString().split('T')[0],
+          scheduledTime: apt.scheduledTime,
+          endTime: apt.scheduledEndTime,
+          customerName: apt.customer?.name || apt.customerName || 'Guest',
+          services: serviceNames,
+          status: apt.status,
+          isMultiService,
+          totalServices: apt.services.length,
+          stylistServices: stylistServices.length,
+        };
+      }),
     };
   }
 

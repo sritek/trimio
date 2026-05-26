@@ -87,7 +87,7 @@ export function EditInvoicePanel({ invoiceId, onSuccess }: EditInvoicePanelProps
   const [payments, setPayments] = useState<PaymentInput[]>([{ paymentMethod: 'cash', amount: 0 }]);
 
   // Queries
-  const { data: servicesData } = useServices({});
+  const { data: servicesData } = useServices({ limit: -1 });
   const { data: productsData } = useProductsForBilling(branchId || '', '');
 
   // Mutations

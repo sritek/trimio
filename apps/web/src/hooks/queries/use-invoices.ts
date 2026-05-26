@@ -6,6 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { floorViewKeys } from '@/hooks/queries/use-stations';
+import { resourceCalendarKeys } from '@/hooks/queries/use-resource-calendar';
 import type {
   Invoice,
   CreateInvoiceInput,
@@ -202,6 +203,8 @@ export function useQuickBill() {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       // Invalidate floor view since station is now free
       queryClient.invalidateQueries({ queryKey: floorViewKeys.all });
+      // Invalidate resource calendar to update appointment status on calendar view
+      queryClient.invalidateQueries({ queryKey: resourceCalendarKeys.all });
     },
   });
 }

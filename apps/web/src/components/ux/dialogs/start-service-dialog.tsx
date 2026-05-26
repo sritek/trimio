@@ -181,14 +181,32 @@ export function StartServiceDialog({
   ]);
 
   const handleClose = useCallback(() => {
+    // Don't allow closing while operation is in progress
+    if (isLoading) {
+      return;
+    }
     setSelectedStationId(null);
     onOpenChange(false);
-  }, [onOpenChange]);
+  }, [onOpenChange, isLoading]);
 
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent
+          className="sm:max-w-2xl"
+          onPointerDownOutside={(e) => {
+            // Prevent closing by clicking outside while pending
+            if (isLoading) {
+              e.preventDefault();
+            }
+          }}
+          onEscapeKeyDown={(e) => {
+            // Prevent closing by escape key while pending
+            if (isLoading) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PlayCircle className="h-5 w-5 text-primary" />
@@ -367,7 +385,8 @@ export function StartServiceDialog({
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-medium text-red-900">
-                  Station &ldquo;{pendingStationData.stationName}&rdquo; has an incomplete appointment
+                  Station &ldquo;{pendingStationData.stationName}&rdquo; has an incomplete
+                  appointment
                 </p>
                 <div className="text-sm text-red-700 space-y-1">
                   <p>

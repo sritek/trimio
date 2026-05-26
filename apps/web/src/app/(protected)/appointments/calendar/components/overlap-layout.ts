@@ -8,6 +8,10 @@
  *
  * This means an appointment only shares width with events it actually
  * overlaps — not with every event in the cluster.
+ *
+ * NOTE: For multi-service appointments, the same appointment ID can appear
+ * multiple times (once per stylist). We use a composite key (stylistId:appointmentId)
+ * to ensure each entry gets its own layout.
  */
 
 import type { CalendarAppointment } from '@/hooks/queries/use-resource-calendar';
@@ -21,6 +25,15 @@ export interface LayoutInfo {
   totalColumns: number;
 }
 
+/**
+ * Generate a unique key for an appointment entry.
+ * For multi-service appointments, the same ID can appear for different stylists,
+ * so we include the stylistId in the key.
+ */
+export function getLayoutKey(appointment: CalendarAppointment): string {
+  return `${appointment.stylistId || '__unassigned__'}:${appointment.id}`;
+}
+
 /** Convert "HH:mm" to total minutes */
 function toMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number);
@@ -29,8 +42,9 @@ function toMinutes(time: string): number {
 
 /** Check if two appointments overlap in time */
 function overlaps(a: CalendarAppointment, b: CalendarAppointment): boolean {
-  return toMinutes(a.startTime) < toMinutes(b.endTime) &&
-         toMinutes(b.startTime) < toMinutes(a.endTime);
+  return (
+    toMinutes(a.startTime) < toMinutes(b.endTime) && toMinutes(b.startTime) < toMinutes(a.endTime)
+  );
 }
 
 /**
@@ -72,7 +86,7 @@ function computeStylistLayout(appointments: CalendarAppointment[]): Map<string, 
   // Step 2: For each cluster, assign columns and compute spans
   for (const cluster of clusters) {
     if (cluster.length === 1) {
-      result.set(cluster[0].id, { column: 0, span: 1, totalColumns: 1 });
+      result.set(getLayoutKey(cluster[0]), { column: 0, span: 1, totalColumns: 1 });
       continue;
     }
 
@@ -81,20 +95,21 @@ function computeStylistLayout(appointments: CalendarAppointment[]): Map<string, 
     const colMap = new Map<string, number>();
 
     for (const apt of cluster) {
+      const key = getLayoutKey(apt);
       const start = toMinutes(apt.startTime);
       let placed = false;
 
       for (let col = 0; col < columnEnds.length; col++) {
         if (columnEnds[col] <= start) {
           columnEnds[col] = toMinutes(apt.endTime);
-          colMap.set(apt.id, col);
+          colMap.set(key, col);
           placed = true;
           break;
         }
       }
 
       if (!placed) {
-        colMap.set(apt.id, columnEnds.length);
+        colMap.set(key, columnEnds.length);
         columnEnds.push(toMinutes(apt.endTime));
       }
     }
@@ -105,19 +120,20 @@ function computeStylistLayout(appointments: CalendarAppointment[]): Map<string, 
     // An appointment in column C can expand into column C+1 if no appointment
     // in column C+1 overlaps with it, and so on.
     for (const apt of cluster) {
-      const col = colMap.get(apt.id)!;
+      const key = getLayoutKey(apt);
+      const col = colMap.get(key)!;
       let span = 1;
 
       for (let nextCol = col + 1; nextCol < totalColumns; nextCol++) {
         // Check if any appointment in nextCol overlaps with this one
         const blocked = cluster.some(
-          (other) => colMap.get(other.id) === nextCol && overlaps(apt, other)
+          (other) => colMap.get(getLayoutKey(other)) === nextCol && overlaps(apt, other)
         );
         if (blocked) break;
         span++;
       }
 
-      result.set(apt.id, { column: col, span, totalColumns });
+      result.set(key, { column: col, span, totalColumns });
     }
   }
 
@@ -127,9 +143,7 @@ function computeStylistLayout(appointments: CalendarAppointment[]): Map<string, 
 /**
  * Compute layout for all appointments across all stylists.
  */
-export function computeOverlapLayout(
-  appointments: CalendarAppointment[]
-): Map<string, LayoutInfo> {
+export function computeOverlapLayout(appointments: CalendarAppointment[]): Map<string, LayoutInfo> {
   const byStylist = new Map<string, CalendarAppointment[]>();
   for (const apt of appointments) {
     const key = apt.stylistId || '__unassigned__';

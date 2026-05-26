@@ -42,7 +42,7 @@ export function AddServicePanel({ appointmentId }: AddServicePanelProps) {
   // Fetch services
   const { data: servicesData, isLoading: servicesLoading } = useServices({
     isActive: true,
-    limit: 100,
+    limit: -1,
   });
 
   // Fetch stylists

@@ -4,6 +4,7 @@
  * Stylist Dashboard Component
  * Shows attendance buttons (with confirmation) + leave application
  * + today's read-only appointments (card/list view)
+ * + walk-in queue section (for receptionist role)
  * Mobile-first design
  */
 
@@ -26,17 +27,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, ConfirmDialog } from '@/components/common';
+import { useOpenPanel } from '@/components/ux/slide-over';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores';
 import { useBranchContext } from '@/hooks/use-branch-context';
 import { useErrorHandler } from '@/hooks/use-error-handler';
 import { useAppointments } from '@/hooks/queries/use-appointments';
-import {
-  useStaffCheckIn,
-  useAttendanceList,
-  useManualAttendance,
-} from '@/hooks/queries/use-staff';
-import type { Appointment } from '@/types/appointments';
+import { useStaffCheckIn, useAttendanceList, useManualAttendance } from '@/hooks/queries/use-staff';
+import { WalkInQueueSection } from './walk-in-queue-section';
+import type { Appointment, WalkInQueueEntry } from '@/types/appointments';
 import type { AttendanceStatus } from '@/types/staff';
 
 // ============================================
@@ -50,7 +49,9 @@ function AttendanceSection() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
   // Confirm dialog state
-  const [confirmAction, setConfirmAction] = useState<'present' | 'absent' | 'on_leave' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'present' | 'absent' | 'on_leave' | null>(
+    null
+  );
 
   const checkInMutation = useStaffCheckIn();
   const manualAttendanceMutation = useManualAttendance();
@@ -243,16 +244,85 @@ function AttendanceSection() {
 // Appointment Card View
 // ============================================
 
+/**
+ * Calculate the time window for a stylist's services within a multi-service appointment.
+ * Uses scheduledStartTime/scheduledEndTime if available, otherwise estimates from sequence.
+ */
+function getStylistTimeWindow(
+  appointmentStartTime: string,
+  allServices: Appointment['services'],
+  myServices: Appointment['services']
+): { startTime: string; endTime: string; totalMinutes: number } | null {
+  if (!myServices || myServices.length === 0) return null;
+
+  const totalMinutes = myServices.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+
+  // Try to use scheduledStartTime/scheduledEndTime from the services
+  const startTimes = myServices
+    .map((s) => s.scheduledStartTime)
+    .filter(Boolean) as string[];
+  const endTimes = myServices
+    .map((s) => s.scheduledEndTime)
+    .filter(Boolean) as string[];
+
+  if (startTimes.length > 0 && endTimes.length > 0) {
+    const earliest = startTimes.sort()[0];
+    const latest = endTimes.sort().reverse()[0];
+    // Format as HH:mm
+    const startTime = new Date(earliest).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const endTime = new Date(latest).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    return { startTime, endTime, totalMinutes };
+  }
+
+  // Fallback: estimate from sequence position
+  // Calculate offset from appointment start based on services before this stylist's services
+  if (allServices && allServices.length > 0 && myServices[0].sequence) {
+    const sortedAll = [...allServices].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    let offsetMinutes = 0;
+    for (const s of sortedAll) {
+      if (s.sequence && myServices[0].sequence && s.sequence < myServices[0].sequence && !s.runParallel) {
+        offsetMinutes += s.durationMinutes || 0;
+      }
+    }
+
+    // Parse appointment start time and add offset
+    const [hours, minutes] = appointmentStartTime.split(':').map(Number);
+    const startDate = new Date(2000, 0, 1, hours, minutes + offsetMinutes);
+    const endDate = new Date(2000, 0, 1, hours, minutes + offsetMinutes + totalMinutes);
+    const startTime = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+    const endTime = `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
+    return { startTime, endTime, totalMinutes };
+  }
+
+  return { startTime: appointmentStartTime, endTime: '', totalMinutes };
+}
+
 function AppointmentCard({ appointment }: { appointment: Appointment }) {
+  const { user } = useAuthStore();
   const services = appointment.services || [];
-  const serviceNames = services.map((s) => s.serviceName).join(', ');
+  const isMultiService = services.length > 1;
+
+  // For multi-service, show only this stylist's services
+  const myServices = isMultiService
+    ? services.filter(
+        (s) => s.actualStylistId === user?.id || s.assignedStylistId === user?.id
+      )
+    : services;
+  const serviceNames = myServices.map((s) => s.serviceName).join(', ');
+
+  // Calculate this stylist's time window
+  const timeWindow = isMultiService
+    ? getStylistTimeWindow(appointment.scheduledTime, services, myServices)
+    : null;
 
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="font-medium text-sm">
-            {appointment.scheduledTime} - {appointment.scheduledEndTime}
+            {isMultiService && timeWindow
+              ? `${timeWindow.startTime} - ${timeWindow.endTime}`
+              : `${appointment.scheduledTime} - ${appointment.scheduledEndTime}`}
           </span>
           <StatusBadge status={appointment.status} size="sm" />
         </div>
@@ -268,7 +338,11 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
         )}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-3.5 w-3.5 shrink-0" />
-          <span>{appointment.totalDuration} min</span>
+          <span>
+            {isMultiService && timeWindow
+              ? `${timeWindow.totalMinutes} min · ${myServices.length} of ${services.length} services`
+              : `${appointment.totalDuration} min`}
+          </span>
         </div>
       </CardContent>
     </Card>
@@ -280,20 +354,39 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
 // ============================================
 
 function AppointmentRow({ appointment }: { appointment: Appointment }) {
+  const { user } = useAuthStore();
   const services = appointment.services || [];
-  const serviceNames = services.map((s) => s.serviceName).join(', ');
+  const isMultiService = services.length > 1;
+
+  // For multi-service, show only this stylist's services
+  const myServices = isMultiService
+    ? services.filter(
+        (s) => s.actualStylistId === user?.id || s.assignedStylistId === user?.id
+      )
+    : services;
+  const serviceNames = myServices.map((s) => s.serviceName).join(', ');
+
+  // Calculate this stylist's time window
+  const timeWindow = isMultiService
+    ? getStylistTimeWindow(appointment.scheduledTime, services, myServices)
+    : null;
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border">
       <div className="min-w-[70px] text-center shrink-0">
-        <p className="text-sm font-medium">{appointment.scheduledTime}</p>
-        <p className="text-xs text-muted-foreground">{appointment.totalDuration}m</p>
+        <p className="text-sm font-medium">
+          {isMultiService && timeWindow ? timeWindow.startTime : appointment.scheduledTime}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {isMultiService && timeWindow ? `${timeWindow.totalMinutes}m` : `${appointment.totalDuration}m`}
+        </p>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate">
-          {appointment.customerName || 'Walk-in'}
+        <p className="font-medium text-sm truncate">{appointment.customerName || 'Walk-in'}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {serviceNames || '—'}
+          {isMultiService && ` (${myServices.length}/${services.length})`}
         </p>
-        <p className="text-xs text-muted-foreground truncate">{serviceNames || '—'}</p>
       </div>
       <StatusBadge status={appointment.status} size="sm" />
     </div>
@@ -405,8 +498,31 @@ function AppointmentsSection() {
 // ============================================
 
 export function StylistDashboard() {
+  const { openNewAppointment } = useOpenPanel();
+
+  // Handle serve from walk-in queue - opens new appointment panel with pre-filled data
+  const handleServeWalkIn = useCallback(
+    (entry: WalkInQueueEntry) => {
+      // Get current time in HH:mm format for walk-ins
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      // Open new appointment panel with customer, services, time, stylist preference, and booking type pre-filled
+      openNewAppointment({
+        customerId: entry.customerId || undefined,
+        serviceIds: entry.serviceIds,
+        walkInQueueId: entry.id,
+        bookingType: 'walk_in',
+        time: currentTime,
+        stylistId: entry.stylistPreferenceId || undefined,
+      });
+    },
+    [openNewAppointment]
+  );
+
   return (
     <div className="space-y-6">
+      <WalkInQueueSection onServe={handleServeWalkIn} />
       <AttendanceSection />
       <AppointmentsSection />
     </div>

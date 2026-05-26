@@ -303,9 +303,7 @@ function FinalizePaymentDialog({
 // Main Component
 // ============================================
 
-export function NewInvoicePanel({
-  onSuccess,
-}: NewInvoicePanelProps) {
+export function NewInvoicePanel({ onSuccess }: NewInvoicePanelProps) {
   const closePanel = useClosePanel();
   const { setUnsavedChanges } = useSlideOverUnsavedChanges();
   const { openNewAppointment } = useOpenPanel();
@@ -323,8 +321,11 @@ export function NewInvoicePanel({
   const [productSearchQuery] = useState('');
 
   // Queries
-  const { data: customerSearchData } = useCustomerSearch({ q: customerSearchQuery, limit: 10 });
-  const { data: servicesData, isLoading: servicesLoading } = useServices({});
+  const { data: customerSearchData, isFetching: isSearchingCustomers } = useCustomerSearch({
+    q: customerSearchQuery,
+    limit: 10,
+  });
+  const { data: servicesData, isLoading: servicesLoading } = useServices({ limit: -1 });
   const { data: staffData } = useStaffList({
     branchId: branchId || '',
     role: 'stylist',
@@ -680,6 +681,7 @@ export function NewInvoicePanel({
                     onChange={handleCustomerSelect}
                     customers={customerOptions}
                     onSearchChange={setCustomerSearchQuery}
+                    isLoading={isSearchingCustomers}
                     placeholder="Search customer..."
                   />
                 </div>

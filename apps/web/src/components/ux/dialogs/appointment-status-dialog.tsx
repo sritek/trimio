@@ -143,9 +143,35 @@ export function AppointmentStatusDialog({
     }
   }, [appointmentId, targetStatus, updateStatusMutation, onOpenChange, onSuccess]);
 
+  // Prevent closing dialog while operation is in progress
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      // Don't allow closing while mutation is pending
+      if (!newOpen && updateStatusMutation.isPending) {
+        return;
+      }
+      onOpenChange(newOpen);
+    },
+    [onOpenChange, updateStatusMutation.isPending]
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="sm:max-w-md"
+        onPointerDownOutside={(e) => {
+          // Prevent closing by clicking outside while pending
+          if (updateStatusMutation.isPending) {
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing by escape key while pending
+          if (updateStatusMutation.isPending) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className={`h-5 w-5 ${config.iconColor}`} />

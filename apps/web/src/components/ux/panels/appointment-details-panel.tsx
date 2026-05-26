@@ -26,9 +26,9 @@ import {
   CreditCard,
   RefreshCw,
   Pencil,
-  Armchair,
   Receipt,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,7 @@ const STATUS_ACTIONS = {
     { status: 'no_show', label: 'No Show', icon: AlertCircle, variant: 'destructive' as const },
   ],
   in_progress: [], // No status actions - only checkout available
+  ready_for_checkout: [], // No status actions - only checkout available
   completed: [],
   cancelled: [],
   no_show: [],
@@ -96,8 +97,19 @@ export function AppointmentDetailsPanel({
   const [editServicesDialogOpen, setEditServicesDialogOpen] = useState(false);
   const [startServiceDialogOpen, setStartServiceDialogOpen] = useState(false);
 
-  // Queries
-  const { data: appointment, isLoading, error } = useAppointment(appointmentId);
+  // Track if any action is in progress (dialog open or data refetching after mutation)
+  // Note: We use isFetching from the query to detect background refetches after mutations
+
+  // Queries - use isFetching to detect background refetches after mutations
+  const { data: appointment, isLoading, error, isFetching } = useAppointment(appointmentId);
+
+  // Determine if buttons should be disabled (any dialog open or data refetching)
+  const isButtonsDisabled =
+    isFetching ||
+    statusDialogOpen ||
+    cancelDialogOpen ||
+    rescheduleDialogOpen ||
+    startServiceDialogOpen;
 
   // Get available actions based on current status
   const availableActions = useMemo(() => {
@@ -106,10 +118,11 @@ export function AppointmentDetailsPanel({
   }, [appointment]);
 
   // Check if checkout button should be shown
-  // Only show for in_progress appointments (completed means payment already captured)
+  // Show for in_progress and ready_for_checkout appointments
+  // completed means payment already captured
   const showCheckout = useMemo(() => {
     if (!appointment) return false;
-    return appointment.status === 'in_progress';
+    return appointment.status === 'in_progress' || appointment.status === 'ready_for_checkout';
   }, [appointment]);
 
   // Handle status change - open appropriate dialog
@@ -196,9 +209,15 @@ export function AppointmentDetailsPanel({
   const formattedDate = format(parseISO(appointment.scheduledDate), 'EEEE, MMMM d, yyyy');
   const formattedTime = `${appointment.scheduledTime} - ${appointment.scheduledEndTime || '--:--'}`;
   const canEditServices = (
-    ['booked', 'confirmed', 'checked_in', 'in_progress'] as AppointmentStatus[]
+    [
+      'booked',
+      'confirmed',
+      'checked_in',
+      'in_progress',
+      'ready_for_checkout',
+    ] as AppointmentStatus[]
   ).includes(appointment.status);
-  const canReschedule = (['booked', 'confirmed', 'checked_in'] as AppointmentStatus[]).includes(
+  const canReschedule = (['booked', 'confirmed'] as AppointmentStatus[]).includes(
     appointment.status
   );
 
@@ -248,40 +267,72 @@ export function AppointmentDetailsPanel({
             <span>{formattedDate}</span>
           </div>
 
-          {/* Time */}
+          {/* Scheduled Time */}
           <div className="flex items-center gap-3">
             <Clock className="h-5 w-5 text-muted-foreground" />
-            <span>{formattedTime}</span>
+            <div className="flex flex-col">
+              <span>{formattedTime}</span>
+              {appointment.actualStartTime && (
+                <span className="text-xs text-muted-foreground">
+                  Started at {format(parseISO(appointment.actualStartTime), 'h:mm a')}
+                  {appointment.actualEndTime && (
+                    <> · Ended at {format(parseISO(appointment.actualEndTime), 'h:mm a')}</>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Stylist */}
-          {appointment.stylist?.name && (
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 text-muted-foreground" />
-              <span>{appointment.stylist.name}</span>
-            </div>
-          )}
+          {(() => {
+            // Get unique stylists from services
+            const serviceStylists = new Map<string, string>();
+            appointment.services?.forEach((service) => {
+              const stylistId = service.actualStylistId || service.assignedStylistId;
+              const stylistName = service.actualStylist?.name || service.assignedStylist?.name;
+              if (stylistId && stylistName) {
+                serviceStylists.set(stylistId, stylistName);
+              }
+            });
 
-          {/* Station (if assigned) */}
-          {appointment.station && (
-            <div className="flex items-center gap-3">
-              <Armchair className="h-5 w-5 text-muted-foreground" />
-              <div className="flex items-center gap-2">
-                <span>{appointment.station.name}</span>
-                {appointment.station.stationType && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded-full border"
-                    style={{
-                      borderColor: appointment.station.stationType.color || undefined,
-                      color: appointment.station.stationType.color || undefined,
-                    }}
-                  >
-                    {appointment.station.stationType.name}
-                  </span>
-                )}
+            // Add primary stylist if not already in the map
+            if (appointment.stylist?.id && appointment.stylist?.name) {
+              serviceStylists.set(appointment.stylist.id, appointment.stylist.name);
+            }
+
+            const uniqueStylists = Array.from(serviceStylists.values());
+
+            if (uniqueStylists.length === 0) {
+              return null;
+            }
+
+            if (uniqueStylists.length === 1) {
+              return (
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <span>{uniqueStylists[0]}</span>
+                </div>
+              );
+            }
+
+            // Multiple stylists
+            return (
+              <div className="flex items-start gap-3">
+                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Multiple Stylists</span>
+                  <div className="flex flex-wrap gap-1">
+                    {uniqueStylists.map((name, idx) => (
+                      <span key={idx} className="text-xs px-2 py-0.5 rounded-full bg-muted">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
+
         </div>
 
         <Separator />
@@ -308,26 +359,120 @@ export function AppointmentDetailsPanel({
           </div>
           <div className="space-y-2">
             {appointment.services && appointment.services.length > 0 ? (
-              appointment.services.map((service, index) => (
-                <ServiceCard
-                  key={service.id || index}
-                  serviceName={service.serviceName}
-                  price={service.unitPrice}
-                  duration={service.durationMinutes}
-                  quantity={service.quantity}
-                />
-              ))
+              (() => {
+                // Sort services by sequence
+                const sortedServices = [...appointment.services].sort(
+                  (a, b) => (a.sequence ?? 1) - (b.sequence ?? 1)
+                );
+
+                // Group services into parallel groups
+                // A service with runParallel: true runs with the previous service
+                const groups: Array<typeof appointment.services> = [];
+                let currentGroup: typeof appointment.services = [];
+
+                sortedServices.forEach((service, index) => {
+                  if (index === 0) {
+                    // First service always starts a new group
+                    currentGroup = [service];
+                  } else if (service.runParallel) {
+                    // This service runs in parallel with the previous one
+                    currentGroup.push(service);
+                  } else {
+                    // This service is sequential - save current group and start new one
+                    if (currentGroup.length > 0) {
+                      groups.push(currentGroup);
+                    }
+                    currentGroup = [service];
+                  }
+                });
+
+                // Don't forget the last group
+                if (currentGroup.length > 0) {
+                  groups.push(currentGroup);
+                }
+
+                // Render groups
+                return groups.map((group, groupIndex) => {
+                  const isParallel = group.length > 1;
+
+                  if (isParallel) {
+                    // Render parallel services in a grouped container
+                    return (
+                      <div key={`group-${groupIndex}`} className="space-y-2">
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="h-px flex-1 bg-purple-200 dark:bg-purple-800" />
+                          <span className="text-xs font-medium text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                            <svg
+                              className="h-3 w-3"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                            </svg>
+                            Parallel Services
+                          </span>
+                          <div className="h-px flex-1 bg-purple-200 dark:bg-purple-800" />
+                        </div>
+                        <div className="pl-3 border-l-2 border-purple-300 dark:border-purple-700 space-y-2">
+                          {group.map((service, index) => (
+                            <ServiceCard
+                              key={service.id || `${groupIndex}-${index}`}
+                              serviceName={service.serviceName}
+                              price={service.unitPrice}
+                              duration={service.durationMinutes}
+                              quantity={service.quantity}
+                              stylistName={
+                                service.actualStylist?.name || service.assignedStylist?.name
+                              }
+                              stationName={service.station?.name}
+                              stationTypeName={service.station?.stationType?.name}
+                              status={service.status}
+                              isParallel
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Single service in group
+                  const service = group[0];
+                  return (
+                    <ServiceCard
+                      key={service.id || `group-${groupIndex}`}
+                      serviceName={service.serviceName}
+                      price={service.unitPrice}
+                      duration={service.durationMinutes}
+                      quantity={service.quantity}
+                      stylistName={service.actualStylist?.name || service.assignedStylist?.name}
+                      stationName={service.station?.name}
+                      stationTypeName={service.station?.stationType?.name}
+                      status={service.status}
+                    />
+                  );
+                });
+              })()
             ) : (
               <p className="text-muted-foreground text-sm">No services added</p>
             )}
           </div>
-          {appointment.totalAmount != null && appointment.totalAmount > 0 && (
+          {appointment.services && appointment.services.some((s: { status: string; unitPrice: number }) => s.status !== 'skipped' && Number(s.unitPrice) > 0) && (
             <div className="mt-8 pt-3 border-t space-y-2">
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>Subtotal</span>
-                <span>₹{appointment.subtotal?.toLocaleString('en-IN') || 0}</span>
+                <span>₹{(appointment.services
+                  ? appointment.services
+                      .filter((s: { status: string }) => s.status !== 'skipped')
+                      .reduce((sum: number, s: { unitPrice: number; quantity: number }) => sum + Number(s.unitPrice) * s.quantity, 0)
+                  : appointment.subtotal || 0
+                ).toLocaleString('en-IN')}</span>
               </div>
-              {appointment.taxAmount > 0 && (
+              {appointment.services &&
+                appointment.services
+                  .filter((s: { status: string }) => s.status !== 'skipped')
+                  .reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0) > 0 && (
                 <div className="flex justify-between items-center text-sm text-muted-foreground">
                   <span>
                     Tax (GST{' '}
@@ -336,7 +481,12 @@ export function AppointmentDetailsPanel({
                       : '18%'}
                     )
                   </span>
-                  <span>₹{appointment.taxAmount.toLocaleString('en-IN')}</span>
+                  <span>₹{(appointment.services
+                    ? appointment.services
+                        .filter((s: { status: string }) => s.status !== 'skipped')
+                        .reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0)
+                    : appointment.taxAmount
+                  ).toLocaleString('en-IN')}</span>
                 </div>
               )}
               {appointment.discountAmount > 0 && (
@@ -348,7 +498,15 @@ export function AppointmentDetailsPanel({
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold">Total</span>
                 <span className="text-lg font-bold text-primary">
-                  ₹{appointment.totalAmount.toLocaleString('en-IN')}
+                  ₹{(appointment.services
+                    ? (() => {
+                        const billable = appointment.services.filter((s: { status: string }) => s.status !== 'skipped');
+                        const sub = billable.reduce((sum: number, s: { unitPrice: number; quantity: number }) => sum + Number(s.unitPrice) * s.quantity, 0);
+                        const tax = billable.reduce((sum: number, s: { taxAmount: number }) => sum + Number(s.taxAmount), 0);
+                        return sub + tax - (appointment.discountAmount || 0);
+                      })()
+                    : appointment.totalAmount
+                  ).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -381,6 +539,30 @@ export function AppointmentDetailsPanel({
         )}
 
         {/* Status Notices */}
+        {/* Ready for Checkout - Show when all services are done but payment not yet captured */}
+        {appointment.status === 'ready_for_checkout' && (
+          <>
+            <Separator />
+            <Notice
+              severity="info"
+              title="Ready for Checkout"
+              description="All services have been completed. Please proceed to checkout to finalize the payment."
+              action={
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100"
+                  onClick={handleCheckout}
+                >
+                  <CreditCard className="h-4 w-4 mr-1" />
+                  Proceed to Checkout
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Button>
+              }
+            />
+          </>
+        )}
+
         {/* Payment Completed - Show for completed appointments */}
         {appointment.status === 'completed' && (
           <>
@@ -447,9 +629,22 @@ export function AppointmentDetailsPanel({
 
       {/* Action Buttons */}
       <div className="border-t p-4 space-y-3">
+        {/* Loading indicator when data is being refetched */}
+        {isFetching && !isLoading && (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-1">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Updating...</span>
+          </div>
+        )}
+
         {/* Checkout Mode - Show Confirm & Proceed button */}
         {isCheckoutMode && (
-          <Button className="w-full" size="lg" onClick={handleProceedToCheckout}>
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={handleProceedToCheckout}
+            disabled={isButtonsDisabled}
+          >
             Confirm & Proceed to Checkout
           </Button>
         )}
@@ -468,6 +663,7 @@ export function AppointmentDetailsPanel({
                       variant={action.variant}
                       size="sm"
                       onClick={() => handleStatusChange(action.status)}
+                      disabled={isButtonsDisabled}
                     >
                       <Icon className="h-4 w-4 mr-1" />
                       {action.label}
@@ -477,7 +673,12 @@ export function AppointmentDetailsPanel({
 
                 {/* Reschedule button for non-completed appointments */}
                 {canReschedule && (
-                  <Button variant="outline" size="sm" onClick={handleReschedule}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReschedule}
+                    disabled={isButtonsDisabled}
+                  >
                     <RefreshCw className="h-4 w-4 mr-1" />
                     Reschedule
                   </Button>
@@ -487,7 +688,12 @@ export function AppointmentDetailsPanel({
 
             {/* Checkout Button */}
             {showCheckout && (
-              <Button className="w-full" size="lg" onClick={handleCheckout}>
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleCheckout}
+                disabled={isButtonsDisabled}
+              >
                 <CreditCard className="h-5 w-5 mr-2" />
                 Checkout
               </Button>
@@ -557,29 +763,73 @@ interface ServiceCardProps {
   price?: number;
   duration?: number;
   stylistName?: string;
+  stationName?: string;
+  stationTypeName?: string;
   quantity?: number;
+  status?: string;
+  isParallel?: boolean;
 }
+
+// Valid status types that can be used with StatusBadge
+const VALID_SERVICE_STATUSES = [
+  'waiting',
+  'in_progress',
+  'completed',
+  'pending',
+  'cancelled',
+  'skipped',
+] as const;
 
 function ServiceCard({
   serviceName,
   price,
   duration,
   stylistName,
+  stationName,
+  stationTypeName,
   quantity = 1,
+  status,
+  isParallel = false,
 }: ServiceCardProps) {
+  // Check if status is a valid StatusBadge type
+  const isValidStatus =
+    status && VALID_SERVICE_STATUSES.includes(status as (typeof VALID_SERVICE_STATUSES)[number]);
+
+  // Skipped services show ₹0
+  const isSkipped = status === 'skipped';
+  const displayPrice = isSkipped ? 0 : (price ?? 0) * quantity;
+
   return (
     <div
       className={cn(
         'p-3 rounded-lg border bg-gradient-to-r from-muted/30 to-transparent',
-        'hover:from-muted/50 transition-colors'
+        'hover:from-muted/50 transition-colors',
+        isParallel && 'border-purple-200 dark:border-purple-800',
+        isSkipped && 'opacity-60'
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">
-            {serviceName}
-            {quantity > 1 && <span className="text-muted-foreground ml-1">×{quantity}</span>}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className={cn('font-medium text-sm truncate', isSkipped && 'line-through')}>
+              {serviceName}
+              {quantity > 1 && <span className="text-muted-foreground ml-1">×{quantity}</span>}
+            </p>
+            {isValidStatus && (
+              <StatusBadge
+                status={
+                  status as
+                    | 'waiting'
+                    | 'in_progress'
+                    | 'completed'
+                    | 'pending'
+                    | 'cancelled'
+                    | 'skipped'
+                }
+                size="sm"
+              />
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
             {duration && (
               <span className="flex items-center gap-1">
@@ -596,11 +846,27 @@ function ServiceCard({
                 </span>
               </>
             )}
+            {stationName && (status === 'in_progress' || status === 'completed') && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  {stationName}
+                  {stationTypeName && (
+                    <span className="text-[10px] text-muted-foreground/70">({stationTypeName})</span>
+                  )}
+                </span>
+              </>
+            )}
           </div>
         </div>
         {price != null && (
-          <span className="font-semibold text-sm whitespace-nowrap">
-            ₹{(price * quantity).toLocaleString('en-IN')}
+          <span
+            className={cn(
+              'font-semibold text-sm whitespace-nowrap',
+              isSkipped && 'line-through text-muted-foreground'
+            )}
+          >
+            ₹{displayPrice.toLocaleString('en-IN')}
           </span>
         )}
       </div>

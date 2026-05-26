@@ -24,7 +24,6 @@ interface DroppableSlotProps {
   isOutsideHours?: boolean;
   isAfterHours?: boolean;
   hasConflict?: boolean;
-  hasConflictingAppointments?: boolean; // Slot contains appointments that conflict with each other
   onClick?: () => void;
   children?: React.ReactNode;
 }
@@ -40,7 +39,6 @@ export function DroppableSlot({
   isOutsideHours = false,
   isAfterHours = false,
   hasConflict = false,
-  hasConflictingAppointments = false,
   onClick,
   children,
 }: DroppableSlotProps) {
@@ -92,11 +90,6 @@ export function DroppableSlot({
           !isBlocked &&
           !isOutsideHours &&
           'bg-orange-100/70 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800',
-        // Conflict zone highlighting - slot contains conflicting appointments
-        hasConflictingAppointments &&
-          !isBreak &&
-          !isBlocked &&
-          'bg-amber-50/50 dark:bg-amber-950/20',
         // Interactive states
         canDrop && !isDragging && 'cursor-pointer hover:bg-primary/5',
         // Drag hover states

@@ -129,7 +129,13 @@ export class CustomersService {
   async lookupByPhone(
     tenantId: string,
     phone: string
-  ): Promise<{ id: string; name: string; phone: string } | null> {
+  ): Promise<{
+    id: string;
+    name: string;
+    phone: string;
+    loyaltyPoints: number;
+    tags: string[];
+  } | null> {
     const customer = await prisma.customer.findFirst({
       where: {
         tenantId,
@@ -140,6 +146,8 @@ export class CustomersService {
         id: true,
         name: true,
         phone: true,
+        loyaltyPoints: true,
+        tags: true,
       },
     });
     return customer;

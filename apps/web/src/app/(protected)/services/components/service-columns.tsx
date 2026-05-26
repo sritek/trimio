@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Power, Trash2 } from 'lucide-react';
 
 import { formatCurrency } from '@/lib/format';
 
@@ -27,12 +27,14 @@ interface GetColumnsOptions {
   canWrite: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
 }
 
 export function getServiceColumns({
   canWrite,
   onEdit,
   onDelete,
+  onToggleStatus,
 }: GetColumnsOptions): ColumnDef<Service>[] {
   return [
     {
@@ -80,7 +82,12 @@ export function getServiceColumns({
       id: 'actions',
       cell: ({ row }) =>
         canWrite ? (
-          <ServiceActions service={row.original} onEdit={onEdit} onDelete={onDelete} />
+          <ServiceActions
+            service={row.original}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onToggleStatus={onToggleStatus}
+          />
         ) : null,
     },
   ];
@@ -116,9 +123,10 @@ interface ServiceActionsProps {
   service: Service;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onToggleStatus: (id: string, isActive: boolean) => void;
 }
 
-function ServiceActions({ service, onEdit, onDelete }: ServiceActionsProps) {
+function ServiceActions({ service, onEdit, onDelete, onToggleStatus }: ServiceActionsProps) {
   const t = useTranslations('common');
 
   return (
@@ -132,6 +140,10 @@ function ServiceActions({ service, onEdit, onDelete }: ServiceActionsProps) {
         <DropdownMenuItem onClick={() => onEdit(service.id)}>
           <Pencil className="mr-2 h-4 w-4" />
           {t('actions.edit')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onToggleStatus(service.id, service.isActive)}>
+          <Power className="mr-2 h-4 w-4" />
+          {service.isActive ? 'Deactivate' : 'Activate'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onDelete(service.id)} className="text-destructive">

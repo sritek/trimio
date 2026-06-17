@@ -219,9 +219,9 @@ function getBranchIdFromRequest(request: FastifyRequest): string | null {
     return body.branchId;
   }
 
-  // Check user's branch context (if they only have one branch)
+  // Check user's branch context (use first branch as fallback)
   const user = request.user;
-  if (user?.branchIds?.length === 1) {
+  if (user?.branchIds?.length > 0) {
     return user.branchIds[0];
   }
 
